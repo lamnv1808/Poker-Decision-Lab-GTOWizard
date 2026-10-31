@@ -1,0 +1,31 @@
+{
+  "name": "poker-decision-lab",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @pdl/core && npm run build -w @pdl/server && npm run build -w @pdl/web",
+    "dev:server": "npm run dev -w @pdl/server",
+    "dev:web": "npm run dev -w @pdl/web",
+    "test": "npm run test -w @pdl/core && npm run test -w @pdl/server && npm run test -w @pdl/web",
+    "test:e2e": "npm run e2e -w @pdl/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "validate:content": "npm run validate:content -w @pdl/core",
+    "db:migrate": "npm run db:migrate -w @pdl/server",
+    "db:seed": "npm run db:seed -w @pdl/server",
+    "start": "npm run start -w @pdl/server"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  }
+}
