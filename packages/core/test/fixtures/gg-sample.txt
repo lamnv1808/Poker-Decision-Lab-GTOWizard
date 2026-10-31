@@ -1,0 +1,106 @@
+Poker Hand #TM5000000001: Tournament #210000001, Daily Special $10.80 Hold'em No Limit - Level12(1,000/2,000(250)) - 2026/10/20 21:15:03
+Table '17' 6-max Seat #6 is the button
+Seat 1: villain1 (50,000 in chips)
+Seat 2: Hero (40,000 in chips)
+Seat 3: villain3 (30,000 in chips)
+Seat 4: villain4 (60,000 in chips)
+Seat 5: villain5 (45,000 in chips)
+Seat 6: villain6 (55,000 in chips)
+villain1: posts the ante 250
+Hero: posts the ante 250
+villain3: posts the ante 250
+villain4: posts the ante 250
+villain5: posts the ante 250
+villain6: posts the ante 250
+villain1: posts small blind 1,000
+Hero: posts big blind 2,000
+*** HOLE CARDS ***
+Dealt to villain1 
+Dealt to Hero [Ah Kd]
+Dealt to villain3 
+Dealt to villain4 
+Dealt to villain5 
+Dealt to villain6 
+villain3: folds
+villain4: raises 2,400 to 4,400
+villain5: folds
+villain6: folds
+villain1: folds
+Hero: calls 2,400
+*** FLOP *** [7s 2c 9d]
+Hero: checks
+villain4: bets 3,000
+Hero: calls 3,000
+*** TURN *** [7s 2c 9d] [Kh]
+Hero: checks
+villain4: bets 8,000
+Hero: raises 24,350 to 32,350 and is all-in
+villain4: calls 24,350
+*** RIVER *** [7s 2c 9d Kh] [3s]
+*** SHOWDOWN ***
+villain4: shows [Qh Qd] (a pair of Queens)
+Hero: shows [Ah Kd] (a pair of Kings)
+Hero collected 82,000 from pot
+*** SUMMARY ***
+Total pot 82,000 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [7s 2c 9d Kh 3s]
+Seat 1: villain1 (small blind) folded before Flop
+Seat 2: Hero (big blind) showed [Ah Kd] and won (82,000) with a pair of Kings
+Seat 4: villain4 showed [Qh Qd] and lost with a pair of Queens
+
+Poker Hand #TM5000000002: Tournament #210000001, Daily Special $10.80 Hold'em No Limit - Level12(1,000/2,000(250)) - 2026/10/20 21:16:10
+Table '17' 6-max Seat #1 is the button
+Seat 1: villain1 (49,000 in chips)
+Seat 2: Hero (82,000 in chips)
+Seat 3: villain3 (29,750 in chips)
+Seat 4: villain4 (19,650 in chips)
+Seat 5: villain5 (44,750 in chips)
+Seat 6: villain6 (54,750 in chips)
+villain1: posts the ante 250
+Hero: posts the ante 250
+villain3: posts the ante 250
+villain4: posts the ante 250
+villain5: posts the ante 250
+villain6: posts the ante 250
+Hero: posts small blind 1,000
+villain3: posts big blind 2,000
+*** HOLE CARDS ***
+Dealt to Hero [7c 2d]
+villain4: folds
+villain5: folds
+villain6: folds
+villain1: raises 2,500 to 4,500
+Hero: folds
+villain3: folds
+Uncalled bet (2,500) returned to villain1
+villain1 collected 6,500 from pot
+*** SUMMARY ***
+Total pot 6,500 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Seat 1: villain1 (button) collected (6,500)
+
+Poker Hand #TM5000000003: Tournament #210000001, Daily Special $10.80 Hold'em No Limit - Level12(1,000/2,000(250)) - 2026/10/20 21:17:00
+Table '17' 6-max Seat #2 is the button
+Seat 1: villain1 (51,500 in chips)
+Seat 2: Hero (80,750 in chips)
+Seat 3: villain3 (27,500 in chips)
+Seat 4: villain4 (19,400 in chips)
+Seat 5: villain5 (44,500 in chips)
+Seat 6: villain6 (54,500 in chips)
+villain1: posts the ante 250
+Hero: posts the ante 250
+villain3: posts the ante 250
+villain4: posts the ante 250
+villain5: posts the ante 250
+villain6: posts the ante 250
+villain3: posts small blind 1,000
+villain4: posts big blind 2,000
+*** HOLE CARDS ***
+Dealt to Hero [Jc Jd]
+villain6: folds
+villain5: folds
+villain1: folds
+Hero: raises 2,000 to 4,000
+villain3: folds
+villain4: calls 2,000
+*** SUMMARY ***
+Total pot 9,500 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
