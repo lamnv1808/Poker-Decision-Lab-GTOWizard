@@ -65,7 +65,8 @@ export function mathFacts(state: HandState, bb: number, action?: PlayerAction) {
     effectiveStackBB: r(eff / bb),
     requiredEquityPct: legal.toCall > 0 ? r((legal.callAmount / (legal.pot + legal.callAmount)) * 100) : null,
     potOddsToOne: legal.toCall > 0 ? Math.round((legal.pot / legal.callAmount) * 100) / 100 : null,
-    mdfPct: legal.toCall > 0 ? r(((legal.pot - legal.toCall) / legal.pot) * 100) : null,
+    // MDF only applies when facing a real bet (not merely the blinds preflop)
+    mdfPct: legal.toCall > 0 && (state.street !== 'preflop' || state.currentBet > bb) ? r(((legal.pot - legal.toCall) / legal.pot) * 100) : null,
     spr: state.street !== 'preflop' && legal.pot > 0 ? Math.round((eff / legal.pot) * 100) / 100 : null,
     betBreakEvenPct: null,
     betPotFraction: null,

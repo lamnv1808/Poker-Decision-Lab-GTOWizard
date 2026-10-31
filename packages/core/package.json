@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./engine": "./src/engine/index.ts",
     "./cards": "./src/cards/index.ts",
-    "./leaks": "./src/leaks/index.ts"
+    "./leaks": "./src/leaks/index.ts",
+    "./math": "./src/math/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
