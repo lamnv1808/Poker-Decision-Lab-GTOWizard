@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "jsx": "react-jsx", "lib": ["ES2022", "DOM", "DOM.Iterable"], "types": ["vite/client", "@testing-library/jest-dom"], "noEmit": true },
+  "compilerOptions": { "jsx": "react-jsx", "lib": ["ES2022", "DOM", "DOM.Iterable"], "types": ["vite/client", "@testing-library/jest-dom", "node"], "noEmit": true },
   "include": ["src", "e2e", "playwright.config.ts"]
 }

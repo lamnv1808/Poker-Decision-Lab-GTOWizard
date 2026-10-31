@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: poker-decision-lab
+    runtime: node
+    rootDir: poker-decision-lab
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: poker-decision-lab-db
+          property: connectionString
+databases:
+  - name: poker-decision-lab-db
+    plan: basic-256mb
