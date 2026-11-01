@@ -7,3 +7,6 @@ test-results/
 playwright-report/
 apps/server/public/
 tools/postflop-solver/
+
+# Neon CLI local context (branch pin)
+.neon
