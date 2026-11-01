@@ -28,6 +28,8 @@ import { currentVersion, loadVersion } from './content';
 import { prisma } from './db';
 import { HttpError, notFound, parse } from './http';
 import { recordAttempt } from './learning';
+import { markCompleted, scenarioStates, touchPlayed } from './history';
+import { mixedSessionFor } from './mixed';
 
 type Step = { nodeKey: string; kind: 'decision'; action: PlayerAction } | { nodeKey: string; kind: 'question' };
 
@@ -166,6 +168,32 @@ function explanationPayload(node: DecisionNode | QuestionNode) {
   return node.explanation;
 }
 
+/** Record a finished scenario in the user's history (validated result only when graded). */
+async function finishRun(userId: string, runId: string, scenarioId: string, module: string) {
+  const atts = await prisma.decisionAttempt.findMany({ where: { runId, userId }, select: { graded: true, isError: true, ratingApplied: true, confidence: true } });
+  const graded = atts.filter((a) => a.graded);
+  await markCompleted(userId, `scenario:${scenarioId}`, module, runId, {
+    result: !graded.length ? 'ungraded' : graded.some((a) => a.isError) ? 'incorrect' : 'correct',
+    ratingEligible: atts.some((a) => a.ratingApplied),
+    confidence: atts[atts.length - 1]?.confidence ?? null,
+  });
+}
+
+/** Replaying a scenario already completed is practice: it can never add rated Elo again. */
+async function startRun(userId: string, scenarioId: string, requestedMode: 'practice' | 'rated', sessionId?: string) {
+  const v = await currentVersion(scenarioId);
+  if (!v) throw notFound('Scenario not found');
+  const st = (await scenarioStates(userId, [scenarioId])).get(scenarioId)!;
+  const mixed = sessionId ? await mixedSessionFor(userId, sessionId) : null;
+  const wanted = mixed?.mode ?? requestedMode;
+  const replay = st.timesCompleted > 0;
+  const mode = replay ? 'practice' : wanted;
+  const session = mixed ? { id: mixed.id } : await sessionFor(userId, v.scenario.mode, mode);
+  const run = await prisma.scenarioRun.create({ data: { userId, sessionId: session.id, scenarioVersionId: v.id, mode } });
+  await touchPlayed(userId, `scenario:${scenarioId}`, v.scenario.mode, run.id);
+  return { v, run, replay, ratedBlocked: replay && wanted === 'rated' };
+}
+
 export const runsRouter = Router();
 
 const ActionInput = z.object({
@@ -175,18 +203,22 @@ const ActionInput = z.object({
 
 runsRouter.post('/', async (req, res) => {
   const userId = requireUser(req);
-  const body = parse(z.object({ scenarioId: z.string().min(1), mode: z.enum(['practice', 'rated']).default('practice') }), req.body);
-  const v = await currentVersion(body.scenarioId);
-  if (!v) throw notFound('Scenario not found');
-  const session = await sessionFor(userId, v.scenario.mode, body.mode);
-  const run = await prisma.scenarioRun.create({ data: { userId, sessionId: session.id, scenarioVersionId: v.id, mode: body.mode } });
-  res.status(201).json(runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []));
+  const body = parse(z.object({ scenarioId: z.string().min(1), mode: z.enum(['practice', 'rated']).default('practice'), sessionId: z.string().uuid().optional() }), req.body);
+  const { v, run, replay, ratedBlocked } = await startRun(userId, body.scenarioId, body.mode, body.sessionId);
+  res.status(201).json({ ...runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []), replay, ratedBlocked });
 });
 
 /**
  * Pick the next scenario for the user ("next test"): due reviews first, then scenarios never
  * attempted, then any other — random within each tier, never repeating the one just played.
  */
+/**
+ * Pick the next scenario ("next test") from a pool. Default "new": never-played scenarios only.
+ * When a pool is exhausted the response says so (409 pool_exhausted with counts) instead of
+ * silently repeating content. Recently played scenarios are avoided in the broader pools.
+ */
+export const POOLS = ['new', 'newDue', 'all', 'played', 'bookmarked', 'weak'] as const;
+const RECENT_WINDOW = 5;
 runsRouter.post('/next', async (req, res) => {
   const userId = requireUser(req);
   const body = parse(
@@ -197,6 +229,8 @@ runsRouter.post('/next', async (req, res) => {
       difficulty: z.number().int().min(1).max(5).optional(),
       ratedOnly: z.boolean().default(false),
       excludeScenarioId: z.string().max(200).optional(),
+      pool: z.enum(POOLS).default('new'),
+      sessionId: z.string().uuid().optional(),
     }),
     req.body,
   );
@@ -205,25 +239,43 @@ runsRouter.post('/next', async (req, res) => {
     where: { OR: scenarios.map((s) => ({ scenarioId: s.id, version: s.currentVersion })) },
     select: { scenarioId: true, difficulty: true, source: { select: { classification: true } } },
   });
-  let pool = versions
+  const filtered = versions
     .filter((v) => (body.difficulty ? v.difficulty === body.difficulty : true))
     .filter((v) => (body.ratedOnly ? ['SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification) : true))
     .map((v) => v.scenarioId);
+  if (!filtered.length) throw new HttpError(404, 'no_scenarios', 'No scenarios match these filters');
+  const states = await scenarioStates(userId, filtered);
+  const bookmarks = new Set((await prisma.bookmark.findMany({ where: { userId, scenarioId: { in: filtered } }, select: { scenarioId: true } })).map((b) => b.scenarioId));
+  const st = (id: string) => states.get(id)!;
+  const recent = new Set([...filtered].filter((id) => st(id).lastPlayedAt).sort((a, b) => +st(b).lastPlayedAt! - +st(a).lastPlayedAt!).slice(0, RECENT_WINDOW));
+  const inPool: Record<(typeof POOLS)[number], (id: string) => boolean> = {
+    new: (id) => st(id).status === 'new',
+    newDue: (id) => st(id).status === 'new' || st(id).status === 'due',
+    all: () => true,
+    played: (id) => st(id).timesCompleted > 0,
+    bookmarked: (id) => bookmarks.has(id),
+    weak: (id) => st(id).lastResult === 'incorrect' || (st(id).mastery !== null && st(id).mastery! < 0.5),
+  };
+  let pool = filtered.filter(inPool[body.pool]);
   if (pool.length > 1 && body.excludeScenarioId) pool = pool.filter((id) => id !== body.excludeScenarioId);
-  if (!pool.length) throw new HttpError(404, 'no_scenarios', 'No scenarios match these filters');
-  const due = new Set((await prisma.reviewItem.findMany({ where: { userId, itemType: 'scenario', itemRef: { in: pool }, dueAt: { lte: new Date() } }, select: { itemRef: true } })).map((r) => r.itemRef));
-  const attempted = new Set(
-    (await prisma.decisionAttempt.findMany({ where: { userId, attemptType: { in: ['decision', 'question'] } }, select: { itemRef: true }, distinct: ['itemRef'] })).map((a) => a.itemRef.split(':')[0]),
-  );
-  const tiers = [pool.filter((id) => due.has(id)), pool.filter((id) => !attempted.has(id)), pool];
-  const tier = tiers.find((t) => t.length > 0)!;
+  // in repeat-capable pools, avoid the most recently played ones when there is anything else
+  if (body.pool !== 'new') {
+    const fresh = pool.filter((id) => !recent.has(id));
+    if (fresh.length) pool = fresh;
+  }
+  if (!pool.length) {
+    const counts = { available: filtered.length, completed: filtered.filter((id) => st(id).timesCompleted > 0).length, due: filtered.filter((id) => st(id).status === 'due').length, bookmarked: bookmarks.size };
+    res.status(409).json({ error: 'pool_exhausted', message: 'No scenarios left in this pool', pool: body.pool, counts });
+    return;
+  }
+  // due first within the pool, then new, then least-recently played
+  const due = pool.filter((id) => st(id).status === 'due');
+  const fresh = pool.filter((id) => st(id).status === 'new');
+  const tier = due.length ? due : fresh.length ? fresh : [...pool].sort((a, b) => +(st(a).lastPlayedAt ?? 0) - +(st(b).lastPlayedAt ?? 0)).slice(0, Math.max(1, Math.ceil(pool.length / 3)));
   const scenarioId = tier[Math.floor(Math.random() * tier.length)]!;
-  const v = await currentVersion(scenarioId);
-  if (!v) throw notFound('Scenario not found');
-  const session = await sessionFor(userId, v.scenario.mode, body.mode);
-  const run = await prisma.scenarioRun.create({ data: { userId, sessionId: session.id, scenarioVersionId: v.id, mode: body.mode } });
-  const reason = tier === tiers[0] ? 'due' : tier === tiers[1] ? 'new' : 'random';
-  res.status(201).json({ ...runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []), pickReason: reason, poolSize: pool.length });
+  const { v, run, replay, ratedBlocked } = await startRun(userId, scenarioId, body.mode, body.sessionId);
+  const reason = tier === due ? 'due' : tier === fresh ? 'new' : 'review';
+  res.status(201).json({ ...runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []), pickReason: reason, poolSize: pool.length, replay, ratedBlocked });
 });
 
 runsRouter.get('/:id', async (req, res) => {
@@ -326,6 +378,7 @@ runsRouter.post('/:id/act', async (req, res) => {
     track: s.source.classification === 'MATH_VERIFIED' ? 'fundamentals' : 'strategy',
     result: feedback,
   });
+  if (done) await finishRun(userId, run.id, v.scenario.id, v.scenario.mode);
   const after = await loadRun(userId, run.id);
   res.json({ feedback: outcome.result, view: runView(after.run, v.id, s, v.sourceClass, after.cursor, after.feedbackLog) });
 });
@@ -414,6 +467,7 @@ runsRouter.post('/:id/answer', async (req, res) => {
     track: s.source.classification === 'MATH_VERIFIED' ? 'fundamentals' : 'strategy',
     result: feedback,
   });
+  if (done) await finishRun(userId, run.id, v.scenario.id, v.scenario.mode);
   const after = await loadRun(userId, run.id);
   res.json({ feedback: outcome.result, view: runView(after.run, v.id, s, v.sourceClass, after.cursor, after.feedbackLog) });
 });
@@ -425,8 +479,7 @@ scenariosRouter.get('/', async (req, res) => {
   const scenarios = await prisma.scenario.findMany({ where: { published: true, mode: q.mode, module: q.module }, orderBy: [{ module: 'asc' }, { id: 'asc' }] });
   const versions = await prisma.scenarioVersion.findMany({ where: { OR: scenarios.map((s) => ({ scenarioId: s.id, version: s.currentVersion })) }, include: { source: true } });
   const bookmarks = new Set((await prisma.bookmark.findMany({ where: { userId } })).map((b) => b.scenarioId));
-  const attempts = await prisma.decisionAttempt.groupBy({ by: ['itemRef'], where: { userId, attemptType: { in: ['decision', 'question'] } }, _count: true });
-  const attemptedScenarios = new Set(attempts.map((a) => a.itemRef.split(':')[0]));
+  const states = await scenarioStates(userId, versions.map((v) => v.scenarioId));
   const reviews = new Map((await prisma.reviewItem.findMany({ where: { userId, itemType: 'scenario' } })).map((r) => [r.itemRef, r]));
   const out = versions
     .map((v) => {
@@ -445,7 +498,9 @@ scenariosRouter.get('/', async (req, res) => {
         classification: v.source.classification,
         rated: ['SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification),
         bookmarked: bookmarks.has(v.scenarioId),
-        attempted: attemptedScenarios.has(v.scenarioId),
+        attempted: (states.get(v.scenarioId)?.timesCompleted ?? 0) > 0,
+        status: states.get(v.scenarioId)?.status ?? 'new',
+        timesPlayed: states.get(v.scenarioId)?.timesPlayed ?? 0,
         mastery: r?.mastery ?? null,
         dueAt: r?.dueAt ?? null,
       };

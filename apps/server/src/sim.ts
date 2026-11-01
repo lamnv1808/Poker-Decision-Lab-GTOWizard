@@ -13,6 +13,8 @@ import {
   type SimRun,
   dealSimSecure,
   type SkillKey,
+  simExactKey,
+  simFingerprint,
   type LeakKey,
   isError,
   legalActions,
@@ -23,6 +25,7 @@ import {
 } from '@pdl/core';
 import type { Prisma, SimHand } from '@prisma/client';
 import { mixedSessionFor } from './mixed';
+import { markCompleted, touchPlayed } from './history';
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireUser } from './auth';
@@ -137,10 +140,32 @@ export async function createSimHand(
     const config = randomSimConfig(randomInt(1, 2 ** 31 - 1), { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
     return { seed: randomInt(1, 2 ** 31 - 1), config, deal: dealSimSecure(config, (n) => randomInt(n)) };
   };
-  let h = fresh();
-  for (let tries = 0; tries < 20 && !runSim(h.seed, h.config, [], { equitySamples: 50, deal: h.deal }).awaitingHero; tries++) h = fresh();
-  return db.simHand.create({ data: { userId, seed: h.seed, deal: h.deal as object, config: h.config as object, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null } });
+  // Diversity: never an exact repeat; avoid the same strategic situation as any of the user's last
+  // RECENT_SITUATIONS hands while alternatives exist (bounded retries, then accept the best found).
+  const recent = new Set((await db.simHand.findMany({ where: { userId, kind: 'play' }, orderBy: { createdAt: 'desc' }, take: RECENT_SITUATIONS, select: { fingerprint: true } })).map((x) => x.fingerprint));
+  let best: (ReturnType<typeof fresh> & { fp: string; key: string }) | null = null;
+  for (let tries = 0; tries < MAX_DEAL_TRIES; tries++) {
+    const h = fresh();
+    if (!runSim(h.seed, h.config, [], { equitySamples: 50, deal: h.deal }).awaitingHero) continue;
+    const c = { ...h, fp: simFingerprint(h.config, h.deal), key: simExactKey(h.config, h.deal) };
+    if (await db.simHand.findFirst({ where: { userId, exactKey: c.key }, select: { id: true } })) continue;
+    best = c;
+    if (!recent.has(c.fp)) break;
+  }
+  if (!best) {
+    const h = fresh();
+    best = { ...h, fp: simFingerprint(h.config, h.deal), key: simExactKey(h.config, h.deal) };
+  }
+  const created = await db.simHand.create({
+    data: { userId, seed: best.seed, deal: best.deal as object, config: best.config as object, fingerprint: best.fp, exactKey: best.key, origin: { kind: 'random' }, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null },
+  });
+  await touchPlayed(userId, `sim:${best.fp}`, 'sim', created.id);
+  return created;
 }
+
+/** Recent-history window for situation diversity, and the bound on re-deals. */
+export const RECENT_SITUATIONS = 30;
+const MAX_DEAL_TRIES = 25;
 
 simRouter.post('/hands', async (req, res) => {
   const userId = requireUser(req);
@@ -190,6 +215,8 @@ simRouter.post('/hands/:id/act', async (req, res) => {
   }
   const d = run.decisions[st.length]!;
   const fb = d.feedback!;
+  // progress metadata (practice progress counts decisions whether or not they are graded)
+  Object.assign(step, { street: d.info.street, graded: fb.graded, grade: fb.grade ?? null, basis: fb.basis, at: new Date().toISOString() });
   const complete = run.state.complete;
   // Claim the step first (optimistic concurrency): of two simultaneous requests only one may record.
   const claimed = await prisma.simHand.updateMany({
@@ -248,6 +275,15 @@ simRouter.post('/hands/:id/act', async (req, res) => {
     step.attemptId = outcome.attemptId;
     // link the attempt to the step (informational; skipped if another step already followed)
     await prisma.simHand.updateMany({ where: { id: h.id, version: h.version + 1 }, data: { steps: [...st, step] as object } });
+  }
+  if (complete && h.kind === 'play' && h.fingerprint) {
+    const all = [...st, step] as (Step & { graded?: boolean; grade?: string | null })[];
+    const graded = all.filter((x) => x.graded);
+    await markCompleted(userId, `sim:${h.fingerprint}`, 'sim', h.id, {
+      result: !graded.length ? 'ungraded' : graded.some((x) => x.grade === 'mistake' || x.grade === 'major') ? 'incorrect' : 'correct',
+      ratingEligible: all.some((x) => x.attemptId),
+      confidence: body.confidence ?? null,
+    });
   }
   const fresh = await load(userId, h.id);
   const reveal = h.feedback === 'guided' || complete;

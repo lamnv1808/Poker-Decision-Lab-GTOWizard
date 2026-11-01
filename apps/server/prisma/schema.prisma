@@ -39,6 +39,7 @@ model User {
   annotations    Annotation[] @relation("AnnotationOwner")
   simHands       SimHand[]
   ratingModel    RatingModelState?
+  scenarioHistory ScenarioHistory[]
 }
 
 model Session {
@@ -61,6 +62,8 @@ model UserPreference {
   explanationView String   @default("quick") // quick | deep
   strategyView    String   @default("gto") // gto | exploit
   showBB          Boolean  @default(true)
+  /// "Reset completion history": history before this instant is ignored for selection (nothing is deleted)
+  historyResetAt  DateTime?
   updatedAt       DateTime @updatedAt
 }
 
@@ -561,12 +564,21 @@ model SimHand {
   steps       Json      @default("[]")
   version     Int       @default(0)
   status      String    @default("active") // active | complete | abandoned
+  /// Strategic fingerprint (position, stack bucket, hand class, table, opponents, origin) for diversity
+  fingerprint String?
+  /// Exact-deal key (cards + config) to never repeat an identical hand
+  exactKey    String?
+  /// How the hand was created: random | scenario continuation | solver flop spot (with scripted prefix)
+  origin      Json?
+  bookmarked  Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?
 
   @@index([userId, status, updatedAt])
   @@index([parentId])
+  @@index([userId, fingerprint])
+  @@index([userId, exactKey])
 }
 
 /// Which rating model a user's ratings follow. Moving to a new version back-fills new subratings
@@ -577,4 +589,30 @@ model RatingModelState {
   version    String
   migratedAt DateTime @default(now())
   backfilled Int      @default(0)
+}
+
+/// Per-user, server-side history of curated scenarios and generated situations (cross-device).
+/// Never deleted by "reset"; review / mastery come from ReviewItem, bookmarks from Bookmark.
+model ScenarioHistory {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// scenario:<scenarioId> | sim:<fingerprint>
+  contentKey     String
+  module         String   // hero | villain | sim
+  firstPlayedAt  DateTime @default(now())
+  lastPlayedAt   DateTime @default(now())
+  timesPlayed    Int      @default(0)
+  timesCompleted Int      @default(0)
+  correct        Int      @default(0)
+  incorrect      Int      @default(0)
+  /// correct | incorrect | ungraded
+  lastResult     String?
+  ratingEligible Boolean  @default(false)
+  lastConfidence Int?
+  firstRefId     String?
+  lastRefId      String?
+
+  @@unique([userId, contentKey])
+  @@index([userId, module, lastPlayedAt])
 }

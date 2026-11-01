@@ -1,7 +1,7 @@
 import type { PlayerAction } from '@pdl/core/engine';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, newAttemptId } from '../api';
+import { api, newAttemptId, ApiError } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { DecisionFeedbackView, QuestionFeedbackView } from '../components/Feedback';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
@@ -122,10 +122,12 @@ export function RunPage() {
     setBusy(true);
     setLatest(null);
     try {
-      const f = { ...loadFilters(view.scenario.mode, view.mode), mode: view.mode };
+      // the launcher's saved filters decide the next pick (a practice replay does not force practice next)
+      const f = loadFilters(view.scenario.mode, view.mode);
       await nextTest(view.scenario.mode, f, view.scenario.id);
     } catch (e) {
-      setError(e);
+      if (e instanceof ApiError && e.code === 'pool_exhausted') nav(`/${view.scenario.mode}?exhausted=1`);
+      else setError(e);
     } finally {
       setBusy(false);
     }

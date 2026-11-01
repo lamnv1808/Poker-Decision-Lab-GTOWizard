@@ -83,8 +83,10 @@ export function HeroSimSetup() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const start = useStartSim();
+  const [gen, setGen] = useState<{ handsCompleted: number; uniqueSituations: number } | null>(null);
   useEffect(() => {
     api.get<typeof active>('/sim/hands/active').then(setActive).catch(setError);
+    api.get<{ generated: { handsCompleted: number; uniqueSituations: number } }>('/history/summary').then((x) => setGen(x.generated)).catch(() => {});
   }, []);
   const sel = 'rounded-md border border-ink-600 bg-ink-850 px-2 py-1.5 text-sm';
   return (
@@ -92,6 +94,7 @@ export function HeroSimSetup() {
       <div>
         <h1 className="text-xl font-bold">{t('sim.title')}</h1>
         <p className="text-sm text-ink-300">{t('sim.intro')}</p>
+        {gen && <p className="mt-1 text-xs text-ink-400" data-testid="sim-generated-count">{t('sim.generatedCount', { n: gen.handsCompleted, u: gen.uniqueSituations })}</p>}
       </div>
       {active && active.length > 0 && (
         <Panel title={t('sim.resume')}>

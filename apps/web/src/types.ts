@@ -112,6 +112,8 @@ export interface ScenarioCard {
   rated: boolean;
   bookmarked: boolean;
   attempted: boolean;
+  status?: 'new' | 'inProgress' | 'played' | 'mastered' | 'due';
+  timesPlayed?: number;
   mastery: number | null;
   dueAt: string | null;
 }

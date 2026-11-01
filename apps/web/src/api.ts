@@ -4,6 +4,7 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    public body?: unknown,
   ) {
     super(message);
   }
@@ -19,7 +20,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new ApiError(res.status, data?.error ?? 'error', data?.message ?? res.statusText);
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? 'error', data?.message ?? res.statusText, data);
   return data as T;
 }
 

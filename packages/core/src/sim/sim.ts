@@ -1,5 +1,6 @@
 import { type Card, cardToInt, fullDeck } from '../cards/cards';
 import { evaluateInts } from '../cards/evaluator';
+import { classOfCombo } from '../cards/range';
 import { createRng, hashString } from '../cards/rng';
 import {
   type HandState,
@@ -559,4 +560,25 @@ export function simReview(run: SimRun) {
   const showdown = run.state.result?.showdown ? run.state.players.filter((p) => !p.folded).map((p) => ({ id: p.id, cards: p.cards! })) : [];
   const net = Object.fromEntries(run.state.players.map((p) => [p.id, Math.round(((run.state.result?.awards[p.id] ?? 0) - p.totalCommitted - p.anteCommitted) / bb * 100) / 100]));
   return { timeline, showdown, net, board: run.state.board, decisions: run.decisions };
+}
+
+/**
+ * Strategic fingerprint of a dealt situation, for diversity (not identity): two hands with the same
+ * fingerprint put Hero in an equivalent spot (same table, seat, stack bucket, hand class, opponents).
+ * Different board textures / actions later in the hand still make them different hands to play.
+ */
+export function simFingerprint(cfg: SimConfig, deal: SimDeal, originKey = 'random'): string {
+  const hero = deal.holes[cfg.heroPos]!;
+  const heroStack = cfg.stacksBB[cfg.heroPos]!;
+  const eff = Math.min(heroStack, Math.max(...Object.keys(cfg.villains).map((p) => cfg.stacksBB[p]!)));
+  const bucket = [10, 15, 25, 40, 60, 100].find((b) => eff <= b) ?? 999;
+  const opp = Object.values(cfg.villains).sort().join(',');
+  return [originKey, cfg.tableSize, cfg.heroPos, `<=${bucket}`, classOfCombo(hero[0], hero[1]), opp].join('|');
+}
+
+/** Exact-deal key: identical cards in identical seats on an identical table. */
+export function simExactKey(cfg: SimConfig, deal: SimDeal): string {
+  const seats = positionsFor(cfg.tableSize).map((p) => `${p}:${cfg.stacksBB[p]}:${cfg.villains[p] ?? 'H'}:${[...deal.holes[p]!].sort().join('')}`);
+  // server-side only (it contains the cards)
+  return `${seats.join('/')}#${deal.board.join('')}#${cfg.anteMode}`;
 }

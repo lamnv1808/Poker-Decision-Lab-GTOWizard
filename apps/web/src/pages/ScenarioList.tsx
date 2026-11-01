@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { Difficulty, Empty, ErrorNote, SourceBadge, Spinner, Toggle } from '../components/ui';
+import { Difficulty, Empty, ErrorNote, SourceBadge, Spinner, Toggle, StatusBadge } from '../components/ui';
 import { loc } from '../format';
 import { useT } from '../i18n';
 import { useApp } from '../store';
@@ -24,6 +24,7 @@ export function ScenarioList({ mode }: { mode: 'hero' | 'villain' }) {
   const [module, setModule] = useState(params.get('module') ?? '');
   const [diff, setDiff] = useState(0);
   const [ratedOnly, setRatedOnly] = useState(false);
+  const [hideDone, setHideDone] = useState(false);
   const [runMode, setRunMode] = useState<'practice' | 'rated'>(defaultMode);
   const start = useStartRun();
   const load = () => api.get<ScenarioCard[]>(`/scenarios?mode=${mode}`).then(setItems).catch(setError);
@@ -31,7 +32,7 @@ export function ScenarioList({ mode }: { mode: 'hero' | 'villain' }) {
     void load();
   }, [mode]);
   const modules = useMemo(() => [...new Set(items?.map((i) => i.module) ?? [])].sort(), [items]);
-  const shown = (items ?? []).filter((i) => (!module || i.module === module) && (!diff || i.difficulty === diff) && (!ratedOnly || i.rated));
+  const shown = (items ?? []).filter((i) => (!module || i.module === module) && (!diff || i.difficulty === diff) && (!ratedOnly || i.rated) && (!hideDone || i.status === 'new' || i.status === 'inProgress' || i.status === 'due'));
   const toggleBookmark = async (s: ScenarioCard) => {
     if (s.bookmarked) await api.del(`/bookmarks/${s.id}`);
     else await api.put(`/bookmarks/${s.id}`);
@@ -54,6 +55,7 @@ export function ScenarioList({ mode }: { mode: 'hero' | 'villain' }) {
           {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>{t('filter.difficulty')} {d}</option>)}
         </select>
         <label className="flex items-center gap-1.5 text-ink-300"><input type="checkbox" checked={ratedOnly} onChange={(e) => setRatedOnly(e.target.checked)} /> {t('filter.ratedOnly')}</label>
+        <label className="flex items-center gap-1.5 text-ink-300"><input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} data-testid="hide-completed" /> {t('list.hideCompleted')}</label>
         <div className="ml-auto"><Toggle label={t('mode.label')} value={runMode} onChange={setRunMode} options={[{ value: 'practice', label: t('mode.practice') }, { value: 'rated', label: t('mode.rated') }]} /></div>
       </div>
       <p className="text-xs text-ink-400">{t('mode.help')}</p>
@@ -73,10 +75,10 @@ export function ScenarioList({ mode }: { mode: 'hero' | 'villain' }) {
               <div className="mt-3 flex items-center gap-2">
                 <SourceBadge cls={s.classification} />
                 {!s.rated && <span className="text-[10px] text-ink-400">{t('list.practiceOnly')}</span>}
+                <StatusBadge status={s.status} />
                 {s.mastery !== null && <span className="text-[10px] text-ink-400">{t('list.mastery')} {Math.round(s.mastery * 100)}%</span>}
-                {s.attempted && s.mastery === null && <span className="text-[10px] text-emerald-400">✓</span>}
                 <button type="button" onClick={() => start(s.id, runMode).catch(setError)} className="ml-auto rounded-lg bg-felt-500 px-3 py-1.5 text-sm font-semibold hover:bg-felt-600" data-testid={`start-${s.id}`}>
-                  {t('list.start')}
+                  {s.status && s.status !== 'new' && s.status !== 'inProgress' ? t('list.replay') : t('list.start')}
                 </button>
               </div>
             </article>
