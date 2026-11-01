@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, newAttemptId, mixedSessionId } from '../api';
+import { api, newAttemptId, mixedSessionId, ApiError } from '../api';
 import { PokerTable } from '../components/PokerTable';
-import { ErrorNote, GradeBadge, Panel, Spinner } from '../components/ui';
+import { Empty, ErrorNote, GradeBadge, Panel, Spinner } from '../components/ui';
 import { fmtNum, loc } from '../format';
 import { useT } from '../i18n';
 import { useApp } from '../store';
@@ -58,8 +58,13 @@ export function FundamentalsPage() {
         <div className="rounded-xl border border-accent/40 bg-ink-900 p-4"><div className="font-semibold">{t('fund.potOdds')}</div><div className="text-sm text-ink-300">{t('fund.potOddsIntro')}</div></div>
       </div>
       <div className="text-xs text-ink-400 tabular">{t('gto.answered')}: {stats.n} · {t('gto.correct')}: {stats.n ? Math.round((100 * stats.ok) / stats.n) : 0}% · {t('fund.notSkill')}</div>
-      <ErrorNote error={error} />
-      {!q ? <Spinner /> : (
+      {/* no imported hands yet is an empty state, not an error */}
+      {!(error instanceof ApiError && error.status === 404) && <ErrorNote error={error} />}
+      {!q && error instanceof ApiError && error.status === 404 ? (
+        <Empty>
+          {t('fund.noHands')} <Link to="/hands" className="text-accent">{t('fund.importLink')}</Link>
+        </Empty>
+      ) : !q ? <Spinner /> : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-3">
             <DecisionHeader q={q} />

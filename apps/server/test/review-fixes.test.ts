@@ -78,3 +78,15 @@ describe('fixes from the V3 code review', () => {
     expect(att.ratingWeight).toBe(1);
   });
 });
+
+describe('production bug: spaced-repetition date overflow on shared review items', () => {
+  it('another correct answer on an item with a runaway schedule records fine and is capped', async () => {
+    const u = await newUser('srs');
+    await prisma.reviewItem.create({ data: { userId: u.id, itemType: 'quiz', itemRef: 'sim', repetitions: 40, ease: 4.2, intervalDays: 3_000_000, dueAt: new Date('9000-01-01T00:00:00Z'), mastery: 1 } });
+    const base = { userId: u.id, attemptType: 'decision' as const, reviewType: 'quiz' as const, reviewRef: 'sim', mode: 'rated' as const, action: {}, graded: true, grade: 'excellent' as const, ratingEligible: true, isError: false, gradingMethodVersion: 't', difficulty: 3, skills: ['preflop' as const], concepts: [], leakOpportunities: [], optionLeaks: [], result: {}, gradeBasis: 'solverEv', sourceClass: 'SOLVER_VERIFIED' as const, track: 'strategy' as const };
+    await recordAttempt({ ...base, clientAttemptId: cid(), itemRef: 'sim:x:0' });
+    const item = await prisma.reviewItem.findUniqueOrThrow({ where: { userId_itemType_itemRef: { userId: u.id, itemType: 'quiz', itemRef: 'sim' } } });
+    expect(item.intervalDays).toBeLessThanOrEqual(365);
+    expect(item.dueAt.getUTCFullYear()).toBeLessThanOrEqual(new Date().getUTCFullYear() + 1);
+  });
+});

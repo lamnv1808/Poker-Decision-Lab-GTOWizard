@@ -163,3 +163,20 @@ describe('Villain model versions', () => {
     expect(fold('nit', 'sim-v1')).toBeLessThan(fold('nit', 'sim-v1.1'));
   });
 });
+
+describe('equity cache (performance)', () => {
+  it('rebuilding with cached equities gives identical decisions and feedback', () => {
+    const cfg = randomSimConfig(99, { tableSize: 6 });
+    const acts: PlayerAction[] = [];
+    let run = runSim(5, cfg, acts);
+    for (let i = 0; i < 8 && run.awaitingHero; i++) {
+      const l = legalActions(run.state)!;
+      acts.push(l.canCheck ? { type: 'check' } : { type: 'call' });
+      run = runSim(5, cfg, acts);
+    }
+    const cache = Object.fromEntries(run.decisions.map((d, i) => [i, d.info.modelEquity]));
+    const fast = runSim(5, cfg, acts, { equityCache: cache, skipPendingEquity: true });
+    expect(fast.state.history).toEqual(run.state.history);
+    expect(fast.decisions.map((d) => d.feedback)).toEqual(run.decisions.map((d) => d.feedback));
+  });
+});

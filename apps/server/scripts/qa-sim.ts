@@ -59,6 +59,7 @@ const main = async () => {
       const action = opts?.length ? opts[Math.floor(rnd() * opts.length)]!.action : heroAction(v, rnd);
       const r = await call('POST', `/sim/hands/${v.id}/act`, { clientAttemptId: `qa-${i}-${k}-${Date.now()}`, action, confidence: 1 + Math.floor(rnd() * 3) });
       if (r.status !== 200) {
+        console.error('non-200', r.status, JSON.stringify(r.body).slice(0, 200));
         invalid++;
         break;
       }

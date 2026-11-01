@@ -180,3 +180,18 @@ describe('quiz generators', () => {
     expect(gradeQuiz(q, NaN).grade).toBe('major');
   });
 });
+
+describe('spaced repetition caps (production bug: due date in year 13084)', () => {
+  it('hundreds of excellent answers on one shared item keep a valid, capped schedule', async () => {
+    const { initialSrs, reviewSrs, MAX_INTERVAL_DAYS, MAX_EASE } = await import('../src');
+    const now = new Date('2026-11-01T00:00:00Z');
+    let s = initialSrs(now);
+    for (let i = 0; i < 300; i++) s = reviewSrs(s, 'excellent', now, 3);
+    expect(s.intervalDays).toBeLessThanOrEqual(MAX_INTERVAL_DAYS);
+    expect(s.ease).toBeLessThanOrEqual(MAX_EASE);
+    expect(new Date(s.dueAt).getUTCFullYear()).toBeLessThanOrEqual(2028);
+    // an item already stored with a runaway interval recovers on its next review
+    const runaway = { ...s, intervalDays: 4_000_000, ease: 9 };
+    expect(reviewSrs(runaway, 'excellent', now, 3).intervalDays).toBe(MAX_INTERVAL_DAYS);
+  });
+});

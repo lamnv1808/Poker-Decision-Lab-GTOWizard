@@ -791,6 +791,9 @@ const en: Dict = {
   "mixed.exhausted": "No unseen content left for: {types}. They were skipped.",
   "sim.solverSpot": "Solved spot — these actions are in the solver's tree (other sizes are not graded):",
   "sim.noRunout": "none — all five cards were dealt",
+  "history.kind.sim": "Full hands",
+  "fund.noHands": "Pot-odds exercises use your own imported hands, and none are imported yet.",
+  "fund.importLink": "Import hand histories",
 };
 
 const vi: Dict = {
@@ -1580,6 +1583,9 @@ const vi: Dict = {
   "mixed.exhausted": "Đã hết bài mới cho: {types}. Đã bỏ qua.",
   "sim.solverSpot": "Spot đã giải — các hành động này nằm trong cây của solver (kích cỡ khác không được chấm):",
   "sim.noRunout": "không có — đã chia đủ năm lá",
+  "history.kind.sim": "Ván đầy đủ",
+  "fund.noHands": "Bài pot odds dùng các ván bạn đã nhập, nhưng bạn chưa nhập ván nào.",
+  "fund.importLink": "Nhập lịch sử ván bài",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, vi };

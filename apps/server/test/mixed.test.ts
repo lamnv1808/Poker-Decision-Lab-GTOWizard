@@ -25,6 +25,7 @@ describe('Mixed Training', () => {
     let first;
     for (let i = 0; i < 10; i++) {
       first = (await u.agent.post(`/api/mixed/sessions/${s.id}/next`).expect(200)).body;
+      if (!first.href.includes('/play/')) continue; // the full-hand focus also serves Hero scenarios
       const id = first.href.split('/play/')[1].split('?')[0];
       const h = await prisma.simHand.findUniqueOrThrow({ where: { id } });
       expect(h.sessionId).toBe(s.id);

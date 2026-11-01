@@ -10,6 +10,7 @@ import {
   SIM_MODEL_VERSION,
   type SimConfig,
   type SimDeal,
+  type CachedEquity,
   type SpotOracle,
   type Scenario,
   scenarioContinuation,
@@ -77,6 +78,9 @@ const build = (h: SimHand, s: Step[] = steps(h)) => {
     villainOverrides: o.villainOverrides,
     oracle: oracleFor(o),
     modelVersion: h.modelVersion,
+    // performance: reuse each decision's model equity (deterministic) and skip the pending one
+    equityCache: Object.fromEntries(s.flatMap((x, i) => ((x as Step & { eq?: CachedEquity }).eq ? [[i, (x as Step & { eq?: CachedEquity }).eq!]] : []))),
+    skipPendingEquity: true,
   });
 };
 
@@ -258,7 +262,7 @@ simRouter.post('/hands/:id/act', async (req, res) => {
   const d = run.decisions[st.length]!;
   const fb = d.feedback!;
   // progress metadata (practice progress counts decisions whether or not they are graded)
-  Object.assign(step, { street: d.info.street, graded: fb.graded, grade: fb.grade ?? null, basis: fb.basis, at: new Date().toISOString() });
+  Object.assign(step, { street: d.info.street, graded: fb.graded, grade: fb.grade ?? null, basis: fb.basis, at: new Date().toISOString(), eq: { equity: d.info.modelEquity.equity, stdErr: d.info.modelEquity.stdErr, samples: d.info.modelEquity.samples } });
   const complete = run.state.complete;
   // Claim the step first (optimistic concurrency): of two simultaneous requests only one may record.
   const claimed = await prisma.simHand.updateMany({
@@ -295,6 +299,8 @@ simRouter.post('/hands/:id/act', async (req, res) => {
       }
       return { leakOpportunities: ['potOdds'], optionLeaks: isError(fb.grade!) ? ['potOdds'] : [] };
     })();
+    let recordFailed = false;
+    // The step is already committed; if recording fails, keep the hand playable and say so.
     const outcome = await recordAttempt({
       userId,
       clientAttemptId: body.clientAttemptId,
@@ -328,10 +334,17 @@ simRouter.post('/hands/:id/act', async (req, res) => {
       responseMs: body.responseMs,
       reasoning: step.reasoning,
       result: { kind: 'sim', handId: h.id, decision: st.length, feedback: fb, facts: facts(d.info) },
+    }).catch((e: unknown) => {
+      console.error('sim recordAttempt failed', h.id, e);
+      recordFailed = true;
+      return null;
     });
-    step.attemptId = outcome.attemptId;
-    // link the attempt to the step (informational; skipped if another step already followed)
-    await prisma.simHand.updateMany({ where: { id: h.id, version: h.version + 1 }, data: { steps: [...st, step] as object } });
+    if (outcome) {
+      step.attemptId = outcome.attemptId;
+      // link the attempt to the step (informational; skipped if another step already followed)
+      await prisma.simHand.updateMany({ where: { id: h.id, version: h.version + 1 }, data: { steps: [...st, step] as object } });
+    }
+    if (recordFailed) res.setHeader('X-Attempt-Not-Recorded', '1');
   }
   if (complete && h.kind === 'play' && h.fingerprint) {
     const all = [...st, step] as (Step & { graded?: boolean; grade?: string | null })[];

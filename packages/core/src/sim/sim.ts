@@ -207,7 +207,12 @@ export interface RunOptions {
   oracle?: SpotOracle;
   /** Villain model version the hand was created with (default: current). */
   modelVersion?: string;
+  /** Model equity already computed for past Hero decisions (by decision index) — skips Monte Carlo. */
+  equityCache?: Record<number, CachedEquity>;
+  /** Skip Monte Carlo for the decision Hero has not made yet (its equity is never shown before acting). */
+  skipPendingEquity?: boolean;
 }
+export interface CachedEquity { equity: number; stdErr: number; samples: number }
 
 export interface HeroDecisionInfo {
   index: number;
@@ -475,13 +480,14 @@ export function modelEquity(hero: readonly Card[], board: readonly Card[], range
   return { equity: mean, stdErr: n ? Math.sqrt(variance / n) : 0, samples: n };
 }
 
-function heroInfo(run: { seed: number; config: SimConfig; ranges: Record<string, Float64Array> }, state: HandState, index: number, samples: number): HeroDecisionInfo {
+function heroInfo(run: { seed: number; config: SimConfig; ranges: Record<string, Float64Array> }, state: HandState, index: number, samples: number, cached?: CachedEquity): HeroDecisionInfo {
   const bb = state.config.bigBlind;
   const legal = legalActions(state)!;
   const hero = state.players[state.toAct]!;
   const req = requiredEquityToCall(state);
   const opps = state.players.filter((p) => !p.folded && p.id !== hero.id);
-  const eq = modelEquity(hero.cards!, state.board, opps.map((p) => run.ranges[p.id]!), samples, hashString(`${run.seed}:eq:${index}`));
+  // deterministic, so a value computed when the decision was made can be reused on every rebuild
+  const eq = cached ?? modelEquity(hero.cards!, state.board, opps.map((p) => run.ranges[p.id]!), samples, hashString(`${run.seed}:eq:${index}`));
   const live = (w: Float64Array) => {
     let s = 0;
     for (let i = 0; i < w.length; i++) s += w[i]!;
@@ -692,7 +698,10 @@ export function runSim(seed: number, config: SimConfig, heroActions: readonly Pl
     }
     if (actor.id === config.heroPos) {
       const node = opts.oracle?.(state, actor.id) ?? null;
-      const info = heroInfo(run, state, run.decisions.length, samples);
+      const idx = run.decisions.length;
+      const pending = k >= heroActions.length;
+      const cached = opts.equityCache?.[idx];
+      const info = heroInfo(run, state, idx, pending && opts.skipPendingEquity ? 0 : samples, cached);
       if (node) info.oracle = { source: node.source, label: node.label, actions: node.actions.map((x) => x.key), options: node.actions.map((x) => x.make) };
       if (k >= heroActions.length) {
         run.decisions.push({ info });

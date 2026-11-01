@@ -5,7 +5,10 @@ import type { Grade } from '../scenario/grading';
  * from ratings: repeated review improves mastery but never inflates ratings
  * (ratings apply a familiarity discount).
  */
-export const SRS_METHOD_VERSION = 'sm2-v1';
+export const SRS_METHOD_VERSION = 'sm2-v1.1';
+/** Caps keep schedules sane: shared review items (e.g. one per quiz type) can be answered hundreds of times. */
+export const MAX_EASE = 3.0;
+export const MAX_INTERVAL_DAYS = 365;
 
 export interface SrsState {
   repetitions: number;
@@ -26,7 +29,7 @@ export function initialSrs(now: Date): SrsState {
 export function reviewSrs(prev: SrsState, grade: Grade, now: Date, confidence?: 1 | 2 | 3): SrsState {
   let q = GRADE_QUALITY[grade];
   if (confidence === 1 && q > 3) q = 3;
-  const ease = Math.max(1.3, prev.ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
+  const ease = Math.min(MAX_EASE, Math.max(1.3, prev.ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))));
   let repetitions: number;
   let intervalDays: number;
   let lapses = prev.lapses;
@@ -36,7 +39,7 @@ export function reviewSrs(prev: SrsState, grade: Grade, now: Date, confidence?: 
     if (prev.repetitions > 0) lapses++;
   } else {
     repetitions = prev.repetitions + 1;
-    intervalDays = repetitions === 1 ? 1 : repetitions === 2 ? 3 : Math.round(prev.intervalDays * ease);
+    intervalDays = Math.min(MAX_INTERVAL_DAYS, repetitions === 1 ? 1 : repetitions === 2 ? 3 : Math.round(Math.min(prev.intervalDays, MAX_INTERVAL_DAYS) * ease));
   }
   const due = new Date(now.getTime() + intervalDays * 86400000);
   return { repetitions, ease, intervalDays, dueAt: due.toISOString(), lastQuality: q, lapses };

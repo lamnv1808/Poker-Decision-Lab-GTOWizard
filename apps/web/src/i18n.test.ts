@@ -24,6 +24,7 @@ describe('i18n', () => {
   it('dynamic key families are complete', () => {
     const fam: Record<string, string[]> = {
       grade: ['excellent', 'good', 'acceptable', 'marginal', 'mistake', 'major'],
+      'history.kind': ['hero', 'villain', 'math', 'review', 'imported', 'mixed', 'sim'],
       street: ['preflop', 'flop', 'turn', 'river'],
       skill: ['overall', 'preflop', 'flop', 'turn', 'river', 'rangeReading', 'math', 'shortStack', 'icm', 'pko', 'exploit'],
       source: ['MATH_VERIFIED', 'SOLVER_VERIFIED', 'COACH_REVIEWED', 'HEURISTIC', 'EXPERIMENTAL'],
