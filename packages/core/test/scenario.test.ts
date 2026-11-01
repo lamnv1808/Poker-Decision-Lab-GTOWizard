@@ -89,6 +89,21 @@ describe('runtime', () => {
   });
 });
 
+describe('sampling-error aware grading', () => {
+  it('does not penalise an EV difference inside the sampling error', () => {
+    const s = byId('bb-k9o-call-sb-shove-12bb');
+    const node = s.nodes[startScenario(s).nodeId] as DecisionNode;
+    const fake = { unit: 'bb' as const, assumptions: [], evStdErr: 0.1, outcomes: [{ key: 'call', ev: 0.15, detail: {} }, { key: 'fold', ev: 0, detail: {} }] };
+    const g = gradeDecision(s, node, node.options.find((o) => o.id === 'fold')!, fake);
+    expect(g.grade).toBe('excellent');
+    expect(g.note).toBe('withinSamplingError');
+    expect(g.evLoss).toBeCloseTo(0.15, 9);
+    const clear = gradeDecision(s, node, node.options.find((o) => o.id === 'fold')!, { ...fake, evStdErr: 0.01 });
+    expect(clear.grade).toBe('good');
+    expect(clear.note).toBeUndefined();
+  });
+});
+
 describe('math models', () => {
   it('shove model: EV(fold)=0 and EV(shove) is consistent with manual formula', () => {
     const s = byId('sb-q9o-10bb-shove-vs-bb');

@@ -167,8 +167,9 @@ export function evaluateModel(scenario: Scenario, node: DecisionNode, state: Han
         const tie = stacksAfter(called, 'tie', hero);
         branches.push({ prob: prob * eq.win, stacks: win }, { prob: prob * eq.lose, stacks: lose }, { prob: prob * eq.tie, stacks: tie });
         // sampling error on equity propagates linearly into EV: d(EV)/d(eq) = pot swing
-        const swing = (win[hero]! - lose[hero]!) / (unit === 'bb' ? scenario.table.bigBlind : 1);
-        if (unit === 'bb') evStdErr = Math.max(evStdErr, prob * eq.stdErr * swing);
+        // (in the node's unit: BB swing, or ICM %-of-pool swing between the win and lose branches)
+        const swing = valueOf([{ prob: 1, stacks: win }], scenario, unit, hero, baseStacks, order) - valueOf([{ prob: 1, stacks: lose }], scenario, unit, hero, baseStacks, order);
+        evStdErr = Math.max(evStdErr, prob * eq.stdErr * Math.abs(swing));
         perCaller[`${c.pos}.callPct`] = Math.round(p * 1000) / 10;
         perCaller[`${c.pos}.equityPct`] = Math.round(eq.equity * 1000) / 10;
       }
@@ -207,7 +208,7 @@ export function evaluateModel(scenario: Scenario, node: DecisionNode, state: Han
       { prob: eq.lose, stacks: lose },
       { prob: eq.tie, stacks: tie },
     ];
-    if (unit === 'bb') evStdErr = (eq.stdErr * (win[hero]! - lose[hero]!)) / scenario.table.bigBlind;
+    evStdErr = eq.stdErr * Math.abs(valueOf([{ prob: 1, stacks: win }], scenario, unit, hero, baseStacks, order) - valueOf([{ prob: 1, stacks: lose }], scenario, unit, hero, baseStacks, order));
     outcomes.push({
       key: 'call',
       ev: valueOf(branches, scenario, unit, hero, baseStacks, order),

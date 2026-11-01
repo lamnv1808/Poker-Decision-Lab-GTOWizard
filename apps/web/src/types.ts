@@ -38,7 +38,7 @@ export interface DecisionFeedback {
   basis: 'solverEv' | 'modelEv' | 'rubric' | 'none';
   evLoss: number | null;
   unit: 'bb' | 'icmPct' | null;
-  note: 'offTree' | 'unvalidatedSource' | 'rubricOnly' | null;
+  note: 'offTree' | 'unvalidatedSource' | 'rubricOnly' | 'withinSamplingError' | null;
   ratingEligible: boolean;
   options: { id: string; label: Localized; ev: number | null; rubricGrade: Grade | null; isBest: boolean; feedback: Localized }[];
   model: { unit: string; assumptions: string[]; evStdErr: number; outcomes: { key: string; ev: number; continueProb: number | null; detail: Record<string, number | string> }[] } | null;

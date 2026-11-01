@@ -46,6 +46,12 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await page.getByTestId('action-bar').getByRole('button', { name: 'Check' }).click();
   await expect(page.getByTestId('decision-sequence')).toBeVisible();
   await expect(page.getByTestId('run-complete')).toBeVisible();
+  // bookmark + personal note on the finished hand
+  await page.getByTestId('bookmark').click();
+  await expect(page.getByTestId('bookmark')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('note-input').fill('Small open, then c-bet small with the nut flush draw');
+  await page.getByTestId('note-save').click();
+  await expect(page.getByTestId('notes')).toContainText('nut flush draw');
 
   // Villain range reading
   await page.goto('/villain');
@@ -92,6 +98,12 @@ test('MVP critical path: train, review, import, persist across devices', async (
   // Review queue
   await page.goto('/train');
   await expect(page.getByTestId('queue-list')).toBeVisible();
+
+  // Review history: attempts, bookmarks, notes
+  await page.goto('/history');
+  await expect(page.getByTestId('history-table')).toBeVisible();
+  await expect(page.getByText('★ btn-ajs-35bb-open-flop-cbet')).toBeVisible();
+  await expect(page.getByTestId('all-notes')).toContainText('nut flush draw');
 
   // Progress, leaks, curriculum render
   await page.goto('/progress');

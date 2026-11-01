@@ -99,6 +99,7 @@ export function DecisionFeedbackView({ fb, bigBlind }: { fb: DecisionFeedback; b
         </div>
       </div>
       {fb.note === 'offTree' && <div className="rounded-md border border-amber-500/40 bg-amber-900/20 p-2.5 text-sm text-amber-200">{t('fb.offTree')}</div>}
+      {fb.note === 'withinSamplingError' && <div className="text-xs text-sky-300">{t('fb.withinError')}</div>}
       {fb.basis === 'rubric' && <div className="text-xs text-ink-400">{t('fb.rubricNote')}</div>}
       <div className="grid gap-2 text-sm sm:grid-cols-2">
         <div className="rounded-lg bg-ink-850 p-2.5">

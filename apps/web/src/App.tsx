@@ -6,6 +6,7 @@ import { AuthPage } from './pages/AuthPage';
 import { CurriculumPage } from './pages/Curriculum';
 import { Dashboard } from './pages/Dashboard';
 import { HandDetailPage, HandsPage } from './pages/Hands';
+import { HistoryPage } from './pages/History';
 import { LeaksPage } from './pages/Leaks';
 import { MathLab } from './pages/MathLab';
 import { ProgressPage } from './pages/Progress';
@@ -45,6 +46,7 @@ export function App() {
         <Route path="hands/:id" element={<HandDetailPage />} />
         <Route path="leaks" element={<LeaksPage />} />
         <Route path="progress" element={<ProgressPage />} />
+        <Route path="history" element={<HistoryPage />} />
         <Route path="curriculum" element={<CurriculumPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

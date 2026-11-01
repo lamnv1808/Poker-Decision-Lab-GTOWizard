@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, newAttemptId } from '../api';
 import { ActionBar } from '../components/ActionBar';
+import { NotesPanel } from '../components/Notes';
 import { CardText } from '../components/Cards';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
 import { Empty, ErrorNote, Panel, Spinner } from '../components/ui';
@@ -178,6 +179,10 @@ export function HandDetailPage() {
           ) : (
             <p className="mt-4 text-xs text-ink-400">{t('hands.hidden')}</p>
           )}
+          <div className="mt-4 border-t border-ink-800 pt-3">
+            <div className="mb-2 text-xs font-semibold uppercase text-ink-400">{t('history.notes')}</div>
+            <NotesPanel targetType="hand" targetRef={hand.id} />
+          </div>
           {hand.warnings.length > 0 && <ul className="mt-3 list-disc pl-5 text-xs text-amber-300">{hand.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
         </Panel>
       </div>

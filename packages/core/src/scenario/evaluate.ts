@@ -19,7 +19,7 @@ export interface DecisionGrade {
   isError: boolean;
   methodVersion: string;
   /** Human-readable reason when not graded or not rating-eligible. */
-  note?: 'offTree' | 'unvalidatedSource' | 'rubricOnly';
+  note?: 'offTree' | 'unvalidatedSource' | 'rubricOnly' | 'withinSamplingError';
 }
 
 const RUBRIC_ORDER: Grade[] = ['excellent', 'good', 'acceptable', 'marginal', 'mistake', 'major'];
@@ -44,7 +44,11 @@ export function gradeDecision(scenario: Scenario, node: DecisionNode, option: De
     const evLoss = Math.max(0, best - selected);
     const unit = node.evUnit;
     const thresholds: Thresholds = (node.thresholds as Thresholds | undefined) ?? DEFAULT_THRESHOLDS[unit];
-    const grade = gradeFromEvLoss(evLoss, thresholds);
+    // A difference smaller than ~2 standard errors of the model's sampling noise is not
+    // distinguishable from zero, so it must not be graded as a loss.
+    const noise = basisIsModel(scenario, option) && model ? 2 * model.evStdErr : 0;
+    const indistinguishable = evLoss > 0 && evLoss <= noise;
+    const grade = indistinguishable ? 'excellent' : gradeFromEvLoss(evLoss, thresholds);
     const basis: GradeBasis = scenario.source.classification === 'SOLVER_VERIFIED' && option.ev !== undefined ? 'solverEv' : 'modelEv';
     return {
       ...base,
@@ -56,7 +60,7 @@ export function gradeDecision(scenario: Scenario, node: DecisionNode, option: De
       bestOptionIds: bestIds(scenario, node, model),
       ratingEligible: sourceRated,
       isError: isError(grade),
-      note: sourceRated ? undefined : 'unvalidatedSource',
+      note: !sourceRated ? 'unvalidatedSource' : indistinguishable ? 'withinSamplingError' : undefined,
     };
   }
   if (!option.grade) {
@@ -74,6 +78,10 @@ export function gradeDecision(scenario: Scenario, node: DecisionNode, option: De
     isError: isError(option.grade),
     note: eligible ? undefined : sourceRated ? 'rubricOnly' : 'unvalidatedSource',
   };
+}
+
+function basisIsModel(scenario: Scenario, option: DecisionOption): boolean {
+  return !(scenario.source.classification === 'SOLVER_VERIFIED' && option.ev !== undefined);
 }
 
 export function bestIds(scenario: Scenario, node: DecisionNode, model: ModelResult | null): string[] {

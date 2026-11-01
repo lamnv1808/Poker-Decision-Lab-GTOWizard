@@ -25,6 +25,7 @@ Legend: ✅ done & tested · ◐ partial · ⛔ blocked/not done
 - ✅ Exact postflop equity; seeded MC preflop with std. error
 - ✅ Models: shove (multi-caller), call (incl. PKO bounty, ICM), river bet sizing
 - ✅ EV-loss grading with configurable thresholds, rubric grading, source-aware rating eligibility
+- ✅ Sampling error reported in BB and ICM units; EV differences within 2 standard errors are not graded as losses
 
 ## Phase 5 — Hero & Villain ✅
 - ✅ Hero mode; Villain mode with multiple choice, action/sizing prediction, range grid, combo count, percentage estimate; observed/assumption/derived labels
@@ -35,7 +36,8 @@ Legend: ✅ done & tested · ◐ partial · ⛔ blocked/not done
 
 ## Phase 7 — Leaks & spaced repetition ✅
 - ✅ 16-leak taxonomy, Wilson-bound ranking (≥6 opportunities, ≥2 errors), trend, severity, confidence, recommended scenarios
-- ✅ SM-2 review, confidence input, queue filters (due, missed, weak, bookmarked, new, mixed), notes API
+- ✅ SM-2 review, confidence input, queue filters (due, missed, weak, bookmarked, new, mixed)
+- ✅ Review History page: sessions, decisions (all / incorrect / reattempts), bookmarks, notes; notes and bookmarks on the training and hand-review screens
 
 ## Phase 8 — Hand-history import ✅
 - ✅ GG/Natural8 tournament TXT + ZIP, dedup, engine reconstruction with pot check, stored errors, hidden-action spot quiz, save-to-queue, per-user isolation
@@ -45,7 +47,7 @@ Legend: ✅ done & tested · ◐ partial · ⛔ blocked/not done
 - ◐ Content depth: 44 scenarios (23 math-verified, 21 heuristic). More final-table/PKO depth is content work, not engine work.
 
 ## Phase 10 — QA & release ◐
-- ✅ Unit (core 130), integration (server 15, real Postgres), component (web 10), Playwright E2E (desktop + mobile)
+- ✅ Unit (core 131), integration (server 17, real Postgres), component (web 10), Playwright E2E (desktop + mobile); CI green on GitHub
 - ✅ Security: hashed passwords/sessions, httpOnly SameSite cookies, origin check, rate limits, input validation, per-user isolation tests, no answers in bundle
 - ✅ Deployment config (`render.yaml`) and instructions (`docs/DEPLOYMENT.md`)
 - ⛔ Actual cloud deployment and two-real-computer verification need hosting credentials/approval (not available in this environment)
@@ -54,4 +56,3 @@ Legend: ✅ done & tested · ◐ partial · ⛔ blocked/not done
 - No solver data is included; nothing is labelled solver-verified. `COACH_REVIEWED` requires a named reviewer — none yet.
 - Off-tree actions end the hand (no heuristic continuation is invented).
 - GG run-it-twice hands and dead-small-blind hands are reported as unsupported.
-- Notes have an API but only a minimal UI (attached to history/hands is future work).

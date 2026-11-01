@@ -5,6 +5,7 @@ import { api, newAttemptId } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { DecisionFeedbackView, QuestionFeedbackView } from '../components/Feedback';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
+import { NotesPanel } from '../components/Notes';
 import { RangeGrid } from '../components/RangeGrid';
 import { Difficulty, ErrorNote, Panel, SourceBadge, Spinner } from '../components/ui';
 import { loc } from '../format';
@@ -72,6 +73,17 @@ export function RunPage() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [latest, setLatest] = useState<DecisionFeedback | QuestionFeedback | null>(null);
+  const [bookmarked, setBookmarked] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!view) return;
+    api.get<{ scenarioId: string }[]>('/bookmarks').then((b) => setBookmarked(b.some((x) => x.scenarioId === view.scenario.id))).catch(() => undefined);
+  }, [view?.scenario.id]);
+  const toggleBookmark = async () => {
+    if (!view) return;
+    if (bookmarked) await api.del(`/bookmarks/${view.scenario.id}`);
+    else await api.put(`/bookmarks/${view.scenario.id}`);
+    setBookmarked(!bookmarked);
+  };
 
   useEffect(() => {
     api.get<RunView>(`/runs/${id}`).then(setView).catch(setError);
@@ -130,7 +142,10 @@ export function RunPage() {
             <SourceBadge cls={s.source.classification} />
             <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${view.mode === 'rated' ? 'bg-gold/20 text-gold' : 'bg-ink-700 text-ink-300'}`}>{t(`mode.${view.mode}`)}</span>
           </div>
-          <h1 className="mt-1 text-xl font-bold">{loc(s.title, lang)}</h1>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-bold">
+            {loc(s.title, lang)}
+            <button type="button" onClick={() => void toggleBookmark()} aria-pressed={!!bookmarked} aria-label={t('list.bookmark')} title={t('list.bookmark')} className={`text-lg ${bookmarked ? 'text-gold' : 'text-ink-600 hover:text-ink-300'}`} data-testid="bookmark">★</button>
+          </h1>
           <p className="text-sm text-ink-300">{loc(s.summary, lang)}</p>
         </div>
         <div className="text-right text-xs text-ink-400 tabular">
@@ -177,6 +192,7 @@ export function RunPage() {
           ) : (
             <Panel title={t('run.feedback')}><p className="text-sm text-ink-400">{t('run.feedbackHint')}</p></Panel>
           )}
+          {view.status === 'complete' && <Panel title={t('history.notes')}><NotesPanel targetType="scenario" targetRef={s.id} /></Panel>}
           {view.feedback.length > 1 && (
             <Panel title={t('run.sequence')}>
               <ol className="space-y-1 text-sm" data-testid="decision-sequence">

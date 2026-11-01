@@ -12,6 +12,7 @@ export const NAV = [
   { to: '/hands', key: 'hands', icon: '⇪' },
   { to: '/leaks', key: 'leaks', icon: '⚠' },
   { to: '/progress', key: 'progress', icon: '↗' },
+  { to: '/history', key: 'history', icon: '⟲' },
   { to: '/curriculum', key: 'curriculum', icon: '☰' },
   { to: '/settings', key: 'settings', icon: '⚙' },
 ];

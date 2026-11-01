@@ -30,6 +30,8 @@ const tokenHash = (t: string) => createHash('sha256').update(t).digest('hex');
 async function createSession(res: Response, userId: string, userAgent?: string) {
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000);
+  // Housekeeping: drop this user's expired sessions on every sign-in.
+  await prisma.session.deleteMany({ where: { userId, expiresAt: { lt: new Date() } } });
   await prisma.session.create({ data: { tokenHash: tokenHash(token), userId, expiresAt, userAgent: userAgent?.slice(0, 200) } });
   res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: isProd, expires: expiresAt, path: '/' });
 }
@@ -142,3 +144,9 @@ preferencesRouter.put('/', async (req, res) => {
   await prisma.userPreference.upsert({ where: { userId }, create: { userId, ...prefs }, update: prefs });
   res.json(await profile(userId));
 });
+
+/** Remove all expired sessions (run at boot). */
+export async function purgeExpiredSessions(): Promise<number> {
+  const r = await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  return r.count;
+}

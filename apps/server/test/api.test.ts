@@ -124,6 +124,29 @@ describe('hero training run', () => {
   });
 });
 
+describe('notes, bookmarks and sessions', () => {
+  it('keeps notes and bookmarks private to their owner', async () => {
+    const a = await newUser('noter');
+    const b = await newUser('snoop');
+    const note = await a.agent.post('/api/notes').send({ targetType: 'scenario', targetRef: 'bb-k9o-call-sb-shove-12bb', body: 'Remember: 44% needed' }).expect(201);
+    await a.agent.put('/api/bookmarks/bb-k9o-call-sb-shove-12bb').expect(200);
+    expect((await a.agent.get('/api/notes')).body).toHaveLength(1);
+    expect((await b.agent.get('/api/notes')).body).toEqual([]);
+    expect((await b.agent.get('/api/bookmarks')).body).toEqual([]);
+    await b.agent.delete(`/api/notes/${note.body.id}`).expect(200); // no-op for other users
+    expect((await a.agent.get('/api/notes')).body).toHaveLength(1);
+    await a.agent.delete(`/api/notes/${note.body.id}`).expect(200);
+    expect((await a.agent.get('/api/notes')).body).toEqual([]);
+    expect((await a.agent.put('/api/bookmarks/does-not-exist')).status).toBe(404);
+  });
+  it('purges expired sessions on sign-in', async () => {
+    const { agent, email, id } = await newUser('expiry');
+    await prisma.session.create({ data: { tokenHash: `expired-${id}`, userId: id, expiresAt: new Date(Date.now() - 1000) } });
+    await agent.post('/api/auth/login').send({ email, password: 'correct horse battery' }).expect(200);
+    expect(await prisma.session.count({ where: { userId: id, expiresAt: { lt: new Date() } } })).toBe(0);
+  });
+});
+
 describe('math lab', () => {
   it('issues signed quizzes and grades answers server-side', async () => {
     const { agent } = await newUser('math');
