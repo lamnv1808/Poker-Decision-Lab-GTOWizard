@@ -196,6 +196,10 @@ export const ggParser: HandHistoryParser = {
         continue;
       }
     }
+    // GG prints "shows" both at an all-in and again at showdown: keep one entry per player.
+    const seenShow = new Map<string, Card[]>();
+    for (const sh of hand.shown) if (!seenShow.has(sh.player) || sh.cards.length > seenShow.get(sh.player)!.length) seenShow.set(sh.player, sh.cards);
+    hand.shown = [...seenShow].map(([player, cards]) => ({ player, cards }));
     if (!hand.heroName) hand.warnings.push('Hero hole cards not found');
     if (hand.buttonSeat === null) hand.warnings.push('Button seat not found');
     if (hand.seats.length < 2) throw new HandParseError('Fewer than two seats found', hand.handId);
@@ -244,7 +248,7 @@ export function reconstructHand(parsed: ParsedHand): ReconstructedHand {
   const labels = positionsFor(n);
   const positions: Record<string, string> = {};
   ordered.forEach((s, k) => (positions[s.name] = labels[k]!));
-  const shownBy = new Map(parsed.shown.map((s) => [s.player, s.cards]));
+  const shownBy = new Map(parsed.shown.filter((s) => s.cards.length === 2).map((s) => [s.player, s.cards]));
   if (parsed.heroName && parsed.heroCards) shownBy.set(parsed.heroName, parsed.heroCards);
   const antePosts = parsed.posts.filter((p) => p.kind === 'ante');
   const anteMode = antePosts.length === 0 ? 'none' : antePosts.length === 1 && antePosts[0]!.player === bbPost.player && n > 2 ? 'bigBlind' : 'each';

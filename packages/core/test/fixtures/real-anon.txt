@@ -1,0 +1,457 @@
+# fixture: sidePotsMultiway
+Poker Hand #TM9000000002: Tournament #900000000, Speed Racer Bounty $3.20 [10 BB] Hold'em No Limit - Level1(500/1,000(150)) - 2026/01/01 12:00:00
+Table '14' 6-max Seat #3 is the button
+Seat 1: Player1 (23,050 in chips)
+Seat 3: Hero (2,700 in chips)
+Seat 4: Player2 (9,850 in chips)
+Seat 5: Player3 (6,650 in chips)
+Seat 6: Player4 (50,800 in chips)
+Player2: posts the ante 150
+Player1: posts the ante 150
+Player3: posts the ante 150
+Player4: posts the ante 150
+Hero: posts the ante 150
+Player2: posts small blind 500
+Player3: posts big blind 1,000
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Hero [8c 6c]
+Dealt to Player2 
+Dealt to Player3 
+Dealt to Player4 
+Player4: calls 1,000
+Player1: calls 1,000
+Hero: raises 1,550 to 2,550 and is all-in
+Player2: calls 2,050
+Player3: calls 1,550
+Player4: raises 48,100 to 50,650 and is all-in
+Player1: calls 21,900 and is all-in
+Player2: calls 7,150 and is all-in
+Player3: calls 3,950 and is all-in
+Uncalled bet (27,750) returned to Player4
+Player4: shows [7c Qc]
+Player1: shows [As 9s]
+Hero: shows [8c 6c]
+Player2: shows [Ad 3d]
+Player3: shows [2s 2d]
+*** FLOP *** [Tc Kd Kc]
+*** TURN *** [Tc Kd Kc] [5h]
+*** RIVER *** [Tc Kd Kc 5h] [6d]
+*** SHOWDOWN ***
+Hero collected 13,500 from pot
+Player3 collected 15,800 from pot
+Player1 collected 9,600 from pot
+Player1 collected 26,400 from pot
+*** SUMMARY ***
+Total pot 65,300 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [Tc Kd Kc 5h 6d]
+Seat 1: Player1 showed [As 9s] and won (36,000) with a pair of Kings
+Seat 3: Hero (button) showed [8c 6c] and won (13,500) with two pair, Kings and Sixes
+Seat 4: Player2 (small blind) showed [Ad 3d] and lost with a pair of Kings
+Seat 5: Player3 (big blind) showed [2s 2d] and won (15,800) with two pair, Kings and Twos
+Seat 6: Player4 showed [7c Qc] and lost with a pair of Kings
+
+# fixture: shortAllInNoReopen
+Poker Hand #TM9000000003: Tournament #900000000, Bounty Hunters Sunday Hyper Special $5.40 Hold'em No Limit - Level8(250/500(75)) - 2026/01/01 12:00:00
+Table '184' 6-max Seat #1 is the button
+Seat 1: Player1 (1,315 in chips)
+Seat 2: Player2 (15,855 in chips)
+Seat 3: Player3 (12,580 in chips)
+Seat 4: Hero (13,482 in chips)
+Seat 5: Player4 (14,694 in chips)
+Seat 6: Player5 (20,770 in chips)
+Player1: posts the ante 75
+Player4: posts the ante 75
+Player3: posts the ante 75
+Hero: posts the ante 75
+Player5: posts the ante 75
+Player2: posts the ante 75
+Player2: posts small blind 250
+Player3: posts big blind 500
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Player2 
+Dealt to Player3 
+Dealt to Hero [Kd Td]
+Dealt to Player4 
+Dealt to Player5 
+Hero: raises 500 to 1,000
+Player4: folds
+Player5: calls 1,000
+Player1: raises 240 to 1,240 and is all-in
+Player2: calls 990
+Player3: calls 740
+Hero: calls 240
+Player5: calls 240
+*** FLOP *** [4h 9h 4s]
+Player2: checks
+Player3: bets 6,650
+Hero: folds
+Player5: folds
+Player2: folds
+Uncalled bet (6,650) returned to Player3
+Player3: shows [9s 6h] (two pair, Nines and Fours)
+Player1: shows [Tc Jh] (a pair of Fours)
+*** TURN *** [4h 9h 4s] [9c]
+*** RIVER *** [4h 9h 4s 9c] [Kh]
+*** SHOWDOWN ***
+Player3 collected 6,650 from pot
+*** SUMMARY ***
+Total pot 6,650 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [4h 9h 4s 9c Kh]
+Seat 1: Player1 (button) showed [Tc Jh] and lost with two pair, Nines and Fours
+Seat 2: Player2 (small blind) folded on the Flop
+Seat 3: Player3 (big blind) showed [9s 6h] and won (6,650) with a full house, Nines full of Fours
+Seat 4: Hero folded on the Flop
+Seat 5: Player4 folded before Flop
+Seat 6: Player5 folded on the Flop
+
+# fixture: uncalledReturn
+Poker Hand #TM9000000001: Tournament #900000000, Bounty Hunters Special $10.80 Hold'em No Limit - Level15(600/1,200(180)) - 2026/01/01 12:00:00
+Table '124' 8-max Seat #2 is the button
+Seat 1: Player1 (25,556 in chips)
+Seat 2: Player2 (10,834 in chips)
+Seat 3: Player3 (53,735 in chips)
+Seat 4: Player4 (88,909 in chips)
+Seat 5: Player5 (19,203 in chips)
+Seat 6: Player6 (32,244 in chips)
+Seat 7: Hero (28,679 in chips)
+Seat 8: Player7 (59,760 in chips)
+Player2: posts the ante 180
+Player6: posts the ante 180
+Player4: posts the ante 180
+Player7: posts the ante 180
+Hero: posts the ante 180
+Player3: posts the ante 180
+Player5: posts the ante 180
+Player1: posts the ante 180
+Player3: posts small blind 600
+Player4: posts big blind 1,200
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Player2 
+Dealt to Player3 
+Dealt to Player4 
+Dealt to Player5 
+Dealt to Player6 
+Dealt to Hero [Jh 6d]
+Dealt to Player7 
+Player5: folds
+Player6: folds
+Hero: folds
+Player7: raises 1,200 to 2,400
+Player1: folds
+Player2: folds
+Player3: folds
+Player4: calls 1,200
+*** FLOP *** [4d 9c 8s]
+Player4: checks
+Player7: checks
+*** TURN *** [4d 9c 8s] [9d]
+Player4: checks
+Player7: checks
+*** RIVER *** [4d 9c 8s 9d] [Ah]
+Player4: checks
+Player7: bets 4,800
+Player4: folds
+Uncalled bet (4,800) returned to Player7
+*** SHOWDOWN ***
+Player7 collected 6,840 from pot
+*** SUMMARY ***
+Total pot 6,840 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [4d 9c 8s 9d Ah]
+Seat 1: Player1 folded before Flop
+Seat 2: Player2 (button) folded before Flop
+Seat 3: Player3 (small blind) folded before Flop
+Seat 4: Player4 (big blind) folded on the River
+Seat 5: Player5 folded before Flop
+Seat 6: Player6 folded before Flop
+Seat 7: Hero folded before Flop
+Seat 8: Player7 won (6,840)
+
+# fixture: shortBigBlindCall
+Poker Hand #TM9000000008: Tournament #900000000, Speed Racer Bounty $5.40 [10 BB] Hold'em No Limit - Level12(8,000/16,000(2,400)) - 2026/01/01 12:00:00
+Table '31' 6-max Seat #3 is the button
+Seat 1: Player1 (15,573 in chips)
+Seat 2: Hero (121,903 in chips)
+Seat 3: Player2 (141,144 in chips)
+Seat 5: Player3 (140,960 in chips)
+Seat 6: Player4 (14,304 in chips)
+Player4: posts the ante 2,400
+Player1: posts the ante 2,400
+Player3: posts the ante 2,400
+Hero: posts the ante 2,400
+Player2: posts the ante 2,400
+Player3: posts small blind 8,000
+Player4: posts big blind 11,904
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Hero [As Kd]
+Dealt to Player2 
+Dealt to Player3 
+Dealt to Player4 
+Player1: calls 13,173 and is all-in
+Hero: raises 103,503 to 119,503 and is all-in
+Player2: raises 19,241 to 138,744 and is all-in
+Player3: folds
+Uncalled bet (19,241) returned to Player2
+Player2: shows [Td 9h]
+Player4: shows [3s 3d]
+Player1: shows [Th Jh]
+Hero: shows [As Kd]
+*** FLOP *** [9c 4c 7h]
+*** TURN *** [9c 4c 7h] [Qc]
+*** RIVER *** [9c 4c 7h Qc] [Ks]
+*** SHOWDOWN ***
+Player1 collected 67,616 from pot
+Player1 collected 3,807 from pot
+Hero collected 212,660 from pot
+*** SUMMARY ***
+Total pot 284,083 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [9c 4c 7h Qc Ks]
+Seat 1: Player1 showed [Th Jh] and won (71,423) with a straight, King to Nine
+Seat 2: Hero showed [As Kd] and won (212,660) with a pair of Kings
+Seat 3: Player2 (button) showed [Td 9h] and lost with a pair of Nines
+Seat 5: Player3 (small blind) folded before Flop
+Seat 6: Player4 (big blind) showed [3s 3d] and lost with a pair of Threes
+
+# fixture: potOddsAllInForLess
+Poker Hand #TM9000000004: Tournament #900000000, Bounty Hunters Mini Encore $5.40 Hold'em No Limit - Level19(3,000/6,000(900)) - 2026/01/01 12:00:00
+Table '185' 8-max Seat #5 is the button
+Seat 1: Player1 (383,110 in chips)
+Seat 2: Player2 (161,768 in chips)
+Seat 3: Hero (55,424 in chips)
+Seat 4: Player3 (142,926 in chips)
+Seat 5: Player4 (290,191 in chips)
+Seat 6: Player5 (153,152 in chips)
+Seat 7: Player6 (176,856 in chips)
+Seat 8: Player7 (411,554 in chips)
+Player3: posts the ante 900
+Player2: posts the ante 900
+Player1: posts the ante 900
+Player6: posts the ante 900
+Player4: posts the ante 900
+Player5: posts the ante 900
+Hero: posts the ante 900
+Player7: posts the ante 900
+Player5: posts small blind 3,000
+Player6: posts big blind 6,000
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Player2 
+Dealt to Hero [Ad Jh]
+Dealt to Player3 
+Dealt to Player4 
+Dealt to Player5 
+Dealt to Player6 
+Dealt to Player7 
+Player7: folds
+Player1: folds
+Player2: folds
+Hero: raises 6,000 to 12,000
+Player3: folds
+Player4: folds
+Player5: raises 140,252 to 152,252 and is all-in
+Player6: folds
+Hero: folds
+Uncalled bet (140,252) returned to Player5
+*** SHOWDOWN ***
+Player5 collected 37,200 from pot
+*** SUMMARY ***
+Total pot 37,200 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Seat 1: Player1 folded before Flop
+Seat 2: Player2 folded before Flop
+Seat 3: Hero folded before Flop
+Seat 4: Player3 folded before Flop
+Seat 5: Player4 (button) folded before Flop
+Seat 6: Player5 (small blind) collected (37,200)
+Seat 7: Player6 (big blind) folded before Flop
+Seat 8: Player7 folded before Flop
+
+# fixture: heroShowsOneCard
+Poker Hand #TM9000000006: Tournament #900000000, Bounty Hunters Sunday Special $10.80 Hold'em No Limit - Level11(350/700(100)) - 2026/01/01 12:00:00
+Table '116' 8-max Seat #1 is the button
+Seat 1: Hero (28,990 in chips)
+Seat 2: Player1 (33,615 in chips)
+Seat 3: Player2 (60,330 in chips)
+Seat 4: Player3 (32,135 in chips)
+Seat 5: Player4 (80,388 in chips)
+Seat 6: Player5 (9,800 in chips)
+Seat 7: Player6 (24,795 in chips)
+Seat 8: Player7 (35,939 in chips)
+Player4: posts the ante 100
+Player1: posts the ante 100
+Player2: posts the ante 100
+Hero: posts the ante 100
+Player7: posts the ante 100
+Player3: posts the ante 100
+Player6: posts the ante 100
+Player5: posts the ante 100
+Player1: posts small blind 350
+Player2: posts big blind 700
+*** HOLE CARDS ***
+Dealt to Hero [8c 2h]
+Dealt to Player1 
+Dealt to Player2 
+Dealt to Player3 
+Dealt to Player4 
+Dealt to Player5 
+Dealt to Player6 
+Dealt to Player7 
+Player3: folds
+Player4: folds
+Player5: raises 9,000 to 9,700 and is all-in
+Player6: raises 14,995 to 24,695 and is all-in
+Player7: folds
+Hero: folds
+Player1: folds
+Player2: folds
+Uncalled bet (14,995) returned to Player6
+Player6: shows [5s 5d]
+Player5: shows [Ac Kd]
+*** FLOP *** [Qh 4h 6h]
+*** TURN *** [Qh 4h 6h] [7h]
+*** RIVER *** [Qh 4h 6h 7h] [Ad]
+Hero: shows [2h] (a flush Queen high)
+*** SHOWDOWN ***
+Player5 collected 21,250 from pot
+*** SUMMARY ***
+Total pot 21,250 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [Qh 4h 6h 7h Ad]
+Seat 1: Hero (button) folded before Flop
+Seat 2: Player1 (small blind) folded before Flop
+Seat 3: Player2 (big blind) folded before Flop
+Seat 4: Player3 folded before Flop
+Seat 5: Player4 folded before Flop
+Seat 6: Player5 showed [Ac Kd] and won (21,250) with a pair of Aces
+Seat 7: Player6 showed [5s 5d] and lost with a pair of Fives
+Seat 8: Player7 folded before Flop
+
+# fixture: duplicateShowLines
+Poker Hand #TM9000000005: Tournament #900000000, Bounty Hunters Deepstack Turbo $8.88 Hold'em No Limit - Level9(300/600(90)) - 2026/01/01 12:00:00
+Table '58' 8-max Seat #1 is the button
+Seat 1: Player1 (80,360 in chips)
+Seat 2: Player2 (54,122 in chips)
+Seat 3: Player3 (17,115 in chips)
+Seat 4: Hero (75,170 in chips)
+Seat 5: Player4 (19,730 in chips)
+Seat 6: Player5 (56,164 in chips)
+Seat 7: Player6 (11,194 in chips)
+Seat 8: Player7 (81,332 in chips)
+Player7: posts the ante 90
+Player1: posts the ante 90
+Player6: posts the ante 90
+Player5: posts the ante 90
+Player4: posts the ante 90
+Hero: posts the ante 90
+Player2: posts the ante 90
+Player3: posts the ante 90
+Player2: posts small blind 300
+Player3: posts big blind 600
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Player2 
+Dealt to Player3 
+Dealt to Hero [Ah Th]
+Dealt to Player4 
+Dealt to Player5 
+Dealt to Player6 
+Dealt to Player7 
+Hero: raises 600 to 1,200
+Player4: folds
+Player5: folds
+Player6: folds
+Player7: calls 1,200
+Player1: calls 1,200
+Player2: calls 900
+Player3: calls 600
+*** FLOP *** [8s 4h 6s]
+Player2: checks
+Player3: checks
+Hero: checks
+Player7: checks
+Player1: checks
+*** TURN *** [8s 4h 6s] [7c]
+Player2: checks
+Player3: checks
+Hero: checks
+Player7: bets 2,218
+Player1: calls 2,218
+Player2: folds
+Player3: calls 2,218
+Hero: folds
+*** RIVER *** [8s 4h 6s 7c] [Tc]
+Player3: bets 4,200
+Player7: folds
+Player1: calls 4,200
+Player3: shows [Qs 9s] (a straight, Ten to Six)
+Player1: shows [7d 6d] (two pair, Sevens and Sixes)
+Player7: shows [Td] (a pair of Tens)
+Player3: shows [Qs 9s] (a straight, Ten to Six)
+Player1: shows [7d 6d] (two pair, Sevens and Sixes)
+*** SHOWDOWN ***
+Player3 collected 21,774 from pot
+*** SUMMARY ***
+Total pot 21,774 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [8s 4h 6s 7c Tc]
+Seat 1: Player1 (button) showed [7d 6d] and lost with two pair, Sevens and Sixes
+Seat 2: Player2 (small blind) folded on the Turn
+Seat 3: Player3 (big blind) showed [Qs 9s] and won (21,774) with a straight, Ten to Six
+Seat 4: Hero folded on the Turn
+Seat 5: Player4 folded before Flop
+Seat 6: Player5 folded before Flop
+Seat 7: Player6 folded before Flop
+Seat 8: Player7 folded on the River
+
+# fixture: allInForfeitFold
+Poker Hand #TM9000000007: Tournament #900000000, Bounty Hunters Deepstack Turbo $5.40 Hold'em No Limit - Level24(5,000/10,000(1,500)) - 2026/01/01 12:00:00
+Table '58' 8-max Seat #4 is the button
+Seat 1: Player1 (142,462 in chips)
+Seat 2: Player2 (178,961 in chips)
+Seat 3: Hero (95,811 in chips)
+Seat 4: Player3 (361,062 in chips)
+Seat 5: Player4 (412 in chips)
+Seat 6: Player5 (172,126 in chips)
+Seat 7: Player6 (259,097 in chips)
+Seat 8: Player7 (216,586 in chips)
+Player7: posts the ante 1,500
+Player4: posts the ante 412
+Player3: posts the ante 1,500
+Hero: posts the ante 1,500
+Player1: posts the ante 1,500
+Player2: posts the ante 1,500
+Player5: posts the ante 1,500
+Player6: posts the ante 1,500
+Player4: posts small blind 0
+Player5: posts big blind 10,000
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Player2 
+Dealt to Hero [8d 3s]
+Dealt to Player3 
+Dealt to Player4 
+Dealt to Player5 
+Dealt to Player6 
+Dealt to Player7 
+Player6: raises 247,597 to 257,597 and is all-in
+Player7: folds
+Player1: folds
+Player2: folds
+Hero: folds
+Player3: folds
+Player4: folds
+Player5: folds
+Uncalled bet (247,597) returned to Player6
+*** SHOWDOWN ***
+Player6 collected 3,296 from pot
+Player6 collected 27,616 from pot
+*** SUMMARY ***
+Total pot 30,912 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Seat 1: Player1 folded before Flop
+Seat 2: Player2 folded before Flop
+Seat 3: Hero folded before Flop
+Seat 4: Player3 (button) folded before Flop
+Seat 5: Player4 (small blind) folded before Flop
+Seat 6: Player5 (big blind) folded before Flop
+Seat 7: Player6 collected (30,912)
+Seat 8: Player7 folded before Flop

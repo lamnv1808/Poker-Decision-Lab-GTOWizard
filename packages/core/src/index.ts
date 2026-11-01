@@ -8,4 +8,5 @@ export * from './leaks';
 export * from './quiz';
 export * from './hh';
 export * from './gto';
+export * from './realhands';
 export * from './content';

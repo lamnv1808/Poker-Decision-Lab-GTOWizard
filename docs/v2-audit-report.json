@@ -1,0 +1,119 @@
+{
+  "source": "Poker_Real_Hand_Source_v2 (private, not committed)",
+  "hands": {
+    "total": 52523,
+    "accepted": 52483,
+    "quarantined": 40,
+    "byReason": {
+      "unsupported_format": 37,
+      "parse_failed": 2,
+      "pot_total_mismatch": 1
+    },
+    "examples": {
+      "unsupported_format": [
+        "TM\u2026: Unrecognized header (only GGPoker No-Limit Hold\u2019em tournament hands are supported)",
+        "TM\u2026: Unrecognized header (only GGPoker No-Limit Hold\u2019em tournament hands are supported)",
+        "TM\u2026: Unrecognized header (only GGPoker No-Limit Hold\u2019em tournament hands are supported)",
+        "TM\u2026: Unrecognized header (only GGPoker No-Limit Hold\u2019em tournament hands are supported)",
+        "TM\u2026: Unrecognized header (only GGPoker No-Limit Hold\u2019em tournament hands are supported)"
+      ],
+      "parse_failed": [
+        "TM\u2026: Line 28: expected no one to act, history says Hero",
+        "TM\u2026: Line 28: expected no one to act, history says 4382daad"
+      ],
+      "pot_total_mismatch": [
+        "TM\u2026: Reconstructed pot 78906 \u2260 history total 61812"
+      ]
+    },
+    "notes": {
+      "history records a fold by an all-in player (treated as a forfeit)": 58,
+      "odd-chip allocation in a split pot differs from the engine": 5
+    }
+  },
+  "decisions": {
+    "total": 78821,
+    "accepted": 78704,
+    "quarantined": 117,
+    "byReason": {
+      "hand_invalid": 59,
+      "call_mismatch": 58
+    },
+    "examples": {
+      "hand_invalid": [
+        "TM\u2026-1: unsupported_format",
+        "TM\u2026-2: unsupported_format",
+        "TM\u2026-1: unsupported_format",
+        "TM\u2026-2: unsupported_format",
+        "TM\u2026-1: unsupported_format"
+      ],
+      "call_mismatch": [
+        "TM\u2026-1: 0.8233 vs engine 1.0000 BB",
+        "TM\u2026-1: 0.7525 vs engine 1.0000 BB",
+        "TM\u2026-1: 0.5000 vs engine 1.0000 BB",
+        "TM\u2026-1: 0.8500 vs engine 1.0000 BB",
+        "TM\u2026-1: 0.6594 vs engine 1.0000 BB"
+      ]
+    },
+    "byStreet": {
+      "preflop": {
+        "accepted": 54959,
+        "quarantined": 101
+      },
+      "flop": {
+        "accepted": 12149,
+        "quarantined": 13
+      },
+      "turn": {
+        "accepted": 7093,
+        "quarantined": 2
+      },
+      "river": {
+        "accepted": 4503,
+        "quarantined": 1
+      }
+    },
+    "orphan": 0
+  },
+  "quizzes": {
+    "total": 12286,
+    "accepted": 11347,
+    "quarantined": 939,
+    "byReason": {
+      "winnable_pot_differs": 920,
+      "decision_invalid": 6,
+      "third_player_all_in": 15
+    },
+    "examples": {
+      "winnable_pot_differs": [
+        "TM\u2026-1-odds: supplied 39.35% vs engine 41.92%",
+        "TM\u2026-2-odds: supplied 19.33% vs engine 34.79%",
+        "TM\u2026-2-odds: supplied 21.18% vs engine 44.62%",
+        "TM\u2026-4-odds: supplied 42.56% vs engine 48.37%",
+        "TM\u2026-5-odds: supplied 23.88% vs engine 33.94%"
+      ],
+      "decision_invalid": [
+        "TM\u2026-2-odds: underlying decision quarantined",
+        "TM\u2026-3-odds: underlying decision quarantined",
+        "TM\u2026-2-odds: underlying decision quarantined",
+        "TM\u2026-4-odds: underlying decision quarantined",
+        "TM\u2026-1-odds: underlying decision quarantined"
+      ],
+      "third_player_all_in": [
+        "TM\u2026-1-odds: a third player is all-in",
+        "TM\u2026-3-odds: a third player is all-in",
+        "TM\u2026-3-odds: a third player is all-in",
+        "TM\u2026-3-odds: a third player is all-in",
+        "TM\u2026-4-odds: a third player is all-in"
+      ]
+    },
+    "terminal": 2998,
+    "nonterminal": 8349
+  },
+  "formats": {
+    "PKO": 46122,
+    "Hyper": 4281,
+    "MTT": 820,
+    "Turbo": 934,
+    "Freeroll": 366
+  }
+}
