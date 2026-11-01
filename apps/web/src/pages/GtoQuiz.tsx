@@ -1,7 +1,7 @@
 import type { HandState } from '@pdl/core/engine';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, newAttemptId } from '../api';
+import { api, newAttemptId, mixedSessionId } from '../api';
 import { GtoGrid } from '../components/GtoGrid';
 import { PokerTable } from '../components/PokerTable';
 import { GtoPostflop } from './GtoPostflop';
@@ -63,7 +63,7 @@ export function GtoQuiz() {
       if (!spot || result || busy) return;
       setBusy(true);
       try {
-        const r = await api.post<Result>('/gto/answer', { token: spot.token, action, clientAttemptId: newAttemptId(), mode });
+        const r = await api.post<Result>('/gto/answer', { token: spot.token, action, clientAttemptId: newAttemptId(), mode, sessionId: mixedSessionId() });
         setResult(r);
         setView(spot.role === 'sbShove' ? 'push' : 'call');
         const ok = r.evLossBB < 0.05;

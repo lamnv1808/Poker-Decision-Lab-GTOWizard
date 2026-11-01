@@ -161,6 +161,8 @@ model TrainingSession {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind      String // hero | villain | math | review | imported | mixed
   mode      String // practice | rated
+  /// Mixed Training: { durationMin, difficulty, focus[] } and the picker's history
+  config    Json?
   startedAt DateTime  @default(now())
   endedAt   DateTime?
 

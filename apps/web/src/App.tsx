@@ -1,4 +1,5 @@
 import { HeroSimPage, HeroSimSetup } from './pages/HeroSim';
+import { MixedRunner, MixedSetup, MixedSummary } from './pages/Mixed';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -51,6 +52,9 @@ export function App() {
         <Route path="villain/browse" element={<ScenarioList mode="villain" />} />
         <Route path="run/:id" element={<RunPage />} />
         <Route path="play" element={<HeroSimSetup />} />
+        <Route path="mixed" element={<MixedSetup />} />
+        <Route path="mixed/:id" element={<MixedRunner />} />
+        <Route path="mixed/:id/summary" element={<MixedSummary />} />
         <Route path="play/:id" element={<HeroSimPage />} />
         <Route path="math" element={<MathLab />} />
         <Route path="fundamentals" element={<FundamentalsPage />} />

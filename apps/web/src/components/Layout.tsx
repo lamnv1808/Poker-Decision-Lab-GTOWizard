@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { MixedBar } from '../pages/Mixed';
 import { useT } from '../i18n';
 import { useApp } from '../store';
 
 export const NAV = [
   { to: '/', key: 'dashboard', icon: '▦' },
   { to: '/train', key: 'train', icon: '◎' },
+  { to: '/mixed', key: 'mixed', icon: '⧉' },
   { to: '/play', key: 'play', icon: '♠' },
   { to: '/hero', key: 'hero', icon: '♤' },
   { to: '/villain', key: 'villain', icon: '◐' },
@@ -92,6 +94,7 @@ export function Layout() {
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5">
+          <MixedBar />
           <Outlet />
         </main>
       </div>

@@ -32,3 +32,9 @@ export const api = {
 };
 
 export const newAttemptId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+/** The Mixed Training session this page was opened from (`?mixed=<id>`), if any. */
+export function mixedSessionId(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return new URLSearchParams(window.location.search).get('mixed') ?? undefined;
+}

@@ -1,3 +1,4 @@
+import { mixedSessionFor } from './mixed';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { QUIZ_KINDS, type QuizKind, generateQuiz, gradeQuiz, quizDifficulty, GRADING_METHOD_VERSION, isError } from '@pdl/core';
 import { Router } from 'express';
@@ -40,11 +41,12 @@ mathRouter.get('/quiz', (req, res) => {
 
 mathRouter.post('/quiz/answer', async (req, res) => {
   const userId = requireUser(req);
-  const body = parse(z.object({ token: z.string().min(10).max(2000), value: z.number().finite(), clientAttemptId: z.string().min(8).max(100), mode: z.enum(['practice', 'rated']).default('rated') }), req.body);
+  const body = parse(z.object({ sessionId: z.string().uuid().optional(), token: z.string().min(10).max(2000), value: z.number().finite(), clientAttemptId: z.string().min(8).max(100), mode: z.enum(['practice', 'rated']).default('rated') }), req.body);
   const t = readToken(userId, body.token);
   const quiz = generateQuiz(t.k, t.s, t.l);
   const { grade, error } = gradeQuiz(quiz, body.value);
-  const session =
+  const mixed = await mixedSessionFor(userId, body.sessionId);
+  const session = mixed ? { id: mixed } :
     (await prisma.trainingSession.findFirst({ where: { userId, kind: 'math', mode: body.mode, endedAt: null, startedAt: { gt: new Date(Date.now() - 2 * 3600 * 1000) } }, orderBy: { startedAt: 'desc' } })) ??
     (await prisma.trainingSession.create({ data: { userId, kind: 'math', mode: body.mode } }));
   const result = { kind: quiz.kind, prompt: quiz.prompt, value: body.value, answer: quiz.answer, unit: quiz.unit, tolerance: quiz.tolerance, error, grade, steps: quiz.steps, formula: quiz.formula, source: { classification: 'MATH_VERIFIED' } };

@@ -29,6 +29,10 @@ export function Train() {
   const [error, setError] = useState<unknown>(null);
   const start = useStartRun();
   const nav = useNavigate();
+  const [resume, setResume] = useState<string | null>(null);
+  useEffect(() => {
+    api.get<{ id: string }[]>('/sim/hands/active').then((h) => setResume(h[0]?.id ?? null)).catch(() => setResume(null));
+  }, []);
   useEffect(() => {
     setItems(null);
     api.get<QueueItem[]>(`/review/queue?filter=${filter}`).then(setItems).catch(setError);
@@ -43,14 +47,27 @@ export function Train() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold">{t('nav.train')}</h1>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {['gto', 'hero', 'villain', 'math', 'hands'].map((k) => (
-          <Link key={k} to={`/${k}`} className="rounded-xl border border-ink-700 bg-ink-900 p-4 hover:border-ink-500">
-            <div className="font-semibold">{t(`nav.${k}`)}</div>
-            <div className="text-sm text-ink-300">{t(`${k}.intro`)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="train-cards">
+        <Link to={resume ? `/play/${resume}` : '#queue'} className="rounded-xl border border-gold/50 bg-ink-900 p-4 hover:border-gold" data-testid="train-continue">
+          <div className="font-semibold">{t('train.continue')}</div>
+          <div className="text-sm text-ink-300">{resume ? t('train.continueHand') : t('train.continueQueue')}</div>
+        </Link>
+        {[
+          { to: '/mixed', k: 'mixed', hi: true },
+          { to: '/play', k: 'play', hi: true },
+          { to: '/gto', k: 'gto' },
+          { to: '/villain', k: 'villain' },
+          { to: '/math', k: 'math' },
+          { to: '/hands', k: 'hands' },
+          { to: '/hero', k: 'hero' },
+        ].map((c) => (
+          <Link key={c.k} to={c.to} className={`rounded-xl border bg-ink-900 p-4 hover:border-ink-500 ${c.hi ? 'border-accent/50' : 'border-ink-700'}`}>
+            <div className="font-semibold">{t(`nav.${c.k}`)}</div>
+            <div className="text-sm text-ink-300">{t(`${c.k}.intro`)}</div>
           </Link>
         ))}
       </div>
+      <div id="queue" />
       <Panel
         title={t('train.queue')}
         actions={<Toggle label={t('mode.label')} value={mode} onChange={setMode} options={[{ value: 'practice', label: t('mode.practice') }, { value: 'rated', label: t('mode.rated') }]} />}

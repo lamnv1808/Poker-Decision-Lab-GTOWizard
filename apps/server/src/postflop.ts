@@ -1,3 +1,4 @@
+import { mixedSessionFor } from './mixed';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -141,7 +142,7 @@ postflopRouter.get('/spot', (req, res) => {
 
 postflopRouter.post('/answer', async (req, res) => {
   const userId = requireUser(req);
-  const body = parse(z.object({ token: z.string().min(10).max(2000), actionIndex: z.number().int().min(0).max(10), clientAttemptId: z.string().min(8).max(100), mode: z.enum(['practice', 'rated']).default('rated') }), req.body);
+  const body = parse(z.object({ sessionId: z.string().uuid().optional(), token: z.string().min(10).max(2000), actionIndex: z.number().int().min(0).max(10), clientAttemptId: z.string().min(8).max(100), mode: z.enum(['practice', 'rated']).default('rated') }), req.body);
   const t = read(userId, body.token);
   const d = load(t.flop);
   const n = d.nodes.find((x) => x.node === t.node)!;
@@ -193,6 +194,7 @@ postflopRouter.post('/answer', async (req, res) => {
   const outcome = await recordAttempt({
     userId,
     clientAttemptId: body.clientAttemptId,
+    sessionId: await mixedSessionFor(userId, body.sessionId),
     attemptType: 'quiz',
     itemRef: `gtopf:${t.flop}:${t.node}:${result.heroClass}`,
     reviewType: 'quiz',

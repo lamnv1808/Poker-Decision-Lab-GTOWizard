@@ -21,6 +21,7 @@ import {
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireUser } from './auth';
+import { mixedSessionFor } from './mixed';
 import { prisma } from './db';
 import { env } from './env';
 import { HttpError, parse } from './http';
@@ -99,7 +100,7 @@ gtoRouter.get('/spot', (req, res) => {
 
 gtoRouter.post('/answer', async (req, res) => {
   const userId = requireUser(req);
-  const body = parse(z.object({ token: z.string().min(10).max(1000), action: z.enum(['shove', 'call', 'fold']), clientAttemptId: z.string().min(8).max(100), mode: z.enum(['practice', 'rated']).default('rated') }), req.body);
+  const body = parse(z.object({ sessionId: z.string().uuid().optional(), token: z.string().min(10).max(1000), action: z.enum(['shove', 'call', 'fold']), clientAttemptId: z.string().min(8).max(100), mode: z.enum(['practice', 'rated']).default('rated') }), req.body);
   const t = read(userId, body.token);
   const spot = generateGtoSpot(t.s, t.f);
   let g;
@@ -135,6 +136,7 @@ gtoRouter.post('/answer', async (req, res) => {
   const outcome = await recordAttempt({
     userId,
     clientAttemptId: body.clientAttemptId,
+    sessionId: await mixedSessionFor(userId, body.sessionId),
     attemptType: 'quiz',
     itemRef: `gto:${spot.role}:${spot.stackBB}:${spot.deadBB}:${spot.heroClass}`,
     reviewType: 'quiz',

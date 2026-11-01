@@ -1,6 +1,6 @@
 import type { HandState } from '@pdl/core/engine';
 import { useCallback, useEffect, useState } from 'react';
-import { api, newAttemptId } from '../api';
+import { api, newAttemptId, mixedSessionId } from '../api';
 import { CardText } from '../components/Cards';
 import { PokerTable } from '../components/PokerTable';
 import { StrategyGrid, actionColor } from '../components/StrategyGrid';
@@ -54,7 +54,7 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
       if (!spot || result || busy) return;
       setBusy(true);
       try {
-        const r = await api.post<Result>('/gto/postflop/answer', { token: spot.token, actionIndex, clientAttemptId: newAttemptId(), mode });
+        const r = await api.post<Result>('/gto/postflop/answer', { token: spot.token, actionIndex, clientAttemptId: newAttemptId(), mode, sessionId: mixedSessionId() });
         setResult(r);
         setStats((s) => ({ n: s.n + 1, ok: s.ok + (r.grade === 'excellent' ? 1 : 0), ev: s.ev + r.evLossBB }));
       } catch (e) {

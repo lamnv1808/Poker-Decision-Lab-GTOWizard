@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, newAttemptId } from '../api';
+import { api, newAttemptId, mixedSessionId } from '../api';
 import { PokerTable } from '../components/PokerTable';
 import { ErrorNote, GradeBadge, Panel, Spinner } from '../components/ui';
 import { fmtNum, loc } from '../format';
@@ -39,7 +39,7 @@ export function FundamentalsPage() {
     e.preventDefault();
     if (!q || value === '') return;
     try {
-      const r = await api.post<PotOddsResult>(`/real/potodds/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), valuePct: Number(value.replace(',', '.')), responseMs: Date.now() - shownAt.current });
+      const r = await api.post<PotOddsResult>(`/real/potodds/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), valuePct: Number(value.replace(',', '.')), responseMs: Date.now() - shownAt.current, sessionId: mixedSessionId() });
       setRes(r);
       setStats((s) => ({ n: s.n + 1, ok: s.ok + (r.grade === 'excellent' ? 1 : 0) }));
     } catch (err) {

@@ -1,7 +1,7 @@
 import { bluffBreakEven, indifferentBluffShare, mdf, requiredEquity, spr, valuePerBluff, icmEquities } from '@pdl/core/math';
 import { Fragment, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, newAttemptId } from '../api';
+import { api, newAttemptId, mixedSessionId } from '../api';
 import { ErrorNote, GradeBadge, Panel, Spinner, Toggle } from '../components/ui';
 import { fmtNum, loc } from '../format';
 import { useT } from '../i18n';
@@ -78,7 +78,7 @@ export function MathLab() {
   const { t, lang } = useT();
   const [params] = useSearchParams();
   const [kind, setKind] = useState<string>(params.get('kind') ?? 'potOdds');
-  const [level, setLevel] = useState<'1' | '2' | '3'>('2');
+  const [level, setLevel] = useState<'1' | '2' | '3'>(() => { const l = new URLSearchParams(window.location.search).get('level'); return l === '1' || l === '3' ? l : '2'; });
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [value, setValue] = useState('');
   const [result, setResult] = useState<Result | null>(null);
@@ -102,7 +102,7 @@ export function MathLab() {
     if (!quiz || value === '') return;
     setBusy(true);
     try {
-      setResult(await api.post<Result>('/math/quiz/answer', { token: quiz.token, value: Number(value.replace(',', '.')), clientAttemptId: newAttemptId(), mode: 'rated' }));
+      setResult(await api.post<Result>('/math/quiz/answer', { token: quiz.token, value: Number(value.replace(',', '.')), clientAttemptId: newAttemptId(), mode: 'rated', sessionId: mixedSessionId() }));
     } catch (err) {
       setError(err);
     } finally {

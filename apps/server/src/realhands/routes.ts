@@ -1,3 +1,4 @@
+import { mixedSessionFor } from '../mixed';
 import {
   type Grade,
   type HandState,
@@ -383,7 +384,7 @@ realRouter.get('/decisions/:id/outcome', async (req, res) => {
 
 realRouter.post('/potodds/:id/answer', async (req, res) => {
   const userId = requireUser(req);
-  const body = parse(z.object({ clientAttemptId: z.string().min(8).max(100), valuePct: z.number().min(0).max(100), responseMs: z.number().int().min(0).max(3_600_000).optional(), confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }), req.body);
+  const body = parse(z.object({ sessionId: z.string().uuid().optional(), clientAttemptId: z.string().min(8).max(100), valuePct: z.number().min(0).max(100), responseMs: z.number().int().min(0).max(3_600_000).optional(), confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }), req.body);
   const { d, snap } = await loadDecision(userId, String(req.params.id));
   const po = d.potOdds as { status: string; requiredEquity: number; terminal: boolean; supplied: number } | null;
   if (!po || po.status !== 'accepted') throw new HttpError(409, 'no_quiz', 'No validated pot-odds benchmark for this decision');
@@ -410,6 +411,7 @@ realRouter.post('/potodds/:id/answer', async (req, res) => {
   const outcome = await recordAttempt({
     userId,
     clientAttemptId: body.clientAttemptId,
+    sessionId: await mixedSessionFor(userId, body.sessionId),
     attemptType: 'potodds',
     itemRef: `potodds:${d.familyId}:${d.id}`,
     reviewType: 'quiz',

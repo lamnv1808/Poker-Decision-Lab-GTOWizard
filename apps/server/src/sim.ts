@@ -119,14 +119,17 @@ const Start = z.object({
   sessionId: z.string().uuid().optional(),
 });
 
+export async function createSimHand(userId: string, o: { tableSize?: number; stackBB?: number; archetype?: (typeof ARCHETYPES)[number] | 'mixed'; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam'; sessionId?: string | null }) {
+  const seed = randomInt(1, 2 ** 31 - 1);
+  const config = randomSimConfig(seed, { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
+  return prisma.simHand.create({ data: { userId, seed, config: config as object, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null } });
+}
+
 simRouter.post('/hands', async (req, res) => {
   const userId = requireUser(req);
   const body = parse(Start, req.body ?? {});
   if (body.sessionId && !(await prisma.trainingSession.findFirst({ where: { id: body.sessionId, userId } }))) throw notFound('Session not found');
-  const seed = randomInt(1, 2 ** 31 - 1);
-  const config = randomSimConfig(seed, { tableSize: body.tableSize, stackBB: body.stackBB, archetype: body.archetype });
-  const h = await prisma.simHand.create({ data: { userId, seed, config: config as object, modelVersion: SIM_MODEL_VERSION, mode: body.mode, feedback: body.feedback, sessionId: body.sessionId ?? null } });
-  res.status(201).json(simView(h));
+  res.status(201).json(simView(await createSimHand(userId, body)));
 });
 
 /** Unfinished hands, for resuming on any device. */
