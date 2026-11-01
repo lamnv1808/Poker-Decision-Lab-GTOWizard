@@ -2,7 +2,6 @@ services:
   - type: web
     name: poker-decision-lab
     runtime: node
-    rootDir: poker-decision-lab
     buildCommand: npm ci && npm run build
     preDeployCommand: npm run db:migrate
     startCommand: npm start

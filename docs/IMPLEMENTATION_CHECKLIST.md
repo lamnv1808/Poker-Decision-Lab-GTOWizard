@@ -3,7 +3,7 @@
 Legend: ✅ done & tested · ◐ partial · ⛔ blocked/not done
 
 ## Phase 0 — Audit & architecture ✅
-- ✅ Repository audit: existing repo is an HSK flashcard PWA (vanilla JS + Supabase). Poker Decision Lab is built as a separate workspace `poker-decision-lab/` so the HSK app is untouched.
+- ✅ Repository audit. (Originally developed inside the hsk-flashcard repo; moved to its own repository with full history.)
 - ✅ No Supabase/hosting credentials in the environment → own auth on Postgres (see ARCHITECTURE.md).
 - ✅ Architecture, data model, risks: `docs/ARCHITECTURE.md`.
 

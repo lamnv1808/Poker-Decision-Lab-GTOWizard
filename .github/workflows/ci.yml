@@ -1,0 +1,33 @@
+name: poker-decision-lab
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pdl
+          POSTGRES_PASSWORD: pdl
+          POSTGRES_DB: pdl_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run validate:content
+      - run: npm run build
+      - run: npm test
+      - name: E2E
+        run: |
+          PGPASSWORD=pdl psql -h localhost -U pdl -d pdl_test -c 'CREATE DATABASE pdl_e2e_test'
+          npx playwright install --with-deps chromium
+          npm run test:e2e

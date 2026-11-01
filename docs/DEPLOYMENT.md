@@ -16,7 +16,7 @@ One web service (Node 20+) serving the API and the built SPA, plus managed Postg
 
 ## Manual
 ```bash
-cd poker-decision-lab
+cd poker-decision-lab   # repository root
 npm ci
 npm run build              # core typecheck, prisma generate, web build + bundle answer-leak guard
 DATABASE_URL=... npm run db:migrate

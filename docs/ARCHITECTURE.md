@@ -1,6 +1,6 @@
 # Poker Decision Lab — Architecture
 
-Modular monolith in one npm workspace (`poker-decision-lab/`), independent of the HSK flashcard app that shares this repository.
+Modular monolith in one npm workspace (npm workspaces: `packages/*`, `apps/*`).
 
 ```
 packages/core   Pure TypeScript domain (no I/O). Used by server AND browser.
