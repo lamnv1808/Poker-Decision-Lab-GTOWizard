@@ -2,8 +2,7 @@ services:
   - type: web
     name: poker-decision-lab
     runtime: node
-    buildCommand: npm ci && npm run build
-    preDeployCommand: npm run db:migrate
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

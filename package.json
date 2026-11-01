@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "build": "npm run build -w @pdl/core && npm run build -w @pdl/server && npm run build -w @pdl/web",
@@ -20,7 +20,7 @@
     "validate:content": "npm run validate:content -w @pdl/core",
     "db:migrate": "npm run db:migrate -w @pdl/server",
     "db:seed": "npm run db:seed -w @pdl/server",
-    "start": "npm run start -w @pdl/server"
+    "start": "npm run db:migrate && npm run start -w @pdl/server"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
