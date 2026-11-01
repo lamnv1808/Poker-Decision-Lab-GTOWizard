@@ -63,6 +63,8 @@ function decisionsView(h: SimHand, run: SimRun) {
       reasoning: st[i]?.reasoning ?? null,
       facts: facts(d.info),
       ...(reveal ? { modelEquity: d.info.modelEquity, solver: d.info.solver, feedback: d.feedback } : {}),
+      // alternatives for the Branch Explorer — only once the hand is over
+      ...(run.state.complete ? { legal: d.info.legal } : {}),
     }));
 }
 

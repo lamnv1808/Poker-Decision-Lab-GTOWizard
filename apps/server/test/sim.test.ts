@@ -43,8 +43,14 @@ describe('Hero simulator API', () => {
   it('plays to the end, then shows the review; finished hands accept no more actions', async () => {
     const u = await newUser('sim2');
     const v = (await u.agent.post('/api/sim/hands').send({ tableSize: 3, stackBB: 30 }).expect(201)).body as View;
-    const { view } = await playToEnd(u.agent, v);
+    let mid = v;
+    if (v.legal) {
+      mid = (await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: v.legal.canCheck ? { type: 'check' } : { type: 'call' } }).expect(200)).body.view;
+      if (mid.status === 'active') for (const d of mid.decisions as { legal?: unknown }[]) expect(d.legal).toBeUndefined();
+    }
+    const { view } = await playToEnd(u.agent, mid);
     expect(view.status).toBe('complete');
+    for (const d of view.decisions as { legal?: unknown }[]) expect(d.legal).toBeDefined();
     expect(view.review).not.toBeNull();
     expect(Object.values(view.review!.netBB).reduce((a, b) => a + b, 0)).toBeCloseTo(0, 6);
     await u.agent.post(`/api/sim/hands/${view.id}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }).expect(409);

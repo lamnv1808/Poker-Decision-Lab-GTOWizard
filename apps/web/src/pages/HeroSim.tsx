@@ -22,7 +22,7 @@ interface Feedback {
   note: Localized;
 }
 interface ModelEq { equity: number; stdErr: number; opponents: { id: string; archetype: string; rangePct: number }[] }
-interface DecisionView { index: number; street: string; action: PlayerAction; confidence: number | null; reasoning: string | null; facts: Facts; feedback?: Feedback; modelEquity?: ModelEq }
+interface DecisionView { legal?: LegalActions; index: number; street: string; action: PlayerAction; confidence: number | null; reasoning: string | null; facts: Facts; feedback?: Feedback; modelEquity?: ModelEq }
 interface TimelineEntry { street: string; playerId: string; type: string; toBB: number; addedBB: number; allIn: boolean; villain?: { archetype: string; source: 'solver' | 'heuristic' }; heroDecision?: number }
 export interface SimView {
   id: string;
@@ -346,6 +346,19 @@ function Review({ v, onError }: { v: SimView; onError: (e: unknown) => void }) {
     }
   };
   const fmtAct = (a: PlayerAction) => `${a.type}${a.amount ? ` ${fmtNum(a.amount / v.bigBlind, 1)}` : ''}`;
+  /** Legal alternatives to what Hero did: fold / check / call, a min-raise and all-in. */
+  const alternatives = (d: DecisionView): PlayerAction[] => {
+    const l = d.legal;
+    if (!l) return [];
+    const out: PlayerAction[] = [];
+    if (l.canFold) out.push({ type: 'fold' });
+    out.push(l.canCheck ? { type: 'check' } : { type: 'call' });
+    if (l.canBet || l.canRaise) {
+      const type = l.canBet ? 'bet' : 'raise';
+      for (const amt of [l.minRaiseTo, l.maxRaiseTo]) if (!out.some((o) => o.amount === amt)) out.push({ type, amount: amt });
+    }
+    return out.filter((a) => !(a.type === d.action.type && (a.amount ?? 0) === (d.action.amount ?? 0)));
+  };
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title={t('sim.timeline')}>
@@ -371,8 +384,8 @@ function Review({ v, onError }: { v: SimView; onError: (e: unknown) => void }) {
                           {v.kind === 'play' && (
                             branchAt === d.index ? (
                               <div className="flex flex-wrap gap-1" data-testid="sim-branch-options">
-                                {(['fold', 'check', 'call'] as const).filter((x) => x !== d.action.type).map((x) => (
-                                  <button key={x} type="button" onClick={() => void branch(d.index, { type: x })} className="rounded border border-ink-600 px-2 py-0.5">{x}</button>
+                                {alternatives(d).map((a) => (
+                                  <button key={fmtAct(a)} type="button" onClick={() => void branch(d.index, a)} className="rounded border border-ink-600 px-2 py-0.5">{fmtAct(a)}</button>
                                 ))}
                                 <button type="button" onClick={() => setBranchAt(null)} className="px-2 text-ink-400">×</button>
                               </div>

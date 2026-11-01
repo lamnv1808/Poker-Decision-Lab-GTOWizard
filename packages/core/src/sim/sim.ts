@@ -159,6 +159,8 @@ export interface HeroDecisionInfo {
   spr: number | null;
   /** Hero equity vs the Villains' ranges implied by the archetype model (Monte Carlo). */
   modelEquity: { equity: number; stdErr: number; samples: number; opponents: { id: string; archetype: Archetype; rangePct: number }[] };
+  /** Legal actions at this decision (sent to the client only after the hand is over). */
+  legal: LegalActions;
   solver: null | { role: PushFoldSpotInfo['role']; stackBB: number; deadBB: number; heroClass: string; frequency: number; evAggressiveBB: number };
 }
 
@@ -376,6 +378,7 @@ function heroInfo(run: { seed: number; config: SimConfig; ranges: Record<string,
     toCallBB: legal.callAmount / bb,
     requiredEquity: req ? Math.round(req.required * 10000) / 10000 : null,
     spr: state.street === 'preflop' ? null : Math.round((eff / Math.max(1, totalPot(state))) * 100) / 100,
+    legal,
     modelEquity: { equity: Math.round(eq.equity * 10000) / 10000, stdErr: Math.round(eq.stdErr * 10000) / 10000, samples: eq.samples, opponents: opps.map((p) => ({ id: p.id, archetype: run.config.villains[p.id]!, rangePct: Math.round(live(run.ranges[p.id]!) * 1000) / 10 })) },
     solver,
   };
