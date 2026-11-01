@@ -42,6 +42,11 @@ describe('V2 import', () => {
     await importV2(owner.id, fx.dir, () => {}, { batch: 2 });
     expect(await prisma.realDecision.count({ where: { realHandId: hand.id } })).toBe(n);
     expect(await prisma.realHand.count({ where: { userId: owner.id } })).toBe(fx.expected.hands);
+    // fast resume only touches the incomplete hand
+    await prisma.realDecision.deleteMany({ where: { realHandId: hand.id } });
+    const s = await importV2(owner.id, fx.dir, () => {}, { skipComplete: true });
+    expect(s.hands.accepted + s.hands.quarantined).toBe(1);
+    expect(await prisma.realDecision.count({ where: { realHandId: hand.id } })).toBe(n);
   });
   it('never puts one hand in both training and assessment', async () => {
     const rows = await prisma.realDecision.groupBy({ by: ['familyId'], where: { userId: owner.id }, _count: { split: true } });

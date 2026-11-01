@@ -56,7 +56,7 @@ adminRouter.put('/bundles', async (req, res) => {
   res.json({ bundleId: id, bytes });
 });
 
-const ImportBody = z.object({ bundleId: z.string().uuid(), userId: z.string().min(1) });
+const ImportBody = z.object({ bundleId: z.string().uuid(), userId: z.string().min(1), batch: z.number().int().min(10).max(500).default(100), pauseMs: z.number().int().min(0).max(5000).default(150), retries: z.number().int().min(0).max(20).default(5) });
 adminRouter.post('/import-v2', async (req, res) => {
   const body = ImportBody.parse(req.body);
   const file = join(dir, `${body.bundleId}.jsonl.gz`);
@@ -65,7 +65,19 @@ adminRouter.post('/import-v2', async (req, res) => {
   if (!user) return void res.status(404).json({ error: 'user_not_found' });
   const job: Job = { id: randomUUID(), status: 'running', startedAt: new Date().toISOString(), log: [] };
   jobs.set(job.id, job);
-  void importV2(user.id, bundleSource(file), (m) => job.log.push(m), { batch: 100, pauseMs: 150 })
+  // A small database may restart under sustained writes; the import resumes safely, so retry after a pause.
+  const run = async () => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await importV2(user.id, bundleSource(file), (m) => job.log.push(m), { batch: body.batch, pauseMs: body.pauseMs, skipComplete: true });
+      } catch (e) {
+        if (attempt >= body.retries) throw e;
+        job.log.push(`attempt ${attempt + 1} failed (${e instanceof Error ? e.message.trim().split('\n').pop() : String(e)}); retrying in 60 s`);
+        await new Promise((r) => setTimeout(r, 60_000));
+      }
+    }
+  };
+  void run()
     .then((s) => Object.assign(job, { status: 'done', summary: s }))
     .catch((e: unknown) => Object.assign(job, { status: 'failed', error: e instanceof Error ? e.message : String(e) }))
     .finally(() => {

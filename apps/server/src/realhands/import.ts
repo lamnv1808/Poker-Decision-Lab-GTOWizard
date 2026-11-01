@@ -130,6 +130,8 @@ export interface ImportOptions {
   batch?: number;
   /** Pause between writes, in ms. */
   pauseMs?: number;
+  /** Skip hands already stored with all their decisions (fast resume). Counts then cover new rows only. */
+  skipComplete?: boolean;
 }
 
 export async function importV2(userId: string, dirOrSource: string | V2Source, log: (m: string) => void = () => {}, opts: ImportOptions = {}): Promise<ImportSummary> {
@@ -163,9 +165,18 @@ export async function importV2(userId: string, dirOrSource: string | V2Source, l
     decBatch = [];
     annBatch = [];
   };
+  const complete = new Set<string>();
+  if (opts.skipComplete) {
+    const stored = await prisma.realHand.findMany({ where: { userId }, select: { handId: true, _count: { select: { decisions: true } } } });
+    for (const r of stored) complete.add(`${r.handId}:${r._count.decisions}`);
+  }
   let n = 0;
   for await (const bundle of source()) {
     const h = bundle.hand;
+    if (complete.has(`${h.hand_id}:${bundle.decisions.length}`)) {
+      if (++n % 2000 === 0) log(`${n} hands (skipped stored)`);
+      continue;
+    }
     const a = auditHand(h.raw);
     const split = (a.tournamentId && splits.get(a.tournamentId)) || 'training';
     const realHandId = crypto.randomUUID();
