@@ -125,7 +125,15 @@ export interface ImportSummary {
 }
 
 /** Import a Real Hand Source v2 directory for one user. Idempotent (existing rows are skipped). */
-export async function importV2(userId: string, dirOrSource: string | V2Source, log: (m: string) => void = () => {}): Promise<ImportSummary> {
+export interface ImportOptions {
+  /** Hands per database write (smaller is gentler on a small database). */
+  batch?: number;
+  /** Pause between writes, in ms. */
+  pauseMs?: number;
+}
+
+export async function importV2(userId: string, dirOrSource: string | V2Source, log: (m: string) => void = () => {}, opts: ImportOptions = {}): Promise<ImportSummary> {
+  const batchSize = opts.batch ?? 500;
   const source = typeof dirOrSource === 'string' ? dirSource(dirOrSource) : dirOrSource;
   const splits = await computeSplits(source);
   const sum: ImportSummary = { hands: { accepted: 0, quarantined: 0 }, decisions: { accepted: 0, quarantined: 0 }, quizzes: { accepted: 0, quarantined: 0 }, solverDrafts: 0, splits: { training: 0, assessment: 0 } };
@@ -133,7 +141,14 @@ export async function importV2(userId: string, dirOrSource: string | V2Source, l
   let decBatch: Prisma.RealDecisionCreateManyInput[] = [];
   let annBatch: { externalId: string; data: ReturnType<typeof pushFoldDraft> }[] = [];
   const flush = async () => {
-    if (handBatch.length) await prisma.realHand.createMany({ data: handBatch, skipDuplicates: true });
+    if (handBatch.length) {
+      await prisma.realHand.createMany({ data: handBatch, skipDuplicates: true });
+      // A hand may already exist (resumed import): point decisions at the stored row, not the new id.
+      const stored = await prisma.realHand.findMany({ where: { userId, handId: { in: handBatch.map((h) => h.handId) } }, select: { id: true, handId: true } });
+      const idOf = new Map(stored.map((r) => [r.handId, r.id]));
+      const handIdOfNew = new Map(handBatch.map((h) => [h.id!, h.handId]));
+      for (const d of decBatch) d.realHandId = idOf.get(handIdOfNew.get(d.realHandId)!) ?? d.realHandId;
+    }
     if (decBatch.length) await prisma.realDecision.createMany({ data: decBatch, skipDuplicates: true });
     if (annBatch.length) {
       const rows = await prisma.realDecision.findMany({ where: { userId, externalId: { in: annBatch.map((a) => a.externalId) } }, select: { id: true, externalId: true, annotations: { select: { id: true } } } });
@@ -203,8 +218,11 @@ export async function importV2(userId: string, dirOrSource: string | V2Source, l
         if (draft) annBatch.push({ externalId: d.id, data: draft });
       }
     }
-    if (++n % 500 === 0) await flush();
-    if (n % 10000 === 0) log(`${n} hands`);
+    if (++n % batchSize === 0) {
+      await flush();
+      if (opts.pauseMs) await new Promise((r) => setTimeout(r, opts.pauseMs));
+    }
+    if (n % 2000 === 0) log(`${n} hands`);
   }
   await flush();
   void publicState;

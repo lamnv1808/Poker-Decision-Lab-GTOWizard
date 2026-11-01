@@ -34,6 +34,15 @@ describe('V2 import', () => {
     await importV2(owner.id, fx.dir);
     expect(await prisma.realDecision.count({ where: { userId: owner.id } })).toBe(before);
   });
+  it('resumes an interrupted import: missing decisions attach to the stored hand rows', async () => {
+    const hand = await prisma.realHand.findFirstOrThrow({ where: { userId: owner.id, decisions: { some: {} } }, include: { decisions: true } });
+    const n = hand.decisions.length;
+    await prisma.annotation.deleteMany({ where: { decisionId: { in: hand.decisions.map((d) => d.id) } } });
+    await prisma.realDecision.deleteMany({ where: { realHandId: hand.id } });
+    await importV2(owner.id, fx.dir, () => {}, { batch: 2 });
+    expect(await prisma.realDecision.count({ where: { realHandId: hand.id } })).toBe(n);
+    expect(await prisma.realHand.count({ where: { userId: owner.id } })).toBe(fx.expected.hands);
+  });
   it('never puts one hand in both training and assessment', async () => {
     const rows = await prisma.realDecision.groupBy({ by: ['familyId'], where: { userId: owner.id }, _count: { split: true } });
     for (const r of rows) {

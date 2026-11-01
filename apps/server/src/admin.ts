@@ -65,7 +65,7 @@ adminRouter.post('/import-v2', async (req, res) => {
   if (!user) return void res.status(404).json({ error: 'user_not_found' });
   const job: Job = { id: randomUUID(), status: 'running', startedAt: new Date().toISOString(), log: [] };
   jobs.set(job.id, job);
-  void importV2(user.id, bundleSource(file), (m) => job.log.push(m))
+  void importV2(user.id, bundleSource(file), (m) => job.log.push(m), { batch: 100, pauseMs: 150 })
     .then((s) => Object.assign(job, { status: 'done', summary: s }))
     .catch((e: unknown) => Object.assign(job, { status: 'failed', error: e instanceof Error ? e.message : String(e) }))
     .finally(() => {
