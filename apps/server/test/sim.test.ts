@@ -88,6 +88,15 @@ describe('Hero simulator API', () => {
     await other.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }).expect(404);
   });
 
+  it('always deals a hand in which Hero has at least one decision', async () => {
+    const u = await newUser('sim8');
+    for (let i = 0; i < 25; i++) {
+      const v = (await u.agent.post('/api/sim/hands').send({ tableSize: 6 }).expect(201)).body as View;
+      expect(v.status).toBe('active');
+      expect(v.legal).not.toBeNull();
+    }
+  });
+
   it('lists unfinished hands for resuming on another device', async () => {
     const u = await newUser('sim5');
     let v: View;

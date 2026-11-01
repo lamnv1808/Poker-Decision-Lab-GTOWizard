@@ -5,7 +5,7 @@ test('mobile: navigation, table and action bar fit the screen', async ({ page })
   await register(page, 'Mobile');
   await waitForContent(page);
   await page.getByTestId('menu-button').click();
-  await page.getByRole('link', { name: 'Play as Hero', exact: true }).click();
+  await page.getByRole('link', { name: 'Hero scenarios', exact: true }).click();
   await page.getByTestId('launch-browse').click();
   await page.getByTestId('start-sb-q9o-10bb-shove-vs-bb').click();
   await expect(page.getByTestId('poker-table')).toBeVisible();

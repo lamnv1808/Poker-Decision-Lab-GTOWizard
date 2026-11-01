@@ -201,7 +201,7 @@ const en: Dict = {
   'history.target.attempt': 'Decision',
   'nav.dashboard': 'Dashboard',
   'nav.train': 'Train',
-  'nav.hero': 'Play as Hero',
+  'nav.hero': 'Hero scenarios',
   'nav.villain': 'Read the Villain',
   'nav.math': 'Math Lab',
   'nav.hands': 'Hand Review',
@@ -665,7 +665,9 @@ const en: Dict = {
   "mixed.type.potodds": "Pot odds (real hands)",
   "train.continue": "Continue training",
   "train.continueHand": "Resume your unfinished hand",
-  "train.continueQueue": "Pick up your review queue below",
+  "replay.noMatch": "No decisions match these filters.",
+  "replay.clearFilters": "Clear filters",
+  "train.continueQuick": "Start a 10-minute adaptive session",
 };
 
 const vi: Dict = {
@@ -865,7 +867,7 @@ const vi: Dict = {
   'history.target.attempt': 'Quyết định',
   'nav.dashboard': 'Tổng quan',
   'nav.train': 'Luyện tập',
-  'nav.hero': 'Chơi vai Hero',
+  'nav.hero': 'Tình huống Hero',
   'nav.villain': 'Đọc đối thủ',
   'nav.math': 'Phòng Toán',
   'nav.hands': 'Xem lại ván bài',
@@ -1329,7 +1331,9 @@ const vi: Dict = {
   "mixed.type.potodds": "Pot odds (ván thật)",
   "train.continue": "Tiếp tục luyện tập",
   "train.continueHand": "Tiếp tục ván đang dở",
-  "train.continueQueue": "Tiếp tục hàng ôn tập bên dưới",
+  "replay.noMatch": "Không có quyết định nào khớp bộ lọc.",
+  "replay.clearFilters": "Xoá bộ lọc",
+  "train.continueQuick": "Bắt đầu phiên thích ứng 10 phút",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, vi };

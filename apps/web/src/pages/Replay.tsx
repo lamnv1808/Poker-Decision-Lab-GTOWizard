@@ -1,7 +1,7 @@
 import type { HandState, LegalActions, PlayerAction } from '@pdl/core/engine';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, newAttemptId } from '../api';
+import { api, newAttemptId, ApiError } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { CardText } from '../components/Cards';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
@@ -156,9 +156,18 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
         {kind === 'strategy' && <div className="ml-auto"><Toggle label={t('mode.label')} value={mode} onChange={setMode} options={[{ value: 'practice', label: t('mode.practice') }, { value: 'rated', label: t('mode.rated') }]} /></div>}
       </div>
       {kind === 'replay' && <div className="rounded-md border border-amber-500/30 bg-amber-900/10 px-3 py-2 text-xs text-amber-200">{t('replay.unreviewedBanner')}</div>}
-      <ErrorNote error={error} />
+      {/* "nothing matches" is an empty state, not an error */}
+      {!(error instanceof ApiError && error.status === 404) && <ErrorNote error={error} />}
       {!q && !error ? <Spinner /> : !q ? (
-        <Empty>{kind === 'strategy' ? <>{t('strategy.none')} <Link className="text-accent" to="/annotate">{t('nav.annotate')}</Link></> : t('list.empty')}</Empty>
+        <Empty>
+          {street || topic || multiway ? (
+            <>{t('replay.noMatch')} <button type="button" className="text-accent" onClick={() => { setStreet(''); setTopic(''); setMultiway(''); }}>{t('replay.clearFilters')}</button></>
+          ) : kind === 'strategy' ? (
+            <>{t('strategy.none')} <Link className="text-accent" to="/annotate">{t('nav.annotate')}</Link></>
+          ) : (
+            t('list.empty')
+          )}
+        </Empty>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
           <div className="space-y-3">

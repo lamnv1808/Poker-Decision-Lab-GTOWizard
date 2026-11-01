@@ -48,10 +48,16 @@ export function Train() {
     <div className="space-y-5">
       <h1 className="text-xl font-bold">{t('nav.train')}</h1>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="train-cards">
-        <Link to={resume ? `/play/${resume}` : '#queue'} className="rounded-xl border border-gold/50 bg-ink-900 p-4 hover:border-gold" data-testid="train-continue">
+        {/* Continue: resume an unfinished hand; otherwise start a 10-minute adaptive Mixed session in one click */}
+        <button
+          type="button"
+          onClick={() => (resume ? nav(`/play/${resume}`) : void api.post<{ id: string }>('/mixed/sessions', { durationMin: 10, difficulty: 'adaptive', mode }).then((s) => nav(`/mixed/${s.id}`)).catch(setError))}
+          className="rounded-xl border border-gold/50 bg-ink-900 p-4 text-left hover:border-gold"
+          data-testid="train-continue"
+        >
           <div className="font-semibold">{t('train.continue')}</div>
-          <div className="text-sm text-ink-300">{resume ? t('train.continueHand') : t('train.continueQueue')}</div>
-        </Link>
+          <div className="text-sm text-ink-300">{resume ? t('train.continueHand') : t('train.continueQuick')}</div>
+        </button>
         {[
           { to: '/mixed', k: 'mixed', hi: true },
           { to: '/play', k: 'play', hi: true },

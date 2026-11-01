@@ -424,7 +424,9 @@ function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerActio
     const live = after.players.filter((p) => !p.folded);
     const closes = after.complete || (after.awaitingBoard && isRunout(after));
     const req = requiredEquityToCall(state)!;
-    if (live.length === 2 && closes) {
+    // Exact under the model when the call ends the betting and there is a single pot (no side pots):
+    // EV = equity × pot − call, heads-up or multiway (equity is computed against every live range).
+    if (live.length >= 2 && closes && computePots(after).length === 1) {
       const evCall = (eq * req.winnable - req.callAmount) / bb;
       const noise = (2 * info.modelEquity.stdErr * req.winnable) / bb;
       const chosen = action.type === 'call' ? evCall : 0;

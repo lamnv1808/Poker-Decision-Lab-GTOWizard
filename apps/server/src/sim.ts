@@ -122,8 +122,13 @@ const Start = z.object({
 });
 
 export async function createSimHand(userId: string, o: { tableSize?: number; stackBB?: number; archetype?: (typeof ARCHETYPES)[number] | 'mixed'; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam'; sessionId?: string | null }) {
-  const seed = randomInt(1, 2 ** 31 - 1);
-  const config = randomSimConfig(seed, { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
+  // Re-deal hands that would be over before Hero gets a decision (e.g. a walk in the big blind).
+  let seed = randomInt(1, 2 ** 31 - 1);
+  let config = randomSimConfig(seed, { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
+  for (let tries = 0; tries < 20 && !runSim(seed, config, [], { equitySamples: 50 }).awaitingHero; tries++) {
+    seed = randomInt(1, 2 ** 31 - 1);
+    config = randomSimConfig(seed, { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
+  }
   return prisma.simHand.create({ data: { userId, seed, config: config as object, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null } });
 }
 
