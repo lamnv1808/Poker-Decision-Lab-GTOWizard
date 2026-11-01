@@ -7,18 +7,13 @@ test('scenario continues to a full hand; review reveals runout and explains Vill
   await waitForContent(page);
   await page.goto('/hero');
   await expect(page.getByTestId('launch-progress')).toContainText('0 unique scenarios completed');
-  // play scenarios until one ends mid-hand and offers "Continue this hand"
-  for (let i = 0; i < 8; i++) {
-    await page.goto('/hero');
-    await page.getByTestId('launch-start').click();
-    await expect(page.getByTestId('poker-table')).toBeVisible();
-    for (let k = 0; k < 6 && !(await page.getByTestId('run-complete').isVisible()); k++) {
-      const bar = page.getByTestId('action-bar');
-      if (await bar.isVisible()) await bar.locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ }).first().click();
-      else await page.locator('[data-testid="question-submit"], button[type="submit"]').first().click().catch(() => {});
-      await page.waitForTimeout(300);
-    }
-    if (await page.getByTestId('continue-hand').isVisible()) break;
+  // a scenario that is known to end mid-hand (deterministic: no random scenario picking)
+  await page.goto('/hero/browse');
+  await page.getByTestId('start-btn-ajs-35bb-open-flop-cbet').click();
+  await expect(page.getByTestId('poker-table')).toBeVisible();
+  for (let k = 0; k < 6 && !(await page.getByTestId('run-complete').isVisible()); k++) {
+    await page.getByTestId('action-bar').locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ }).first().click();
+    await page.waitForTimeout(300);
   }
   await page.getByTestId('continue-hand').click();
   await expect(page.getByTestId('sim-progress')).toBeVisible();
