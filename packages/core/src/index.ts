@@ -10,3 +10,4 @@ export * from './hh';
 export * from './gto';
 export * from './realhands';
 export * from './content';
+export * from './sim';

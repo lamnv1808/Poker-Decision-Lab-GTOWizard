@@ -177,3 +177,21 @@ export function classIndex(cls: string): number {
   if (i < 0) throw new Error(`Unknown class ${cls}`);
   return i;
 }
+
+/** All-in equity of a hand class against a uniformly random hand (from the 169×169 table). */
+export function equityVsRandom(cls: string): number {
+  const i = classIndex(cls);
+  let num = 0;
+  let den = 0;
+  for (let j = 0; j < N; j++) {
+    const w = W[i * N + j]!;
+    num += w * EQ[i * N + j]!;
+    den += w;
+  }
+  return num / den;
+}
+
+/** Whether a solution is available without solving at runtime (precomputed or cached). */
+export function hasPushFoldSolution(stackBB: number, deadBB: number): boolean {
+  return !!precomputed?.solutions[`${stackBB}|${deadBB}`] || cache.has(`${stackBB}|${deadBB}|1500`);
+}
