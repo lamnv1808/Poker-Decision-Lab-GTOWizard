@@ -7,6 +7,7 @@ import { DecisionFeedbackView, QuestionFeedbackView } from '../components/Feedba
 import { ActionHistory, PokerTable } from '../components/PokerTable';
 import { NotesPanel } from '../components/Notes';
 import { RangeGrid } from '../components/RangeGrid';
+import { loadFilters, useNextTest } from './Launcher';
 import { Difficulty, ErrorNote, Panel, SourceBadge, Spinner } from '../components/ui';
 import { loc } from '../format';
 import { useT } from '../i18n';
@@ -115,6 +116,20 @@ export function RunPage() {
       setBusy(false);
     }
   };
+  const nextTest = useNextTest();
+  const goNext = async () => {
+    if (!view) return;
+    setBusy(true);
+    setLatest(null);
+    try {
+      const f = { ...loadFilters(view.scenario.mode, view.mode), mode: view.mode };
+      await nextTest(view.scenario.mode, f, view.scenario.id);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
   const again = async () => {
     if (!view) return;
     const r = await api.post<RunView>('/runs', { scenarioId: view.scenario.id, mode: view.mode });
@@ -178,8 +193,9 @@ export function RunPage() {
             <Panel>
               <div className="flex flex-wrap items-center gap-3" data-testid="run-complete">
                 <span className="font-semibold">{view.terminated === 'offTree' ? t('run.offTree') : t('run.complete')}</span>
+                <button type="button" disabled={busy} onClick={() => void goNext()} className="rounded-lg bg-felt-500 px-5 py-2 text-sm font-bold hover:bg-felt-600 disabled:opacity-50" data-testid="next-test">{t('run.nextTest')} →</button>
                 <button type="button" onClick={again} className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm hover:border-ink-400">{t('run.again')}</button>
-                <Link to={s.mode === 'hero' ? '/hero' : '/villain'} className="rounded-lg bg-felt-500 px-3 py-1.5 text-sm font-semibold hover:bg-felt-600">{t('run.next')}</Link>
+                <Link to={s.mode === 'hero' ? '/hero/browse' : '/villain/browse'} className="text-sm text-ink-400 hover:text-accent">{t('launch.browse')}</Link>
               </div>
             </Panel>
           )}

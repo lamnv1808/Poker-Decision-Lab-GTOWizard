@@ -175,6 +175,49 @@ runsRouter.post('/', async (req, res) => {
   res.status(201).json(runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []));
 });
 
+/**
+ * Pick the next scenario for the user ("next test"): due reviews first, then scenarios never
+ * attempted, then any other — random within each tier, never repeating the one just played.
+ */
+runsRouter.post('/next', async (req, res) => {
+  const userId = requireUser(req);
+  const body = parse(
+    z.object({
+      kind: z.enum(['hero', 'villain']),
+      mode: z.enum(['practice', 'rated']).default('practice'),
+      module: z.string().max(4).optional(),
+      difficulty: z.number().int().min(1).max(5).optional(),
+      ratedOnly: z.boolean().default(false),
+      excludeScenarioId: z.string().max(200).optional(),
+    }),
+    req.body,
+  );
+  const scenarios = await prisma.scenario.findMany({ where: { published: true, mode: body.kind, module: body.module || undefined } });
+  const versions = await prisma.scenarioVersion.findMany({
+    where: { OR: scenarios.map((s) => ({ scenarioId: s.id, version: s.currentVersion })) },
+    select: { scenarioId: true, difficulty: true, source: { select: { classification: true } } },
+  });
+  let pool = versions
+    .filter((v) => (body.difficulty ? v.difficulty === body.difficulty : true))
+    .filter((v) => (body.ratedOnly ? ['MATH_VERIFIED', 'SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification) : true))
+    .map((v) => v.scenarioId);
+  if (pool.length > 1 && body.excludeScenarioId) pool = pool.filter((id) => id !== body.excludeScenarioId);
+  if (!pool.length) throw new HttpError(404, 'no_scenarios', 'No scenarios match these filters');
+  const due = new Set((await prisma.reviewItem.findMany({ where: { userId, itemType: 'scenario', itemRef: { in: pool }, dueAt: { lte: new Date() } }, select: { itemRef: true } })).map((r) => r.itemRef));
+  const attempted = new Set(
+    (await prisma.decisionAttempt.findMany({ where: { userId, attemptType: { in: ['decision', 'question'] } }, select: { itemRef: true }, distinct: ['itemRef'] })).map((a) => a.itemRef.split(':')[0]),
+  );
+  const tiers = [pool.filter((id) => due.has(id)), pool.filter((id) => !attempted.has(id)), pool];
+  const tier = tiers.find((t) => t.length > 0)!;
+  const scenarioId = tier[Math.floor(Math.random() * tier.length)]!;
+  const v = await currentVersion(scenarioId);
+  if (!v) throw notFound('Scenario not found');
+  const session = await sessionFor(userId, v.scenario.mode, body.mode);
+  const run = await prisma.scenarioRun.create({ data: { userId, sessionId: session.id, scenarioVersionId: v.id, mode: body.mode } });
+  const reason = tier === tiers[0] ? 'due' : tier === tiers[1] ? 'new' : 'random';
+  res.status(201).json({ ...runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []), pickReason: reason, poolSize: pool.length });
+});
+
 runsRouter.get('/:id', async (req, res) => {
   const userId = requireUser(req);
   const { run, v, cursor, feedbackLog } = await loadRun(userId, String(req.params.id));

@@ -147,6 +147,29 @@ describe('notes, bookmarks and sessions', () => {
   });
 });
 
+describe('next test picker', () => {
+  it('starts a random scenario of the requested kind, preferring unattempted ones and never repeating the last', async () => {
+    const { agent } = await newUser('picker');
+    const a = await agent.post('/api/runs/next').send({ kind: 'hero', mode: 'practice' }).expect(201);
+    expect(a.body.scenario.mode).toBe('hero');
+    expect(a.body.pickReason).toBe('new');
+    const seen = new Set<string>([a.body.scenario.id]);
+    let last = a.body.scenario.id;
+    for (let i = 0; i < 5; i++) {
+      const r = await agent.post('/api/runs/next').send({ kind: 'hero', excludeScenarioId: last }).expect(201);
+      expect(r.body.scenario.id).not.toBe(last);
+      last = r.body.scenario.id;
+      seen.add(last);
+    }
+    const v = await agent.post('/api/runs/next').send({ kind: 'villain', module: '11' }).expect(201);
+    expect(v.body.scenario.mode).toBe('villain');
+    expect(v.body.scenario.module).toBe('11');
+    const rated = await agent.post('/api/runs/next').send({ kind: 'hero', ratedOnly: true }).expect(201);
+    expect(['MATH_VERIFIED', 'SOLVER_VERIFIED', 'COACH_REVIEWED']).toContain(rated.body.scenario.source.classification);
+    expect((await agent.post('/api/runs/next').send({ kind: 'hero', module: '99' })).status).toBe(404);
+  });
+});
+
 describe('math lab', () => {
   it('issues signed quizzes and grades answers server-side', async () => {
     const { agent } = await newUser('math');

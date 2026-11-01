@@ -6,6 +6,12 @@ type Dict = Record<string, string>;
 
 const en: Dict = {
   module: 'Module',
+  'run.nextTest': 'Next test',
+  'launch.start': 'Start a test',
+  'launch.how': 'The app picks for you: scenarios due for review first, then ones you have not tried, then a random one.',
+  'launch.browse': 'Browse all scenarios',
+  'launch.back': 'Back',
+  'launch.allScenarios': 'all scenarios',
   'nav.gto': 'GTO Quiz',
   'nav.audit': 'Push/Fold Audit',
   'gto.intro': 'Endless random short-stack spots graded against a solved push/fold equilibrium. Keys: S/C = shove/call, F = fold, Enter = next.',
@@ -427,6 +433,12 @@ const en: Dict = {
 
 const vi: Dict = {
   module: 'Chương',
+  'run.nextTest': 'Bài tiếp theo',
+  'launch.start': 'Bắt đầu bài kiểm tra',
+  'launch.how': 'Ứng dụng tự chọn cho bạn: tình huống đến hạn ôn trước, rồi tình huống chưa làm, rồi ngẫu nhiên.',
+  'launch.browse': 'Xem tất cả tình huống',
+  'launch.back': 'Quay lại',
+  'launch.allScenarios': 'tất cả tình huống',
   'nav.gto': 'GTO Quiz',
   'nav.audit': 'Kiểm tra Push/Fold',
   'gto.intro': 'Tình huống stack ngắn ngẫu nhiên vô hạn, chấm theo cân bằng push/fold đã giải. Phím: S/C = all-in/theo, F = bỏ, Enter = tiếp.',

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { Difficulty, Empty, ErrorNote, SourceBadge, Spinner, Toggle } from '../components/ui';
 import { loc } from '../format';
@@ -40,7 +40,8 @@ export function ScenarioList({ mode }: { mode: 'hero' | 'villain' }) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold">{t(`nav.${mode}`)}</h1>
+        <Link to={`/${mode}`} className="text-xs text-accent">← {t('launch.back')}</Link>
+        <h1 className="text-xl font-bold">{t(`nav.${mode}`)} · {t('launch.allScenarios')}</h1>
         <p className="text-sm text-ink-300">{t(`${mode}.intro`)}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3 text-sm">

@@ -16,7 +16,7 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await page.getByTestId('lang-vi').click();
 
   // Rated, math-verified hero decision
-  await page.goto('/hero');
+  await page.goto('/hero/browse');
   await page.getByRole('radio', { name: 'Xếp hạng' }).click();
   await page.getByTestId('start-bb-k9o-call-sb-shove-12bb').click();
   await expect(page.getByTestId('action-bar')).toBeVisible();
@@ -36,7 +36,7 @@ test('MVP critical path: train, review, import, persist across devices', async (
 
   // Multi-street heuristic tree with sizing
   await page.getByTestId('lang-en').click();
-  await page.goto('/hero');
+  await page.goto('/hero/browse');
   await page.getByTestId('start-btn-ajs-35bb-open-flop-cbet').click();
   await page.getByRole('button', { name: '2.2BB' }).click();
   await page.getByTestId('action-bar').getByRole('button', { name: 'Raise to 2.2 BB' }).click();
@@ -53,8 +53,21 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await page.getByTestId('note-save').click();
   await expect(page.getByTestId('notes')).toContainText('nut flush draw');
 
+  // "Next test" goes straight into another scenario (no list)
+  const before = page.url();
+  await page.getByTestId('next-test').click();
+  await expect(page).not.toHaveURL(before);
+  await expect(page.getByTestId('poker-table')).toBeVisible();
+
+  // Launcher: one button picks a scenario
+  await page.goto('/hero');
+  await expect(page.getByTestId('scenario-list')).toHaveCount(0);
+  await page.getByTestId('launch-start').click();
+  await expect(page).toHaveURL(/\/run\//);
+  await expect(page.getByTestId('poker-table')).toBeVisible();
+
   // Villain range reading
-  await page.goto('/villain');
+  await page.goto('/villain/browse');
   await page.getByTestId('start-v-k84-checkraise-combo-count').click();
   await expect(page.getByTestId('question')).toBeVisible();
   for (let i = 0; i < 8; i++) {

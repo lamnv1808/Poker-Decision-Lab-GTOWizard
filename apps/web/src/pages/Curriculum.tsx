@@ -39,7 +39,7 @@ export function CurriculumPage() {
               <span>{t('curr.elo')}: {m.skillRatings.map((s) => `${t(`skill.${s.skill}`)} ${s.rating ?? '—'}`).join(' · ')}</span>
             </div>
             <div className="mt-3 flex gap-2 text-xs">
-              {m.scenarioCount > 0 && <Link to={`/hero?module=${m.id}`} className="rounded-md border border-ink-600 px-2 py-1 hover:border-accent">{t('curr.practice')}</Link>}
+              {m.scenarioCount > 0 && <Link to={`/hero/browse?module=${m.id}`} className="rounded-md border border-ink-600 px-2 py-1 hover:border-accent">{t('curr.practice')}</Link>}
               {m.quizKinds.slice(0, 2).map((k) => <Link key={k} to={`/math?kind=${k}`} className="rounded-md border border-ink-600 px-2 py-1 hover:border-accent">∑ {t(`quiz.${k}`)}</Link>)}
             </div>
           </article>

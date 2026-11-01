@@ -10,6 +10,7 @@ import { GtoQuiz } from './pages/GtoQuiz';
 import { HandDetailPage, HandsPage } from './pages/Hands';
 import { HistoryPage } from './pages/History';
 import { LeaksPage } from './pages/Leaks';
+import { Launcher } from './pages/Launcher';
 import { MathLab } from './pages/MathLab';
 import { ProgressPage } from './pages/Progress';
 import { RunPage } from './pages/RunPage';
@@ -40,8 +41,10 @@ export function App() {
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
         <Route index element={<Dashboard />} />
         <Route path="train" element={<Train />} />
-        <Route path="hero" element={<ScenarioList mode="hero" />} />
-        <Route path="villain" element={<ScenarioList mode="villain" />} />
+        <Route path="hero" element={<Launcher kind="hero" />} />
+        <Route path="villain" element={<Launcher kind="villain" />} />
+        <Route path="hero/browse" element={<ScenarioList mode="hero" />} />
+        <Route path="villain/browse" element={<ScenarioList mode="villain" />} />
         <Route path="run/:id" element={<RunPage />} />
         <Route path="math" element={<MathLab />} />
         <Route path="gto" element={<GtoQuiz />} />
