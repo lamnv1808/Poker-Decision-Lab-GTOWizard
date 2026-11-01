@@ -165,7 +165,7 @@ describe('Fundamentals and metrics', () => {
     const po = d.potOdds as { requiredEquity: number };
     const r = await owner.agent.post(`/api/real/potodds/${d.id}/answer`).send({ clientAttemptId: cid(), valuePct: po.requiredEquity * 100 + 0.3 }).expect(200);
     expect(r.body.grade).toBe('excellent');
-    expect(r.body.ratingChanges).toEqual([]);
+    expect(r.body.ratingChanges.map((c: { skill: string }) => c.skill)).toEqual(['fundamentals']);
     const next = await owner.agent.post('/api/real/next').send({ kind: 'potodds' }).expect(200);
     expect(next.body.potOddsPrompt.vi).toMatch(/không phải câu hỏi nên theo hay bỏ/);
   });

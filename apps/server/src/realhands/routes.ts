@@ -414,7 +414,8 @@ realRouter.post('/potodds/:id/answer', async (req, res) => {
     itemRef: `potodds:${d.familyId}:${d.id}`,
     reviewType: 'quiz',
     reviewRef: 'potodds',
-    mode: 'practice',
+    // exact arithmetic: counts toward the Fundamentals subrating (never strategy Elo)
+    mode: 'rated',
     action: { valuePct: body.valuePct },
     graded: true,
     grade,

@@ -1,4 +1,5 @@
-import { CURRICULUM, LEAK_LABELS, type LeakKey, rankLeaks, confidenceHalfWidth } from '@pdl/core';
+import { CURRICULUM, FUNDAMENTALS_KEY, LEAK_LABELS, type LeakKey, SKILLS, rankLeaks, confidenceHalfWidth, overallProficiency, strengthsAndWeaknesses } from '@pdl/core';
+import { ensureRatingModel } from './learning';
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireUser } from './auth';
@@ -44,16 +45,18 @@ export const analyticsRouter = Router();
 
 analyticsRouter.get('/dashboard', async (req, res) => {
   const userId = requireUser(req);
+  await ensureRatingModel(userId);
   const [ratings, attempts, sessions, history] = await Promise.all([
     prisma.rating.findMany({ where: { userId } }),
-    prisma.decisionAttempt.findMany({ where: { userId }, select: { graded: true, isError: true, grade: true, evLoss: true, evUnit: true, createdAt: true, street: true, heroPosition: true, effectiveStackBB: true, difficulty: true, concepts: true, attemptType: true, mode: true } }),
+    prisma.decisionAttempt.findMany({ where: { userId }, select: { graded: true, isError: true, grade: true, evLoss: true, evUnit: true, createdAt: true, street: true, heroPosition: true, effectiveStackBB: true, difficulty: true, concepts: true, attemptType: true, mode: true, gradeBasis: true } }),
     prisma.trainingSession.count({ where: { userId } }),
     prisma.ratingHistory.findMany({ where: { userId, skill: 'overall' }, orderBy: { createdAt: 'asc' }, select: { ratingBefore: true, ratingAfter: true, createdAt: true } }),
   ]);
   const overall = ratings.find((r) => r.skill === 'overall');
   const weekAgo = Date.now() - 7 * 86400000;
   const firstThisWeek = history.find((h) => h.createdAt.getTime() >= weekAgo);
-  const skills = ratings.filter((r) => r.skill !== 'overall' && r.games >= 1).map((r) => ({ skill: r.skill, rating: Math.round(r.rating), rd: Math.round(r.rd), games: r.games }));
+  const fundamentals = ratings.find((r) => r.skill === FUNDAMENTALS_KEY);
+  const skills = ratings.filter((r) => r.skill !== 'overall' && r.skill !== FUNDAMENTALS_KEY && r.games >= 1).map((r) => ({ skill: r.skill, rating: Math.round(r.rating), rd: Math.round(r.rd), games: r.games }));
   const reliable = skills.filter((s) => s.rd < 150);
   const obs = await prisma.leakObservation.findMany({ where: { userId }, select: { leakKey: true, isError: true, evLossBB: true, createdAt: true } });
   const leaks = rankLeaks(obs.map((o) => ({ leak: o.leakKey as LeakKey, isError: o.isError, evLossBB: o.evLossBB ?? undefined, at: o.createdAt.toISOString() }))).filter((l) => l.ranked).slice(0, 3);
@@ -63,8 +66,16 @@ analyticsRouter.get('/dashboard', async (req, res) => {
     ratingChange7d: firstThisWeek && overall ? Math.round(overall.rating - firstThisWeek.ratingBefore) : null,
     sessions,
     ...summarize(attempts),
-    strengths: [...reliable].sort((a, b) => b.rating - a.rating).slice(0, 3),
-    weaknesses: [...reliable].sort((a, b) => a.rating - b.rating).slice(0, 3),
+    ...(() => {
+      const sw = strengthsAndWeaknesses(reliable);
+      return { strengths: sw.strengths, weaknesses: sw.weaknesses, skillEvidence: sw.enough ? 'ok' : 'insufficient' };
+    })(),
+    competency: {
+      ...overallProficiency(overall, fundamentals, { covered: skills.length + (fundamentals?.games ? 1 : 0), total: SKILLS.length + 1 }),
+      strategy: overall ? { rating: Math.round(overall.rating), rd: Math.round(overall.rd), interval95: Math.round(confidenceHalfWidth(overall.rd)), games: overall.games } : null,
+      fundamentals: fundamentals ? { rating: Math.round(fundamentals.rating), rd: Math.round(fundamentals.rd), interval95: Math.round(confidenceHalfWidth(fundamentals.rd)), games: fundamentals.games } : null,
+      exploratory: { attempts: attempts.filter((a) => a.graded && a.gradeBasis === 'rubric').length },
+    },
     provisionalSkills: skills.filter((s) => s.rd >= 150).map((s) => s.skill),
     topLeaks: leaks.map((l) => ({ ...l, label: LEAK_LABELS[l.leak] })),
     reviewDue: due,
@@ -73,6 +84,7 @@ analyticsRouter.get('/dashboard', async (req, res) => {
 
 analyticsRouter.get('/progress', async (req, res) => {
   const userId = requireUser(req);
+  await ensureRatingModel(userId);
   const [history, ratings, attempts] = await Promise.all([
     prisma.ratingHistory.findMany({ where: { userId }, orderBy: { createdAt: 'asc' }, select: { skill: true, ratingAfter: true, rdAfter: true, createdAt: true } }),
     prisma.rating.findMany({ where: { userId } }),

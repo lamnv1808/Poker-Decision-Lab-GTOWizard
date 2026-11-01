@@ -92,10 +92,11 @@ describe('hero training run', () => {
     expect(fb.ratingEligible).toBe(false);
     expect(fb.facts.requiredEquityPct).toBe(44);
     expect(fb.model.assumptions.length).toBeGreaterThan(0);
-    expect(fb.ratingChanges).toEqual([]);
+    // only the Fundamentals subrating moves; strategy ratings are untouched
+    expect(fb.ratingChanges.map((c: { skill: string }) => c.skill)).toEqual(['fundamentals']);
     const att = await prisma.decisionAttempt.findFirstOrThrow({ where: { userId: id } });
     expect(att.track).toBe('fundamentals');
-    expect(await prisma.rating.count({ where: { userId: id } })).toBe(0);
+    expect((await prisma.rating.findMany({ where: { userId: id } })).map((r) => r.skill)).toEqual(['fundamentals']);
     // idempotent retry
     await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId, action: { type: 'call' } }).expect(200);
     expect(await prisma.decisionAttempt.count({ where: { userId: id } })).toBe(1);

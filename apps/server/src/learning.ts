@@ -12,6 +12,10 @@ import {
   observationsFor,
   reviewSrs,
   difficultyRating,
+  FUNDAMENTALS_KEY,
+  FUND_METHOD_VERSION,
+  RATING_MODEL_VERSION,
+  fundamentalsUpdate,
 } from '@pdl/core';
 import { Prisma } from '@prisma/client';
 import { prisma } from './db';
@@ -71,6 +75,7 @@ export interface AttemptOutcome {
  * the spaced-repetition schedule. Idempotent on (userId, clientAttemptId).
  */
 export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome> {
+  await ensureRatingModel(input.userId);
   const existing = await prisma.decisionAttempt.findUnique({ where: { userId_clientAttemptId: { userId: input.userId, clientAttemptId: input.clientAttemptId } }, include: { ratingHistory: true } });
   if (existing) return fromExisting(existing);
   try {
@@ -90,6 +95,19 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
       const { changes, weight, methodVersion } = rated
         ? computeRatingChanges(curMap, { score: score!, difficulty: input.difficulty, source: input.sourceClass, priorExposures, rated: true, skills: input.skills, daysSince })
         : { changes: [], weight: 0, methodVersion: '' };
+      // Fundamentals subrating: exact maths / assumed-range-model decisions (never heuristic content).
+      const fundRated = track === 'fundamentals' && input.graded && score !== undefined && (input.mode === 'rated' || input.attemptType === 'potodds');
+      let fund: ReturnType<typeof fundamentalsUpdate> = null;
+      if (fundRated) {
+        const prior = await tx.ratingHistory.count({ where: { userId: input.userId, skill: FUNDAMENTALS_KEY, attempt: input.familyId ? { familyId: input.familyId } : { itemRef: input.itemRef } } });
+        const cur = await tx.rating.findUnique({ where: { userId_skill: { userId: input.userId, skill: FUNDAMENTALS_KEY } } });
+        fund = fundamentalsUpdate(cur ? { rating: cur.rating, rd: cur.rd, vol: cur.vol } : undefined, {
+          score: score!,
+          difficulty: input.difficulty,
+          priorExposures: prior,
+          daysSince: cur ? Math.floor((now.getTime() - cur.updatedAt.getTime()) / 86400000) : 0,
+        });
+      }
       const attempt = await tx.decisionAttempt.create({
         data: {
           userId: input.userId,
@@ -110,8 +128,8 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
           evUnit: input.evUnit ?? null,
           score: score ?? null,
           ratingEligible: input.ratingEligible,
-          ratingApplied: changes.length > 0,
-          ratingWeight: weight,
+          ratingApplied: changes.length > 0 || !!fund,
+          ratingWeight: fund ? fund.weight : weight,
           isError: input.isError,
           confidence: input.confidence ?? null,
           gradingMethodVersion: input.gradingMethodVersion,
@@ -154,6 +172,17 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
             methodVersion,
           },
         });
+      }
+      if (fund) {
+        await tx.rating.upsert({
+          where: { userId_skill: { userId: input.userId, skill: FUNDAMENTALS_KEY } },
+          create: { userId: input.userId, skill: FUNDAMENTALS_KEY, rating: fund.after.rating, rd: fund.after.rd, vol: fund.after.vol, games: 1 },
+          update: { rating: fund.after.rating, rd: fund.after.rd, vol: fund.after.vol, games: { increment: 1 } },
+        });
+        await tx.ratingHistory.create({
+          data: { userId: input.userId, attemptId: attempt.id, skill: FUNDAMENTALS_KEY, ratingBefore: fund.before.rating, rdBefore: fund.before.rd, volBefore: fund.before.vol, ratingAfter: fund.after.rating, rdAfter: fund.after.rd, volAfter: fund.after.vol, weight: fund.weight, score: score!, opponentRating: opp.rating, methodVersion: FUND_METHOD_VERSION },
+        });
+        changes.push({ key: FUNDAMENTALS_KEY as RatingKey, before: fund.before, after: fund.after, weight: fund.weight });
       }
       if (input.graded) {
         const evBB = input.evUnit === 'bb' ? input.evLoss : undefined;
@@ -208,4 +237,58 @@ function fromExisting(a: { id: string; result: unknown }): AttemptOutcome {
     review: (result.review as AttemptOutcome['review']) ?? null,
     result,
   };
+}
+
+/**
+ * Bring a user's ratings to the current rating model (versioned, idempotent, no reset).
+ * unified-v1 adds the Fundamentals subrating, back-filled deterministically from the user's
+ * immutable fundamentals attempts in time order; strategy ratings are not touched.
+ */
+export async function ensureRatingModel(userId: string): Promise<void> {
+  const st = await prisma.ratingModelState.findUnique({ where: { userId } });
+  if (st?.version === RATING_MODEL_VERSION) return;
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        // The state row doubles as a lock: a concurrent migration fails on the primary key / version check.
+        if (st) {
+          const n = await tx.ratingModelState.updateMany({ where: { userId, version: st.version }, data: { version: RATING_MODEL_VERSION, migratedAt: new Date() } });
+          if (n.count === 0) return;
+        } else await tx.ratingModelState.create({ data: { userId, version: RATING_MODEL_VERSION } });
+        if (await tx.ratingHistory.findFirst({ where: { userId, skill: FUNDAMENTALS_KEY } })) return;
+        const atts = await tx.decisionAttempt.findMany({
+          where: { userId, track: 'fundamentals', graded: true, score: { not: null }, OR: [{ mode: 'rated' }, { attemptType: 'potodds' }] },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, score: true, difficulty: true, familyId: true, itemRef: true, createdAt: true },
+        });
+        let cur: { rating: number; rd: number; vol: number } | undefined;
+        let last: Date | undefined;
+        const seen = new Map<string, number>();
+        const rows: Prisma.RatingHistoryCreateManyInput[] = [];
+        for (const a of atts) {
+          const key = a.familyId ?? a.itemRef;
+          const prior = seen.get(key) ?? 0;
+          const u = fundamentalsUpdate(cur, { score: a.score!, difficulty: a.difficulty, priorExposures: prior, daysSince: last ? Math.floor((a.createdAt.getTime() - last.getTime()) / 86400000) : 0 });
+          if (!u) continue;
+          seen.set(key, prior + 1);
+          rows.push({ userId, attemptId: a.id, skill: FUNDAMENTALS_KEY, ratingBefore: u.before.rating, rdBefore: u.before.rd, volBefore: u.before.vol, ratingAfter: u.after.rating, rdAfter: u.after.rd, volAfter: u.after.vol, weight: u.weight, score: a.score!, opponentRating: difficultyRating(a.difficulty).rating, methodVersion: `${FUND_METHOD_VERSION}-backfill`, createdAt: a.createdAt });
+          cur = u.after;
+          last = a.createdAt;
+        }
+        if (rows.length) {
+          await tx.ratingHistory.createMany({ data: rows, skipDuplicates: true });
+          await tx.rating.upsert({
+            where: { userId_skill: { userId, skill: FUNDAMENTALS_KEY } },
+            create: { userId, skill: FUNDAMENTALS_KEY, rating: cur!.rating, rd: cur!.rd, vol: cur!.vol, games: rows.length },
+            update: { rating: cur!.rating, rd: cur!.rd, vol: cur!.vol, games: rows.length },
+          });
+        }
+        await tx.ratingModelState.update({ where: { userId }, data: { backfilled: rows.length } });
+      },
+      { timeout: 60_000 },
+    );
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return;
+    throw e;
+  }
 }

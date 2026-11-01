@@ -38,6 +38,7 @@ model User {
   realDecisions  RealDecision[]
   annotations    Annotation[] @relation("AnnotationOwner")
   simHands       SimHand[]
+  ratingModel    RatingModelState?
 }
 
 model Session {
@@ -562,4 +563,14 @@ model SimHand {
 
   @@index([userId, status, updatedAt])
   @@index([parentId])
+}
+
+/// Which rating model a user's ratings follow. Moving to a new version back-fills new subratings
+/// from immutable attempt history; existing ratings are never reset.
+model RatingModelState {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version    String
+  migratedAt DateTime @default(now())
+  backfilled Int      @default(0)
 }

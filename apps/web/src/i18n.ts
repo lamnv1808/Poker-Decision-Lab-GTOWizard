@@ -612,6 +612,20 @@ const en: Dict = {
   "arch.station": "Station",
   "arch.maniac": "Maniac",
   "mixed.next": "Next in session",
+  "dash.proficiency": "Overall proficiency",
+  "dash.confidence": "Confidence",
+  "dash.conf.low": "low",
+  "dash.conf.medium": "medium",
+  "dash.conf.high": "high",
+  "dash.coverage": "Coverage",
+  "dash.blend": "{s}% strategy / {f}% fundamentals",
+  "dash.notEnoughEvidence": "Not enough evidence",
+  "dash.notEnoughHint": "Needs 10+ rated decisions in Strategy or Fundamentals",
+  "dash.strategyRating": "Strategy rating",
+  "dash.fundamentalsRating": "Fundamentals rating",
+  "dash.exploratory": "Exploratory",
+  "dash.exploratoryNote": "heuristic spots, never rated",
+  "skill.fundamentals": "Fundamentals",
 };
 
 const vi: Dict = {
@@ -1222,6 +1236,20 @@ const vi: Dict = {
   "arch.station": "Station",
   "arch.maniac": "Maniac",
   "mixed.next": "Câu tiếp theo",
+  "dash.proficiency": "Trình độ tổng thể",
+  "dash.confidence": "Độ tin cậy",
+  "dash.conf.low": "thấp",
+  "dash.conf.medium": "trung bình",
+  "dash.conf.high": "cao",
+  "dash.coverage": "Độ phủ",
+  "dash.blend": "{s}% chiến thuật / {f}% nền tảng",
+  "dash.notEnoughEvidence": "Chưa đủ dữ liệu",
+  "dash.notEnoughHint": "Cần 10+ quyết định xếp hạng ở Chiến thuật hoặc Nền tảng",
+  "dash.strategyRating": "Điểm chiến thuật",
+  "dash.fundamentalsRating": "Điểm nền tảng",
+  "dash.exploratory": "Khám phá",
+  "dash.exploratoryNote": "spot heuristic, không xếp hạng",
+  "skill.fundamentals": "Nền tảng",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, vi };

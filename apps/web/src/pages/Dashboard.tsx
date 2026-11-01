@@ -20,6 +20,18 @@ interface Dash {
   provisionalSkills: string[];
   topLeaks: { leak: string; label: Localized; errorRate: number; opportunities: number; confidence: string }[];
   reviewDue: number;
+  skillEvidence: 'ok' | 'insufficient';
+  competency: {
+    status: 'ok' | 'insufficient';
+    rating: number | null;
+    interval95: number | null;
+    confidence: 'low' | 'medium' | 'high' | null;
+    coveragePct: number;
+    components: { strategy: number; fundamentals: number };
+    strategy: { rating: number; interval95: number; games: number } | null;
+    fundamentals: { rating: number; interval95: number; games: number } | null;
+    exploratory: { attempts: number };
+  };
 }
 
 export function Dashboard() {
@@ -40,24 +52,49 @@ export function Dashboard() {
           <Link to="/train" className="rounded-lg bg-felt-500 px-3 py-1.5 text-sm font-semibold hover:bg-felt-600">{t('dash.startTraining')}</Link>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_1fr]" data-testid="competency">
+        <div className="rounded-xl border border-accent/40 bg-ink-900 p-4" data-testid="stat-proficiency">
+          <div className="text-xs uppercase tracking-wide text-ink-400">{t('dash.proficiency')}</div>
+          {d.competency.status === 'ok' ? (
+            <>
+              <div className="text-3xl font-bold tabular">{d.competency.rating} <span className="text-sm font-normal text-ink-300">±{d.competency.interval95}</span></div>
+              <div className="text-xs text-ink-300">
+                {t('dash.confidence')}: {t(`dash.conf.${d.competency.confidence}`)} · {t('dash.coverage')}: {d.competency.coveragePct}% · {t('dash.blend', { s: Math.round(d.competency.components.strategy * 100), f: Math.round(d.competency.components.fundamentals * 100) })}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-xl font-semibold text-ink-200">{t('dash.notEnoughEvidence')}</div>
+              <div className="text-xs text-ink-400">{t('dash.notEnoughHint')} · {t('dash.coverage')}: {d.competency.coveragePct}%</div>
+            </>
+          )}
+        </div>
         <Stat
           testId="stat-rating"
-          label={t('dash.rating')}
-          value={d.rating ? d.rating.rating : '1000'}
+          label={t('dash.strategyRating')}
+          value={d.rating ? d.rating.rating : '—'}
           sub={d.rating ? `±${d.rating.interval95} (95%) · ${d.rating.games} ${t('dash.ratedDecisions')}` : t('dash.provisional')}
         />
+        <Stat
+          testId="stat-fundamentals"
+          label={t('dash.fundamentalsRating')}
+          value={d.competency.fundamentals ? d.competency.fundamentals.rating : '—'}
+          sub={d.competency.fundamentals ? `±${d.competency.fundamentals.interval95} (95%) · ${d.competency.fundamentals.games} ${t('dash.ratedDecisions')}` : t('dash.provisional')}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={t('dash.change7d')} value={d.ratingChange7d === null ? '—' : `${d.ratingChange7d >= 0 ? '+' : ''}${d.ratingChange7d}`} />
         <Stat testId="stat-accuracy" label={t('dash.accuracy')} value={fmtPct(d.accuracyPct)} sub={`${d.graded} ${t('dash.graded')} / ${d.decisions} ${t('dash.decisions')}`} />
         <Stat label={t('dash.evLoss')} value={d.avgEvLossBB === null ? '—' : `${fmtNum(d.avgEvLossBB, 2)} BB`} sub={`${d.evSamples} ${t('dash.evSamples')}`} />
+        <Stat label={t('dash.exploratory')} value={d.competency.exploratory.attempts} sub={t('dash.exploratoryNote')} />
       </div>
       <p className="text-xs text-ink-400">{t('dash.metricsNote')}</p>
       <div className="grid gap-4 md:grid-cols-3">
         <Panel title={t('dash.strengths')}>
-          {d.strengths.length ? <ul className="space-y-1 text-sm">{d.strengths.map((s) => <li key={s.skill} className="flex justify-between"><span>{t(`skill.${s.skill}`)}</span><b className="tabular">{s.rating}</b></li>)}</ul> : <Empty>{t('dash.needMoreData')}</Empty>}
+          {d.strengths.length ? <ul className="space-y-1 text-sm">{d.strengths.map((s) => <li key={s.skill} className="flex justify-between"><span>{t(`skill.${s.skill}`)}</span><b className="tabular">{s.rating}</b></li>)}</ul> : <Empty>{t('dash.notEnoughEvidence')}</Empty>}
         </Panel>
         <Panel title={t('dash.weaknesses')}>
-          {d.weaknesses.length ? <ul className="space-y-1 text-sm">{d.weaknesses.map((s) => <li key={s.skill} className="flex justify-between"><span>{t(`skill.${s.skill}`)}</span><b className="tabular">{s.rating}</b></li>)}</ul> : <Empty>{t('dash.needMoreData')}</Empty>}
+          {d.weaknesses.length ? <ul className="space-y-1 text-sm">{d.weaknesses.map((s) => <li key={s.skill} className="flex justify-between"><span>{t(`skill.${s.skill}`)}</span><b className="tabular">{s.rating}</b></li>)}</ul> : <Empty>{t('dash.notEnoughEvidence')}</Empty>}
           {d.provisionalSkills.length > 0 && <p className="mt-2 text-xs text-ink-400">{t('dash.provisionalSkills')}: {d.provisionalSkills.map((s) => t(`skill.${s}`)).join(', ')}</p>}
         </Panel>
         <Panel title={t('dash.topLeaks')} actions={<Link to="/leaks" className="text-xs text-accent">{t('dash.all')}</Link>}>
@@ -70,7 +107,7 @@ export function Dashboard() {
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {[
-          { to: '/hero', k: 'hero' },
+          { to: '/play', k: 'play' },
           { to: '/villain', k: 'villain' },
           { to: '/math', k: 'math' },
         ].map((c) => (

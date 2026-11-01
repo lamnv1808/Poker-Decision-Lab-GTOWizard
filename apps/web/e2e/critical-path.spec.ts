@@ -24,8 +24,9 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await page.getByTestId('action-bar').getByRole('button', { name: /^Theo/ }).click();
   await expect(page.getByTestId('feedback')).toBeVisible();
   await expect(page.getByTestId('ev-loss')).toBeVisible();
-  // assumed-range models are Fundamentals: no strategy rating change
-  await expect(page.getByTestId('rating-changes')).toHaveCount(0);
+  // assumed-range models are Fundamentals: only the Fundamentals subrating moves, never strategy
+  await expect(page.getByTestId('rating-changes')).toContainText(/Fundamentals|Nền tảng/);
+  await expect(page.getByTestId('rating-changes')).not.toContainText(/Overall|Tổng thể/);
   await expect(page.getByTestId('math-facts')).toContainText('44.0%');
   await expect(page.getByTestId('run-complete')).toBeVisible();
   // Deep analysis with GTO / exploit toggle
