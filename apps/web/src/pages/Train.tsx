@@ -31,7 +31,7 @@ export function Train() {
   const nav = useNavigate();
   const [resume, setResume] = useState<string | null>(null);
   useEffect(() => {
-    api.get<{ id: string }[]>('/sim/hands/active').then((h) => setResume(h[0]?.id ?? null)).catch(() => setResume(null));
+    api.get<{ id: string; sessionId: string | null }[]>('/sim/hands/active').then((h) => setResume(h[0] ? `${h[0].id}${h[0].sessionId ? `?mixed=${h[0].sessionId}` : ''}` : null)).catch(() => setResume(null));
   }, []);
   useEffect(() => {
     setItems(null);

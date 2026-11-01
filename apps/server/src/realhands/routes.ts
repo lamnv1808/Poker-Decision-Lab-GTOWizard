@@ -408,16 +408,18 @@ realRouter.post('/potodds/:id/answer', async (req, res) => {
       : { en: 'Assumes no further betting on later streets; real equity realization differs.', vi: 'Giả định không còn cược ở các vòng sau; hiện thực hóa equity thực tế sẽ khác.' },
     note: { en: 'Arithmetic benchmark only — pot odds alone do not decide whether to call; Hero’s equity vs the opponent’s range is unknown.', vi: 'Chỉ là bài tập số học — pot odds riêng nó không quyết định nên theo; equity của Hero so với range đối thủ chưa biết.' },
   };
+  // a Mixed session's practice/rated choice overrides the page's own toggle
+  const mixed = await mixedSessionFor(userId, body.sessionId);
   const outcome = await recordAttempt({
     userId,
     clientAttemptId: body.clientAttemptId,
-    sessionId: await mixedSessionFor(userId, body.sessionId),
+    sessionId: mixed?.id ?? null,
     attemptType: 'potodds',
     itemRef: `potodds:${d.familyId}:${d.id}`,
     reviewType: 'quiz',
     reviewRef: 'potodds',
     // exact arithmetic: counts toward the Fundamentals subrating (never strategy Elo)
-    mode: 'rated',
+    mode: mixed?.mode ?? 'rated',
     action: { valuePct: body.valuePct },
     graded: true,
     grade,

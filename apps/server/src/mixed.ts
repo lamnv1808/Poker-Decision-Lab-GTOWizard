@@ -1,4 +1,5 @@
 import { createRng, hashString } from '@pdl/core';
+import type { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireUser } from './auth';
@@ -25,11 +26,20 @@ interface MixedConfig {
   served: { type: MixedType; at: string; ref?: string }[];
 }
 
-/** The session id if it is the caller's own, still-open Mixed session; otherwise null. */
-export async function mixedSessionFor(userId: string, sessionId: string | undefined | null): Promise<string | null> {
+/** Time allowed after the clock runs out to finish the item already on screen. */
+const GRACE_SEC = 300;
+
+/**
+ * The caller's own Mixed session if it is still open (not ended, within its time + grace), with
+ * the session's practice/rated mode — which overrides any mode the page sends. Otherwise null.
+ */
+export async function mixedSessionFor(userId: string, sessionId: string | undefined | null): Promise<{ id: string; mode: 'practice' | 'rated' } | null> {
   if (!sessionId) return null;
-  const s = await prisma.trainingSession.findFirst({ where: { id: sessionId, userId, kind: 'mixed', endedAt: null }, select: { id: true } });
-  return s?.id ?? null;
+  const s = await prisma.trainingSession.findFirst({ where: { id: sessionId, userId, kind: 'mixed', endedAt: null }, select: { id: true, mode: true, startedAt: true, config: true } });
+  if (!s) return null;
+  const cfg = s.config as unknown as MixedConfig | null;
+  if (cfg && Date.now() - s.startedAt.getTime() > (cfg.durationMin * 60 + GRACE_SEC) * 1000) return null;
+  return { id: s.id, mode: s.mode as 'practice' | 'rated' };
 }
 
 const typeOf = (itemRef: string): MixedType | null => (MIXED_TYPES.find((t) => itemRef.startsWith(PREFIX[t])) ?? null);
@@ -100,14 +110,25 @@ const simOpts = (d: MixedConfig['difficulty'], seed: number) =>
 
 mixedRouter.post('/sessions/:id/next', async (req, res) => {
   const userId = requireUser(req);
-  const { s, cfg } = await load(userId, String(req.params.id));
+  await load(userId, String(req.params.id));
+  // Serialise /next per session (double clicks, StrictMode) so no item is lost or dealt twice.
+  const out = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "TrainingSession" WHERE id = ${String(req.params.id)} FOR UPDATE`;
+    const s = (await tx.trainingSession.findUniqueOrThrow({ where: { id: String(req.params.id) } }));
+    const cfg = s.config as unknown as MixedConfig;
+    return nextItem(tx, userId, s, cfg);
+  }, { timeout: 20_000 });
+  res.json(out);
+});
+
+async function nextItem(tx: Prisma.TransactionClient, userId: string, s: { id: string; mode: string; startedAt: Date; endedAt: Date | null }, cfg: MixedConfig) {
   const elapsedSec = Math.floor((Date.now() - s.startedAt.getTime()) / 1000);
   const remainingSec = Math.max(0, cfg.durationMin * 60 - elapsedSec);
-  if (s.endedAt || remainingSec === 0) return void res.json({ done: true, remainingSec: 0 });
+  if (s.endedAt || remainingSec === 0) return { done: true, remainingSec: 0 };
   // an unfinished full hand from this session is resumed, not replaced
-  const open = await prisma.simHand.findFirst({ where: { userId, sessionId: s.id, status: 'active' } });
-  if (open) return void res.json({ done: false, type: 'sim', href: `/play/${open.id}?mixed=${s.id}`, remainingSec, served: cfg.served.length, resumed: true });
-  const hasReal = (await prisma.realDecision.count({ where: { userId, status: 'accepted' }, take: 1 })) > 0;
+  const open = await tx.simHand.findFirst({ where: { userId, sessionId: s.id, status: 'active' } });
+  if (open) return { done: false, type: 'sim', href: `/play/${open.id}?mixed=${s.id}`, remainingSec, served: cfg.served.length, resumed: true };
+  const hasReal = (await tx.realDecision.count({ where: { userId, status: 'accepted' }, take: 1 })) > 0;
   const w = await weights(userId, cfg, hasReal);
   const type = pick(w, hashString(`${s.id}:${cfg.served.length}`));
   if (!type) throw new HttpError(409, 'no_items', 'No item types available for this focus');
@@ -115,7 +136,7 @@ mixedRouter.post('/sessions/:id/next', async (req, res) => {
   let ref: string | undefined;
   const q = `mixed=${s.id}`;
   if (type === 'sim') {
-    const h = await createSimHand(userId, { ...simOpts(cfg.difficulty, cfg.served.length), mode: s.mode as 'practice' | 'rated', feedback: 'guided', sessionId: s.id });
+    const h = await createSimHand(userId, { ...simOpts(cfg.difficulty, cfg.served.length), mode: s.mode as 'practice' | 'rated', feedback: 'guided', sessionId: s.id }, tx);
     href = `/play/${h.id}?${q}`;
     ref = h.id;
   } else if (type === 'gto') href = `/gto?${q}`;
@@ -123,9 +144,9 @@ mixedRouter.post('/sessions/:id/next', async (req, res) => {
   else if (type === 'math') href = `/math?level=${await mathLevel(userId, cfg.difficulty)}&${q}`;
   else href = `/fundamentals?${q}`;
   cfg.served.push({ type, at: new Date().toISOString(), ref });
-  await prisma.trainingSession.update({ where: { id: s.id }, data: { config: cfg as object } });
-  res.json({ done: false, type, href, remainingSec, served: cfg.served.length, weights: w });
-});
+  await tx.trainingSession.update({ where: { id: s.id }, data: { config: cfg as object } });
+  return { done: false, type, href, remainingSec, served: cfg.served.length, weights: w };
+}
 
 mixedRouter.post('/sessions/:id/end', async (req, res) => {
   const userId = requireUser(req);
@@ -137,7 +158,10 @@ mixedRouter.post('/sessions/:id/end', async (req, res) => {
 mixedRouter.get('/sessions/:id', async (req, res) => {
   const userId = requireUser(req);
   const { s, cfg } = await load(userId, String(req.params.id));
-  const answered = await prisma.decisionAttempt.count({ where: { userId, sessionId: s.id } });
+  // recorded answers + full-hand decisions that were not graded (and so not recorded as attempts)
+  const sims = await prisma.simHand.findMany({ where: { userId, sessionId: s.id }, select: { steps: true } });
+  const ungraded = sims.reduce((n, h) => n + ((h.steps as { attemptId?: string }[]) ?? []).filter((x) => !x.attemptId).length, 0);
+  const answered = (await prisma.decisionAttempt.count({ where: { userId, sessionId: s.id } })) + ungraded;
   const remainingSec = s.endedAt ? 0 : Math.max(0, cfg.durationMin * 60 - Math.floor((Date.now() - s.startedAt.getTime()) / 1000));
   res.json({ id: s.id, mode: s.mode, ...cfg, served: cfg.served.length, answered, remainingSec, ended: !!s.endedAt || remainingSec === 0 });
 });

@@ -133,15 +133,17 @@ gtoRouter.post('/answer', async (req, res) => {
     assumptions: GTO_ASSUMPTIONS,
     source: { classification: 'SOLVER_VERIFIED', method: { en: `Push/fold Nash equilibrium computed by this app (${sol.methodVersion}, ${PUSHFOLD_DATA_INFO.iterations} fictitious-play iterations; exploitability ${sol.exploitabilityBB.toFixed(5)} BB).`, vi: `Cân bằng Nash push/fold do ứng dụng tính (${sol.methodVersion}, ${PUSHFOLD_DATA_INFO.iterations} vòng fictitious play; độ khai thác ${sol.exploitabilityBB.toFixed(5)} BB).` } },
   };
+  // a Mixed session's practice/rated choice overrides the page's own toggle
+  const mixed = await mixedSessionFor(userId, body.sessionId);
   const outcome = await recordAttempt({
     userId,
     clientAttemptId: body.clientAttemptId,
-    sessionId: await mixedSessionFor(userId, body.sessionId),
+    sessionId: mixed?.id ?? null,
     attemptType: 'quiz',
     itemRef: `gto:${spot.role}:${spot.stackBB}:${spot.deadBB}:${spot.heroClass}`,
     reviewType: 'quiz',
     reviewRef: 'gto',
-    mode: body.mode,
+    mode: mixed?.mode ?? body.mode,
     action: { action: body.action },
     optionKey: body.action,
     graded: true,

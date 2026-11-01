@@ -191,15 +191,17 @@ postflopRouter.post('/answer', async (req, res) => {
       },
     },
   };
+  // a Mixed session's practice/rated choice overrides the page's own toggle
+  const mixed = await mixedSessionFor(userId, body.sessionId);
   const outcome = await recordAttempt({
     userId,
     clientAttemptId: body.clientAttemptId,
-    sessionId: await mixedSessionFor(userId, body.sessionId),
+    sessionId: mixed?.id ?? null,
     attemptType: 'quiz',
     itemRef: `gtopf:${t.flop}:${t.node}:${result.heroClass}`,
     reviewType: 'quiz',
     reviewRef: 'gtopf',
-    mode: body.mode,
+    mode: mixed?.mode ?? body.mode,
     action: { actionIndex: body.actionIndex, action: n.actions[body.actionIndex] },
     optionKey: n.actions[body.actionIndex],
     graded: true,

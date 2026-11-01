@@ -9,8 +9,11 @@ import {
   SIM_BB,
   SIM_MODEL_VERSION,
   type SimConfig,
+  type SimDeal,
   type SimRun,
+  dealSimSecure,
   type SkillKey,
+  type LeakKey,
   isError,
   legalActions,
   publicState,
@@ -18,7 +21,8 @@ import {
   runSim,
   simReview,
 } from '@pdl/core';
-import type { SimHand } from '@prisma/client';
+import type { Prisma, SimHand } from '@prisma/client';
+import { mixedSessionFor } from './mixed';
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireUser } from './auth';
@@ -43,7 +47,7 @@ interface Step {
 }
 
 const steps = (h: SimHand) => (h.steps as unknown as Step[]) ?? [];
-const build = (h: SimHand, s: Step[] = steps(h)) => runSim(h.seed, h.config as unknown as SimConfig, s.map((x) => x.action));
+const build = (h: SimHand, s: Step[] = steps(h)) => runSim(h.seed, h.config as unknown as SimConfig, s.map((x) => x.action), { deal: (h.deal as unknown as SimDeal | null) ?? undefined });
 
 /** Math facts available to Hero at the decision (no model equity — that would hint at the answer). */
 function facts(info: HeroDecisionInfo) {
@@ -121,29 +125,37 @@ const Start = z.object({
   sessionId: z.string().uuid().optional(),
 });
 
-export async function createSimHand(userId: string, o: { tableSize?: number; stackBB?: number; archetype?: (typeof ARCHETYPES)[number] | 'mixed'; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam'; sessionId?: string | null }) {
-  // Re-deal hands that would be over before Hero gets a decision (e.g. a walk in the big blind).
-  let seed = randomInt(1, 2 ** 31 - 1);
-  let config = randomSimConfig(seed, { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
-  for (let tries = 0; tries < 20 && !runSim(seed, config, [], { equitySamples: 50 }).awaitingHero; tries++) {
-    seed = randomInt(1, 2 ** 31 - 1);
-    config = randomSimConfig(seed, { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
-  }
-  return prisma.simHand.create({ data: { userId, seed, config: config as object, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null } });
+export async function createSimHand(
+  userId: string,
+  o: { tableSize?: number; stackBB?: number; archetype?: (typeof ARCHETYPES)[number] | 'mixed'; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam'; sessionId?: string | null },
+  db: Prisma.TransactionClient = prisma,
+) {
+  // Security: the table config is public, so it comes from its own random value; the cards are
+  // shuffled with a CSPRNG and stored server-side. Neither can be derived from what the client sees.
+  // Hands that would be over before Hero acts (e.g. a walk in the big blind) are re-dealt.
+  const fresh = () => {
+    const config = randomSimConfig(randomInt(1, 2 ** 31 - 1), { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
+    return { seed: randomInt(1, 2 ** 31 - 1), config, deal: dealSimSecure(config, (n) => randomInt(n)) };
+  };
+  let h = fresh();
+  for (let tries = 0; tries < 20 && !runSim(h.seed, h.config, [], { equitySamples: 50, deal: h.deal }).awaitingHero; tries++) h = fresh();
+  return db.simHand.create({ data: { userId, seed: h.seed, deal: h.deal as object, config: h.config as object, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null } });
 }
 
 simRouter.post('/hands', async (req, res) => {
   const userId = requireUser(req);
   const body = parse(Start, req.body ?? {});
-  if (body.sessionId && !(await prisma.trainingSession.findFirst({ where: { id: body.sessionId, userId } }))) throw notFound('Session not found');
-  res.status(201).json(simView(await createSimHand(userId, body)));
+  // Only the caller's own open Mixed session can be attached; its practice/rated mode wins.
+  const mixed = body.sessionId ? await mixedSessionFor(userId, body.sessionId) : null;
+  if (body.sessionId && !mixed) throw notFound('Session not found or already ended');
+  res.status(201).json(simView(await createSimHand(userId, { ...body, mode: mixed?.mode ?? body.mode, sessionId: mixed?.id ?? null })));
 });
 
 /** Unfinished hands, for resuming on any device. */
 simRouter.get('/hands/active', async (req, res) => {
   const userId = requireUser(req);
   const hands = await prisma.simHand.findMany({ where: { userId, status: 'active' }, orderBy: { updatedAt: 'desc' }, take: 10 });
-  res.json(hands.map((h) => ({ id: h.id, mode: h.mode, feedback: h.feedback, kind: h.kind, decisions: steps(h).length, updatedAt: h.updatedAt, tableSize: (h.config as unknown as SimConfig).tableSize })));
+  res.json(hands.map((h) => ({ id: h.id, sessionId: h.sessionId, mode: h.mode, feedback: h.feedback, kind: h.kind, decisions: steps(h).length, updatedAt: h.updatedAt, tableSize: (h.config as unknown as SimConfig).tableSize })));
 });
 
 simRouter.get('/hands/:id', async (req, res) => {
@@ -178,10 +190,18 @@ simRouter.post('/hands/:id/act', async (req, res) => {
   }
   const d = run.decisions[st.length]!;
   const fb = d.feedback!;
+  const complete = run.state.complete;
+  // Claim the step first (optimistic concurrency): of two simultaneous requests only one may record.
+  const claimed = await prisma.simHand.updateMany({
+    where: { id: h.id, userId, version: h.version },
+    data: { steps: [...st, step] as object, version: { increment: 1 }, ...(complete ? { status: 'complete', completedAt: new Date() } : {}) },
+  });
+  if (claimed.count === 0) throw new HttpError(409, 'conflict', 'The hand changed on another device; reload it');
   // Only original hands count; replays and branches are exploration and never recorded (no double counting).
   if (h.kind === 'play' && fb.graded && fb.track) {
+    const mixed = await mixedSessionFor(userId, h.sessionId);
     const session =
-      (h.sessionId && (await prisma.trainingSession.findFirst({ where: { id: h.sessionId, userId } }))) ||
+      mixed ||
       (await prisma.trainingSession.findFirst({ where: { userId, kind: 'sim', mode: h.mode, endedAt: null, startedAt: { gt: new Date(Date.now() - 2 * 3600 * 1000) } }, orderBy: { startedAt: 'desc' } })) ||
       (await prisma.trainingSession.create({ data: { userId, kind: 'sim', mode: h.mode } }));
     const solver = fb.basis === 'solverEv';
@@ -213,8 +233,12 @@ simRouter.post('/hands/:id/act', async (req, res) => {
       difficulty: solver ? (Math.abs(d.info.solver!.evAggressiveBB) < 0.3 ? 4 : Math.abs(d.info.solver!.evAggressiveBB) < 1 ? 3 : 2) : 3,
       skills: (solver ? ['preflop', 'shortStack'] : [street, 'math']) as SkillKey[],
       concepts: solver ? ['push-fold', 'full-hand'] : ['pot-odds', 'full-hand'],
-      leakOpportunities: ['potOdds'],
-      optionLeaks: isError(fb.grade!) ? ['potOdds'] : [],
+      ...(() => {
+        const role = d.info.solver?.role;
+        const opp: LeakKey[] = role === 'sbShove' ? ['stackDepthAdjustments', 'excessivePreflopAllIns'] : ['potOdds'];
+        const leak: LeakKey = role === 'sbShove' ? (body.action.type === 'fold' ? 'stackDepthAdjustments' : 'excessivePreflopAllIns') : 'potOdds';
+        return { leakOpportunities: opp, optionLeaks: isError(fb.grade!) ? [leak] : [] };
+      })(),
       sourceClass: solver ? 'SOLVER_VERIFIED' : 'MATH_VERIFIED',
       track: fb.track,
       responseMs: body.responseMs,
@@ -222,13 +246,9 @@ simRouter.post('/hands/:id/act', async (req, res) => {
       result: { kind: 'sim', handId: h.id, decision: st.length, feedback: fb, facts: facts(d.info) },
     });
     step.attemptId = outcome.attemptId;
+    // link the attempt to the step (informational; skipped if another step already followed)
+    await prisma.simHand.updateMany({ where: { id: h.id, version: h.version + 1 }, data: { steps: [...st, step] as object } });
   }
-  const complete = run.state.complete;
-  const updated = await prisma.simHand.updateMany({
-    where: { id: h.id, userId, version: h.version },
-    data: { steps: [...st, step] as object, version: { increment: 1 }, ...(complete ? { status: 'complete', completedAt: new Date() } : {}) },
-  });
-  if (updated.count === 0) throw new HttpError(409, 'conflict', 'The hand changed on another device; reload it');
   const fresh = await load(userId, h.id);
   const reveal = h.feedback === 'guided' || complete;
   res.json({ view: simView(fresh, run), feedback: reveal ? { ...fb, modelEquity: d.info.modelEquity, solver: d.info.solver } : null });
@@ -247,7 +267,7 @@ simRouter.post('/hands/:id/replay', async (req, res) => {
   const h = await load(userId, String(req.params.id));
   if (!build(h).state.complete) throw new HttpError(409, 'not_complete', 'Finish the hand first');
   const root = h.parentId ?? h.id;
-  const r = await prisma.simHand.create({ data: { userId, seed: h.seed, config: h.config as object, modelVersion: h.modelVersion, mode: 'practice', feedback: 'guided', kind: 'replay', parentId: root } });
+  const r = await prisma.simHand.create({ data: { userId, seed: h.seed, ...(h.deal ? { deal: h.deal as object } : {}), config: h.config as object, modelVersion: h.modelVersion, mode: 'practice', feedback: 'guided', kind: 'replay', parentId: root } });
   res.status(201).json(simView(r));
 });
 
@@ -268,7 +288,7 @@ simRouter.post('/hands/:id/branch', async (req, res) => {
   }
   const done = build(h, prefix).state.complete;
   const r = await prisma.simHand.create({
-    data: { userId, seed: h.seed, config: h.config as object, modelVersion: h.modelVersion, mode: 'practice', feedback: 'guided', kind: 'branch', parentId: h.parentId ?? h.id, branchAt: body.decisionIndex, steps: prefix as object, status: done ? 'complete' : 'active', completedAt: done ? new Date() : null },
+    data: { userId, seed: h.seed, ...(h.deal ? { deal: h.deal as object } : {}), config: h.config as object, modelVersion: h.modelVersion, mode: 'practice', feedback: 'guided', kind: 'branch', parentId: h.parentId ?? h.id, branchAt: body.decisionIndex, steps: prefix as object, status: done ? 'complete' : 'active', completedAt: done ? new Date() : null },
   });
   res.status(201).json(simView(r));
 });

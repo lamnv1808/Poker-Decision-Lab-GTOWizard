@@ -46,7 +46,7 @@ mathRouter.post('/quiz/answer', async (req, res) => {
   const quiz = generateQuiz(t.k, t.s, t.l);
   const { grade, error } = gradeQuiz(quiz, body.value);
   const mixed = await mixedSessionFor(userId, body.sessionId);
-  const session = mixed ? { id: mixed } :
+  const session = mixed ? { id: mixed.id } :
     (await prisma.trainingSession.findFirst({ where: { userId, kind: 'math', mode: body.mode, endedAt: null, startedAt: { gt: new Date(Date.now() - 2 * 3600 * 1000) } }, orderBy: { startedAt: 'desc' } })) ??
     (await prisma.trainingSession.create({ data: { userId, kind: 'math', mode: body.mode } }));
   const result = { kind: quiz.kind, prompt: quiz.prompt, value: body.value, answer: quiz.answer, unit: quiz.unit, tolerance: quiz.tolerance, error, grade, steps: quiz.steps, formula: quiz.formula, source: { classification: 'MATH_VERIFIED' } };
@@ -58,7 +58,7 @@ mathRouter.post('/quiz/answer', async (req, res) => {
     itemRef: `quiz:${quiz.kind}:${quiz.level}:${quiz.seed}`,
     reviewType: 'quiz',
     reviewRef: `${quiz.kind}`,
-    mode: body.mode,
+    mode: mixed?.mode ?? body.mode,
     action: { value: body.value },
     graded: true,
     grade,

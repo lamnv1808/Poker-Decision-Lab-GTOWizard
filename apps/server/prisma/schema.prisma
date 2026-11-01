@@ -547,6 +547,8 @@ model SimHand {
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   seed        Int
+  /// Hole cards + all five board cards, shuffled with a CSPRNG. Never sent to the client.
+  deal        Json?
   config      Json
   modelVersion String
   mode        String    // practice | rated

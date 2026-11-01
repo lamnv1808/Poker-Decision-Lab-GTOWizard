@@ -86,7 +86,7 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
       // Arithmetic (fundamentals) and unreviewed replays never move strategy ratings.
       const rated = track === 'strategy' && input.mode === 'rated' && input.graded && input.ratingEligible && score !== undefined;
       const priorExposures = rated
-        ? await tx.decisionAttempt.count({ where: { userId: input.userId, ratingApplied: true, ...(input.familyId ? { familyId: input.familyId } : { itemRef: input.itemRef }) } })
+        ? await tx.decisionAttempt.count({ where: { userId: input.userId, ratingApplied: true, track: 'strategy', ...(input.familyId ? { familyId: input.familyId } : { itemRef: input.itemRef }) } })
         : 0;
       const keys: RatingKey[] = ['overall', ...input.skills];
       const current = rated ? await tx.rating.findMany({ where: { userId: input.userId, skill: { in: keys } } }) : [];
@@ -96,7 +96,7 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
         ? computeRatingChanges(curMap, { score: score!, difficulty: input.difficulty, source: input.sourceClass, priorExposures, rated: true, skills: input.skills, daysSince })
         : { changes: [], weight: 0, methodVersion: '' };
       // Fundamentals subrating: exact maths / assumed-range-model decisions (never heuristic content).
-      const fundRated = track === 'fundamentals' && input.graded && score !== undefined && (input.mode === 'rated' || input.attemptType === 'potodds');
+      const fundRated = track === 'fundamentals' && input.graded && score !== undefined && input.mode === 'rated';
       let fund: ReturnType<typeof fundamentalsUpdate> = null;
       if (fundRated) {
         const prior = await tx.ratingHistory.count({ where: { userId: input.userId, skill: FUNDAMENTALS_KEY, attempt: input.familyId ? { familyId: input.familyId } : { itemRef: input.itemRef } } });
@@ -105,7 +105,11 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
           score: score!,
           difficulty: input.difficulty,
           priorExposures: prior,
-          daysSince: cur ? Math.floor((now.getTime() - cur.updatedAt.getTime()) / 86400000) : 0,
+          // RD inflation from the last Fundamentals update itself (not the row's write time, which a back-fill resets)
+          daysSince: await (async () => {
+            const last = await tx.ratingHistory.findFirst({ where: { userId: input.userId, skill: FUNDAMENTALS_KEY }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
+            return last ? Math.floor((now.getTime() - last.createdAt.getTime()) / 86400000) : 0;
+          })(),
         });
       }
       const attempt = await tx.decisionAttempt.create({

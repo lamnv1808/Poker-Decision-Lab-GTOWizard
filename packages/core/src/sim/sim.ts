@@ -82,6 +82,22 @@ export function dealSim(seed: number, cfg: SimConfig): SimDeal {
   return { holes, board: deck.slice(k, k + 5) };
 }
 
+/**
+ * Deal from an external random source (pass a CSPRNG such as crypto.randomInt). Unlike dealSim,
+ * the result cannot be reconstructed from anything the client sees.
+ */
+export function dealSimSecure(cfg: SimConfig, randomInt: (maxExclusive: number) => number): SimDeal {
+  const deck = fullDeck();
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [deck[i], deck[j]] = [deck[j]!, deck[i]!];
+  }
+  const holes: Record<string, [Card, Card]> = {};
+  let k = 0;
+  for (const pos of positionsFor(cfg.tableSize)) holes[pos] = [deck[k++]!, deck[k++]!];
+  return { holes, board: deck.slice(k, k + 5) };
+}
+
 function tableFor(cfg: SimConfig, deal: SimDeal): TableConfig {
   return {
     smallBlind: SIM_BB / 2,
@@ -393,7 +409,11 @@ function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerActio
     const s = info.solver;
     let act: GtoAction | 'other' = 'other';
     if (action.type === 'fold') act = 'fold';
-    else if (s.role === 'sbShove' && (action.type === 'raise' || action.type === 'bet') && action.amount === legal.maxRaiseTo) act = 'shove';
+    else if (s.role === 'sbShove' && (action.type === 'raise' || action.type === 'bet')) {
+      // any raise that puts the BB all-in is a shove in the push/fold model (effective stack)
+      const bbP = state.players[1]!;
+      if ((action.amount ?? 0) >= Math.min(legal.maxRaiseTo, bbP.stack + bbP.streetCommitted)) act = 'shove';
+    }
     else if (s.role === 'bbCall' && action.type === 'call') act = 'call';
     if (act === 'other')
       return {
@@ -440,8 +460,8 @@ function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerActio
         best: Math.abs(evCall) <= noise ? 'either' : evCall > 0 ? 'call' : 'fold',
         evByAction: { call: Math.round(evCall * 1000) / 1000, fold: 0 },
         note: {
-          en: `The call ends the betting, so EV is exact under the Villain model: equity ${pct(eq)} (±${pct(2 * info.modelEquity.stdErr)}) vs required ${pct(req.required)} → call EV ${evCall.toFixed(2)} BB. Assumed-range model, not a solver.`,
-          vi: `Lệnh theo kết thúc việc cược, nên EV chính xác theo mô hình đối thủ: equity ${pct(eq)} (±${pct(2 * info.modelEquity.stdErr)}) so với cần ${pct(req.required)} → EV theo ${evCall.toFixed(2)} BB. Mô hình range giả định, không phải solver.`,
+          en: `The call ends the betting, so the EV follows from the Villain model (Monte Carlo): equity ${pct(eq)} (±${pct(2 * info.modelEquity.stdErr)}) vs required ${pct(req.required)} → call EV ${evCall.toFixed(2)} BB. Assumed-range model, not a solver.`,
+          vi: `Lệnh theo kết thúc việc cược, nên EV tính trực tiếp từ mô hình đối thủ (Monte Carlo): equity ${pct(eq)} (±${pct(2 * info.modelEquity.stdErr)}) so với cần ${pct(req.required)} → EV theo ${evCall.toFixed(2)} BB. Mô hình range giả định, không phải solver.`,
         },
       };
     }
@@ -470,9 +490,10 @@ function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerActio
  * model; streets are dealt from the fixed board. Stops when Hero must act or the hand is over.
  * Throws IllegalActionError if a Hero action is not legal.
  */
-export function runSim(seed: number, config: SimConfig, heroActions: readonly PlayerAction[], opts: { equitySamples?: number } = {}): SimRun {
+export function runSim(seed: number, config: SimConfig, heroActions: readonly PlayerAction[], opts: { equitySamples?: number; deal?: SimDeal } = {}): SimRun {
   validateSimConfig(config);
-  const deal = dealSim(seed, config);
+  // Production passes a deal shuffled with a CSPRNG; the seeded deal is for tests and tooling only.
+  const deal = opts.deal ?? dealSim(seed, config);
   let state = createHand(tableFor(config, deal));
   const ranges: Record<string, Float64Array> = {};
   for (const id of Object.keys(config.villains)) ranges[id] = new Float64Array(COMBOS.length).fill(1);
