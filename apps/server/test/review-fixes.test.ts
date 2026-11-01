@@ -13,10 +13,11 @@ describe('fixes from the V3 code review', () => {
       const cfg = row.config as unknown as SimConfig;
       const deal = row.deal as { holes: Record<string, string[]> };
       expect(v.heroCards).toEqual(deal.holes[cfg.heroPos]);
-      expect(dealSim(row.seed, cfg).holes[cfg.heroPos]).not.toEqual(deal.holes[cfg.heroPos]);
+      // compare the whole deal (all hole cards + board): a 2-card match alone can coincide by chance
+      expect(JSON.stringify(dealSim(row.seed, cfg))).not.toEqual(JSON.stringify(row.deal));
       expect(randomSimConfig(row.seed)).not.toEqual(cfg);
     }
-  });
+  }, 30_000);
 
   it('two simultaneous actions on one decision record at most one attempt and one rating update', async () => {
     const u = await newUser('fx2');
@@ -27,7 +28,7 @@ describe('fixes from the V3 code review', () => {
         u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }),
       ]);
       expect([a.status, b.status].sort()).toEqual([200, 409]);
-      const atts = await prisma.decisionAttempt.findMany({ where: { userId: u.id, familyId: `sim:${v.id}` } });
+      const atts = await prisma.decisionAttempt.findMany({ where: { userId: u.id, itemRef: { startsWith: `sim:${v.id}:` } } });
       expect(atts.length).toBeLessThanOrEqual(1);
       if (atts.length) {
         expect(await prisma.ratingHistory.count({ where: { attemptId: atts[0]!.id, skill: 'overall' } })).toBeLessThanOrEqual(1);

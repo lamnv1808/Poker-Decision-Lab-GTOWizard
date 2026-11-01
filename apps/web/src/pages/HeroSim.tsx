@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, newAttemptId } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { PokerTable } from '../components/PokerTable';
+import { CardText } from '../components/Cards';
 import { ErrorNote, GradeBadge, Panel, Spinner, Toggle } from '../components/ui';
 import { fmtNum, loc } from '../format';
 import { useT } from '../i18n';
@@ -11,7 +12,10 @@ import { useApp } from '../store';
 import type { Grade, Localized } from '../types';
 
 interface Facts { potBB: number; toCallBB: number; requiredEquity: number | null; spr: number | null; street: string }
+type Assessment = 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assumedRange' | 'heuristicCoaching' | 'notEvaluated';
 interface Feedback {
+  assessment?: Assessment;
+  coaching?: Localized;
   graded: boolean;
   grade?: Grade;
   evLossBB?: number;
@@ -22,8 +26,9 @@ interface Feedback {
   note: Localized;
 }
 interface ModelEq { equity: number; stdErr: number; opponents: { id: string; archetype: string; rangePct: number }[] }
-interface DecisionView { legal?: LegalActions; index: number; street: string; action: PlayerAction; confidence: number | null; reasoning: string | null; facts: Facts; feedback?: Feedback; modelEquity?: ModelEq }
-interface TimelineEntry { street: string; playerId: string; type: string; toBB: number; addedBB: number; allIn: boolean; villain?: { archetype: string; source: 'solver' | 'heuristic' }; heroDecision?: number }
+interface DecisionView { topics?: string[]; legal?: LegalActions; index: number; street: string; action: PlayerAction; confidence: number | null; reasoning: string | null; facts: Facts; feedback?: Feedback; modelEquity?: ModelEq }
+interface VillainWhy { archetype: string; source: 'solver' | 'heuristic' | 'scripted'; chosen: 'fold' | 'passive' | 'aggressive'; forced?: boolean; probs?: { fold: number; passive: number; aggressive: number }; strength?: { kind: 'preflopTop' | 'postflop'; value: number } }
+interface TimelineEntry { street: string; playerId: string; type: string; toBB: number; addedBB: number; allIn: boolean; villain?: VillainWhy; heroDecision?: number }
 export interface SimView {
   id: string;
   status: 'active' | 'complete' | 'abandoned';
@@ -40,9 +45,11 @@ export interface SimView {
   progress: { street: string; decisionNumber: number; complete: boolean };
   current: Facts | null;
   decisions: DecisionView[];
-  review: null | { timeline: TimelineEntry[]; showdown: { id: string; cards: string[] }[]; netBB: Record<string, number>; heroNetBB: number; gradedCount: number; source: { villains: Localized } };
+  origin?: { kind: 'random' | 'scenario' | 'solverFlop'; scenarioId: string | null; flop: string | null };
+  bookmarked?: boolean;
+  review: null | { timeline: TimelineEntry[]; showdown: { id: string; cards: string[]; category: string | null }[]; netBB: Record<string, number>; heroNetBB: number; gradedCount: number; winners: { id: string; amountBB: number; category: string | null }[]; endedBy: 'fold' | 'showdown'; terminalStreet: string; source: { villains: Localized } };
 }
-interface Setup { tableSize: number; stackBB: number; archetype: string; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam' }
+interface Setup { table?: 'random' | 'solverFlop'; tableSize: number; stackBB: number; archetype: string; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam' }
 
 const SETUP_KEY = 'pdl.sim.setup';
 const MATH_KEY = 'pdl.sim.math';
@@ -67,7 +74,7 @@ export function useStartSim() {
   const nav = useNavigate();
   return async (s: Setup, sessionId?: string) => {
     saveSetup(s);
-    const v = await api.post<SimView>('/sim/hands', { tableSize: s.tableSize || undefined, stackBB: s.stackBB || undefined, archetype: s.archetype, mode: s.mode, feedback: s.feedback, sessionId });
+    const v = await api.post<SimView>('/sim/hands', { table: s.table ?? 'random', tableSize: s.tableSize || undefined, stackBB: s.stackBB || undefined, archetype: s.archetype, mode: s.mode, feedback: s.feedback, sessionId });
     nav(`/play/${v.id}${sessionId ? `?mixed=${sessionId}` : ''}`);
   };
 }
@@ -109,7 +116,11 @@ export function HeroSimSetup() {
         </Panel>
       )}
       <Panel title={t('sim.newHand')}>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="mb-3">
+          <Toggle label={t('sim.tableType')} value={s.table ?? 'random'} onChange={(table) => setS({ ...s, table })} options={[{ value: 'random', label: t('sim.table.random') }, { value: 'solverFlop', label: t('sim.table.solverFlop') }]} />
+          <p className="mt-1 text-xs text-ink-400">{t(s.table === 'solverFlop' ? 'sim.table.solverFlopNote' : 'sim.table.randomNote')}</p>
+        </div>
+        <div className={`grid gap-3 sm:grid-cols-3 ${s.table === 'solverFlop' ? 'pointer-events-none opacity-40' : ''}`}>
           <label className="text-sm">{t('sim.tableSize')}
             <select className={`${sel} mt-1 block w-full`} value={s.tableSize} onChange={(e) => setS({ ...s, tableSize: Number(e.target.value) })} data-testid="sim-table">
               <option value={0}>{t('sim.random')}</option>
@@ -155,12 +166,14 @@ export function HeroSimSetup() {
 function Progress({ v }: { v: SimView }) {
   const { t } = useT();
   const cur = v.progress.complete ? 4 : STREETS.indexOf(v.state.street);
+  // after the hand, streets that were never reached are shown as skipped, not completed
+  const reached = v.review ? STREETS.indexOf(v.review.terminalStreet) : 3;
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="sim-progress">
       <ol className="flex items-center gap-1 text-[11px]">
         {[...STREETS, 'showdown'].map((s, i) => (
-          <li key={s} className={`rounded-full px-2 py-0.5 ${i === cur ? 'bg-accent/20 text-accent' : i < cur ? 'text-ink-300' : 'text-ink-500'}`}>
-            {i < cur ? '✓ ' : ''}{s === 'showdown' ? t('sim.handEnd') : t(`street.${s}`)}
+          <li key={s} className={`rounded-full px-2 py-0.5 ${i === cur ? 'bg-accent/20 text-accent' : i < cur && (i === 4 || i <= reached) ? 'text-ink-300' : 'text-ink-600 line-through'}`}>
+            {i < cur && (i === 4 || i <= reached) ? '✓ ' : ''}{s === 'showdown' ? t('sim.handEnd') : t(`street.${s}`)}
           </li>
         ))}
       </ol>
@@ -170,13 +183,27 @@ function Progress({ v }: { v: SimView }) {
   );
 }
 
+const ASSESS_CLS: Record<Assessment, string> = {
+  solverVerified: 'border-emerald-400/60 text-emerald-300',
+  mathVerified: 'border-emerald-400/60 text-emerald-300',
+  reviewedStrategy: 'border-emerald-400/60 text-emerald-300',
+  assumedRange: 'border-sky-400/60 text-sky-300',
+  heuristicCoaching: 'border-amber-400/60 text-amber-300',
+  notEvaluated: 'border-ink-500 text-ink-400',
+};
+/** Solver Verified / Math Verified / Reviewed Strategy / Assumed-Range Model / Heuristic Coaching / Not Evaluated */
+export function AssessmentBadge({ a }: { a: Assessment }) {
+  const { t } = useT();
+  return <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${ASSESS_CLS[a]}`} title={t(`assess.${a}.help`)} data-testid={`assess-${a}`}>{t(`assess.${a}`)}</span>;
+}
+
 function FeedbackCard({ fb, eq }: { fb: Feedback; eq?: ModelEq }) {
   const { t, lang } = useT();
   return (
     <div className="space-y-1.5 text-sm" data-testid="sim-feedback">
       <div className="flex flex-wrap items-center gap-2">
+        {fb.assessment && <AssessmentBadge a={fb.assessment} />}
         {fb.graded ? <GradeBadge grade={fb.grade ?? null} /> : <span className="rounded bg-ink-800 px-2 py-0.5 text-xs text-ink-300">{t('sim.notGraded')}</span>}
-        {fb.basis !== 'none' && <span className="text-[10px] uppercase text-ink-400">{fb.basis === 'solverEv' ? t('sim.basis.solver') : t('sim.basis.model')}</span>}
         {fb.evLossBB !== undefined && fb.graded && <span className="text-xs tabular text-ink-300">{t('sim.evLoss')}: {fmtNum(fb.evLossBB, 2)} BB</span>}
       </div>
       {fb.evByAction && (
@@ -187,6 +214,7 @@ function FeedbackCard({ fb, eq }: { fb: Feedback; eq?: ModelEq }) {
         </div>
       )}
       <p className="text-xs text-ink-200">{loc(fb.note, lang)}</p>
+      {fb.coaching && <p className="rounded border border-sky-500/30 bg-sky-500/5 px-2 py-1 text-xs text-sky-200" data-testid="sim-coaching">{loc(fb.coaching, lang)}</p>}
       {eq && Number.isFinite(eq.equity) && (
         <p className="text-[11px] text-ink-400">
           {t('sim.modelEquity')}: {pct(eq.equity)} ({eq.opponents.map((o) => `${o.id} ${t(`arch.${o.archetype}`)} ~${o.rangePct}%`).join(', ')})
@@ -314,14 +342,25 @@ export function HeroSimPage() {
               <div className={`text-2xl font-bold tabular ${v.review.heroNetBB >= 0 ? 'text-emerald-300' : 'text-red-300'}`} data-testid="sim-net">
                 {v.review.heroNetBB >= 0 ? '+' : ''}{fmtNum(v.review.heroNetBB, 1)} BB
               </div>
-              <p className="mt-1 text-[11px] text-ink-400">{loc(v.review.source.villains, lang)}</p>
+              <div className="mt-2 space-y-0.5 text-sm" data-testid="sim-winners">
+                <div className="text-xs text-ink-400">{v.review.endedBy === 'showdown' ? t('sim.endedShowdown', { street: t(`street.${v.review.terminalStreet}`) }) : t('sim.endedFold', { street: t(`street.${v.review.terminalStreet}`) })}</div>
+                {v.review.winners.map((w) => (
+                  <div key={w.id}>
+                    <b className={w.id === v.config.heroPos ? 'text-accent' : ''}>{w.id}</b> {t('sim.wins', { n: fmtNum(w.amountBB, 1) })}
+                    {w.category && <span className="text-ink-300"> · {t(`hand.${w.category}`)}</span>}
+                  </div>
+                ))}
+              </div>
+              <HiddenInfo id={v.id} />
+              <p className="mt-2 text-[11px] text-ink-400">{loc(v.review.source.villains, lang)}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {mixed ? (
                   <button type="button" onClick={() => nav(`/mixed/${mixed}`)} className="rounded-lg bg-felt-500 px-4 py-1.5 text-sm font-bold" data-testid="mixed-next">{t('mixed.next')}</button>
                 ) : (
-                  <button type="button" onClick={() => void start(nextSetup).catch(setError)} className="rounded-lg bg-felt-500 px-4 py-1.5 text-sm font-bold" data-testid="sim-next">{t('sim.nextHand')}</button>
+                  <button type="button" onClick={() => void start(nextSetup).catch(setError)} className="rounded-lg bg-felt-500 px-4 py-1.5 text-sm font-bold" data-testid="sim-next">{t('sim.nextNewHand')}</button>
                 )}
                 <button type="button" onClick={() => void api.post<SimView>(`/sim/hands/${v.id}/replay`).then((r) => nav(`/play/${r.id}`)).catch(setError)} className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm" data-testid="sim-replay">{t('sim.replay')}</button>
+                <button type="button" onClick={() => void api.post(`/sim/hands/${v.id}/bookmark`, { on: !v.bookmarked }).then(() => setV({ ...v, bookmarked: !v.bookmarked })).catch(setError)} className={`rounded-lg border px-3 py-1.5 text-sm ${v.bookmarked ? 'border-gold text-gold' : 'border-ink-600'}`} data-testid="sim-bookmark">★ {t(v.bookmarked ? 'sim.bookmarked' : 'sim.bookmark')}</button>
               </div>
             </Panel>
           )}
@@ -343,6 +382,14 @@ function Review({ v, onError }: { v: SimView; onError: (e: unknown) => void }) {
   const branch = async (decisionIndex: number, action: PlayerAction) => {
     try {
       const r = await api.post<SimView>(`/sim/hands/${v.id}/branch`, { decisionIndex, action });
+      nav(`/play/${r.id}`);
+    } catch (e) {
+      onError(e);
+    }
+  };
+  const branchVillain = async (historyIndex: number, choice: 'fold' | 'passive' | 'aggressive') => {
+    try {
+      const r = await api.post<SimView>(`/sim/hands/${v.id}/branch-villain`, { historyIndex, choice });
       nav(`/play/${r.id}`);
     } catch (e) {
       onError(e);
@@ -370,18 +417,22 @@ function Review({ v, onError }: { v: SimView; onError: (e: unknown) => void }) {
             <li key={s}>
               <div className="mb-1 text-[10px] uppercase tracking-widest text-ink-400">{t(`street.${s}`)}</div>
               <ul className="space-y-1">
-                {v.review!.timeline.filter((e) => e.street === s && !['postSB', 'postBB', 'postAnte'].includes(e.type)).map((e, i) => {
+                {v.review!.timeline.map((e, hi) => ({ e, hi })).filter(({ e }) => e.street === s && !['postSB', 'postBB', 'postAnte'].includes(e.type)).map(({ e, hi }, i) => {
                   const d = e.heroDecision !== undefined ? v.decisions[e.heroDecision] : undefined;
                   return (
                     <li key={i} className={`rounded-md px-2 py-1 ${d ? 'bg-accent/10' : ''}`}>
                       <div className="flex flex-wrap items-center gap-2">
                         <b className={e.playerId === v.config.heroPos ? 'text-accent' : ''}>{e.playerId}</b>
-                        <span className="tabular">{e.type}{e.type === 'bet' || e.type === 'raise' || e.type === 'call' ? ` ${fmtNum(e.type === 'call' ? e.addedBB : e.toBB, 1)} BB` : ''}{e.allIn ? ' (all-in)' : ''}</span>
-                        {e.villain && <span className="rounded bg-ink-800 px-1 text-[10px] text-ink-300">{t(`arch.${e.villain.archetype}`)} · {e.villain.source === 'solver' ? t('sim.src.solver') : t('sim.src.heuristic')}</span>}
+                        <span className="tabular">{t(`act.log.${e.type}`)}{e.type === 'bet' || e.type === 'raise' || e.type === 'call' || e.type === 'returnUncalled' ? ` ${fmtNum(e.type === 'call' || e.type === 'returnUncalled' ? e.addedBB : e.toBB, 1)} BB` : ''}{e.allIn ? ' (all-in)' : ''}</span>
+                        {e.villain && <span className="rounded bg-ink-800 px-1 text-[10px] text-ink-300">{t(`arch.${e.villain.archetype}`)} · {t(`sim.src.${e.villain.source}`)}{e.villain.forced ? ` · ${t('sim.forced')}` : ''}</span>}
                         {d?.feedback?.graded && <GradeBadge grade={d.feedback.grade ?? null} />}
                       </div>
+                      {e.villain && e.villain.source !== 'scripted' && <VillainWhyRow w={e.villain} onBranch={(choice) => void branchVillain(hi, choice)} />}
                       {d && (
                         <div className="mt-1 space-y-1 text-xs">
+                          {d.topics && d.topics.length > 0 && <div className="flex flex-wrap gap-1">{d.topics.map((x) => <span key={x} className="rounded bg-ink-800 px-1.5 text-[10px] text-ink-300">{t(`topic.${x}`)}</span>)}</div>}
+                          {d.legal && <div className="text-[11px] text-ink-400">{t('sim.alternatives')}: {alternatives(d).map(fmtAct).join(' · ') || '—'}</div>}
+                          {d.confidence && <div className="text-[11px] text-ink-400">{t('sim.yourConfidence')}: {t(`confidence.${d.confidence}`)}</div>}
                           {d.reasoning && <p className="italic text-ink-300">“{d.reasoning}”</p>}
                           {d.feedback && <FeedbackCard fb={d.feedback} eq={d.modelEquity} />}
                           {v.kind === 'play' && (
@@ -426,6 +477,56 @@ function Review({ v, onError }: { v: SimView; onError: (e: unknown) => void }) {
           </table>
         )}
       </Panel>
+    </div>
+  );
+}
+
+/** After the hand: why the modelled Villain acted (labelled heuristic or solver) + Branch Challenge. */
+function VillainWhyRow({ w, onBranch }: { w: VillainWhy; onBranch: (c: 'fold' | 'passive' | 'aggressive') => void }) {
+  const { t } = useT();
+  const [open, setOpen] = useState(false);
+  const p = (x?: number) => (x === undefined ? '—' : `${Math.round(x * 100)}%`);
+  const strength = w.strength ? (w.strength.kind === 'preflopTop' ? t('sim.why.top', { n: Math.max(1, Math.round(w.strength.value * 100)) }) : t('sim.why.post', { n: Math.round(w.strength.value * 100) })) : '';
+  return (
+    <div className="mt-1 text-[11px]">
+      <button type="button" className="text-ink-400 hover:text-ink-200" onClick={() => setOpen(!open)} data-testid="villain-why">{open ? '▾' : '▸'} {t('sim.why.title')}</button>
+      {open && (
+        <div className="mt-1 space-y-1 rounded border border-ink-700 bg-ink-850 p-2 text-ink-300">
+          <p>{t(w.source === 'solver' ? 'sim.why.solver' : 'sim.why.heuristic', { arch: t(`arch.${w.archetype}`), strength, fold: p(w.probs?.fold), passive: p(w.probs?.passive), aggressive: p(w.probs?.aggressive) })}</p>
+          <div className="flex flex-wrap gap-1" data-testid="villain-branch">
+            <span className="text-ink-400">{t('sim.whatIf')}</span>
+            {(['fold', 'passive', 'aggressive'] as const).filter((c) => c !== w.chosen).map((c) => (
+              <button key={c} type="button" onClick={() => onBranch(c)} className="rounded border border-ink-600 px-1.5">{t(`sim.choice.${c}`)}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Optional, after the hand: simulator-only hidden cards and the hypothetical runout (labelled). */
+function HiddenInfo({ id }: { id: string }) {
+  const { t, lang } = useT();
+  const [h, setH] = useState<null | { runout: string[]; opponents: { id: string; cards: string[]; folded: boolean }[]; label: Localized }>(null);
+  const [show, setShow] = useState<{ runout: boolean; cards: boolean }>({ runout: false, cards: false });
+  const get = async (k: 'runout' | 'cards') => {
+    if (!h) setH(await api.get(`/sim/hands/${id}/hidden`));
+    setShow((x) => ({ ...x, [k]: true }));
+  };
+  return (
+    <div className="mt-3 space-y-2 text-xs" data-testid="sim-hidden">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => void get('runout')} className="rounded border border-ink-600 px-2 py-1" data-testid="reveal-runout">{t('sim.revealRunout')}</button>
+        <button type="button" onClick={() => void get('cards')} className="rounded border border-ink-600 px-2 py-1" data-testid="reveal-cards">{t('sim.revealCards')}</button>
+      </div>
+      {h && (show.runout || show.cards) && (
+        <div className="rounded border border-dashed border-amber-400/50 bg-amber-500/5 p-2" data-testid="sim-hidden-panel">
+          <p className="mb-1 text-[11px] text-amber-200">{loc(h.label, lang)}</p>
+          {show.runout && <div>{t('sim.hypotheticalRunout')}: {h.runout.length ? <CardText cards={h.runout.join('')} /> : '—'}</div>}
+          {show.cards && <div className="space-y-0.5">{h.opponents.map((o) => <div key={o.id}>{o.id}: <CardText cards={o.cards.join('')} />{o.folded ? ` (${t('table.folded')})` : ''}</div>)}</div>}
+        </div>
+      )}
     </div>
   );
 }

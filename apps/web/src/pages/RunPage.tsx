@@ -1,7 +1,7 @@
 import type { PlayerAction } from '@pdl/core/engine';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, newAttemptId, ApiError } from '../api';
+import { api, newAttemptId, ApiError, mixedSessionId } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { DecisionFeedbackView, QuestionFeedbackView } from '../components/Feedback';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
@@ -195,10 +195,23 @@ export function RunPage() {
             <Panel>
               <div className="flex flex-wrap items-center gap-3" data-testid="run-complete">
                 <span className="font-semibold">{view.terminated === 'offTree' ? t('run.offTree') : t('run.complete')}</span>
-                <button type="button" disabled={busy} onClick={() => void goNext()} className="rounded-lg bg-felt-500 px-5 py-2 text-sm font-bold hover:bg-felt-600 disabled:opacity-50" data-testid="next-test">{t('run.nextTest')} →</button>
+                {s.mode === 'hero' && !view.state.complete && (
+                  // the scenario's lesson is over but the poker hand is not: play it to the end
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void api.post<{ id: string }>(`/sim/from-run/${view.runId}`).then((h) => nav(`/play/${h.id}${mixedSessionId() ? `?mixed=${mixedSessionId()}` : ''}`)).catch(setError)}
+                    className="rounded-lg bg-felt-500 px-5 py-2 text-sm font-bold hover:bg-felt-600 disabled:opacity-50"
+                    data-testid="continue-hand"
+                  >
+                    {t('run.continueHand')}
+                  </button>
+                )}
+                <button type="button" disabled={busy} onClick={() => void goNext()} className={`rounded-lg px-5 py-2 text-sm font-bold disabled:opacity-50 ${s.mode === 'hero' && !view.state.complete ? 'border border-ink-600' : 'bg-felt-500 hover:bg-felt-600'}`} data-testid="next-test">{t('run.nextTest')} →</button>
                 <button type="button" onClick={again} className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm hover:border-ink-400">{t('run.again')}</button>
                 <Link to={s.mode === 'hero' ? '/hero/browse' : '/villain/browse'} className="text-sm text-ink-400 hover:text-accent">{t('launch.browse')}</Link>
               </div>
+              {s.mode === 'hero' && !view.state.complete && <p className="mt-2 text-xs text-ink-400">{t('run.continueNote')}</p>}
             </Panel>
           )}
           <ErrorNote error={error} />

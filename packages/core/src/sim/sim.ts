@@ -1,6 +1,7 @@
 import { type Card, cardToInt, fullDeck } from '../cards/cards';
-import { evaluateInts } from '../cards/evaluator';
+import { categoryOf as handCategory, evaluate, evaluateInts } from '../cards/evaluator';
 import { classOfCombo } from '../cards/range';
+import { topicsFor } from '../realhands/topics';
 import { createRng, hashString } from '../cards/rng';
 import {
   type HandState,
@@ -32,9 +33,13 @@ export interface SimConfig {
   heroPos: string;
   /** Starting stack per position, in BB (whole numbers of chips). */
   stacksBB: Record<string, number>;
-  anteMode: 'none' | 'bigBlind';
+  anteMode: 'none' | 'bigBlind' | 'each';
+  /** Ante size in BB (defaults: 1 for a big-blind ante, 0.125 for antes from everyone). */
+  anteBB?: number;
   /** Villain model per position (every non-Hero seat). */
   villains: Record<string, Archetype>;
+  /** Exact chip units (used when continuing a curated scenario); default SB 50 / BB 100. */
+  chips?: { smallBlind: number; bigBlind: number; ante: number };
 }
 
 export function validateSimConfig(cfg: SimConfig): void {
@@ -43,7 +48,8 @@ export function validateSimConfig(cfg: SimConfig): void {
   if (!layout.includes(cfg.heroPos)) throw new Error('Unknown hero position');
   for (const pos of layout) {
     const s = cfg.stacksBB[pos];
-    if (!(typeof s === 'number' && s >= 2 && s <= 300 && Number.isInteger(s * SIM_BB))) throw new Error(`Invalid stack for ${pos}`);
+    const bb = cfg.chips?.bigBlind ?? SIM_BB;
+    if (!(typeof s === 'number' && s > 0 && s <= 1000 && Math.abs(s * bb - Math.round(s * bb)) < 1e-6)) throw new Error(`Invalid stack for ${pos}`);
     if (pos !== cfg.heroPos && !ARCHETYPES.includes(cfg.villains[pos]!)) throw new Error(`Missing villain model for ${pos}`);
   }
 }
@@ -101,11 +107,11 @@ export function dealSimSecure(cfg: SimConfig, randomInt: (maxExclusive: number) 
 
 function tableFor(cfg: SimConfig, deal: SimDeal): TableConfig {
   return {
-    smallBlind: SIM_BB / 2,
-    bigBlind: SIM_BB,
-    ante: cfg.anteMode === 'bigBlind' ? SIM_BB : 0,
-    anteMode: cfg.anteMode === 'bigBlind' ? 'bigBlind' : 'none',
-    players: positionsFor(cfg.tableSize).map((pos) => ({ id: pos, stack: Math.round(cfg.stacksBB[pos]! * SIM_BB), cards: deal.holes[pos] })),
+    smallBlind: cfg.chips?.smallBlind ?? SIM_BB / 2,
+    bigBlind: cfg.chips?.bigBlind ?? SIM_BB,
+    ante: cfg.chips ? cfg.chips.ante : cfg.anteMode === 'none' ? 0 : Math.round((cfg.anteBB ?? (cfg.anteMode === 'bigBlind' ? 1 : 0.125)) * SIM_BB),
+    anteMode: cfg.anteMode,
+    players: positionsFor(cfg.tableSize).map((pos) => ({ id: pos, stack: Math.round(cfg.stacksBB[pos]! * (cfg.chips?.bigBlind ?? SIM_BB)), cards: deal.holes[pos] })),
   };
 }
 
@@ -161,8 +167,43 @@ export interface VillainEvent {
   historyIndex: number;
   playerId: string;
   archetype: Archetype;
-  source: 'solver' | 'heuristic';
+  /** solver = validated frequencies; heuristic = archetype model; scripted = fixed by a curated scenario */
+  source: 'solver' | 'heuristic' | 'scripted';
   chosen: keyof ActionProbs;
+  /** Set when the Branch Challenge forced this Villain choice. */
+  forced?: boolean;
+  /** For the post-hand explanation only: the model's probabilities for Villain's actual hand. */
+  probs?: ActionProbs;
+  /** Villain's hand strength as the model saw it: preflop top-share, postflop strength percentile. */
+  strength?: { kind: 'preflopTop' | 'postflop'; value: number };
+}
+
+/**
+ * Validated strategy for a spot (e.g. the 85-flop postflop library), supplied by the server only
+ * when the hand matches the solver's exact assumptions.
+ */
+export interface OracleNode {
+  source: string;
+  actions: { key: string; make: PlayerAction }[];
+  /** Frequencies and EVs (BB) for a hand, or null if the hand is outside the solved range. */
+  strategy(cards: readonly [Card, Card]): { f: number[]; ev: number[] } | null;
+  /** Index of the solver action matching Hero's action, or -1 if outside the solved tree. */
+  matchHero(action: PlayerAction): number;
+  /** EV differences within this (BB) are within solver precision. */
+  noiseBB: number;
+  label: { en: string; vi: string };
+}
+export type SpotOracle = (state: HandState, actorId: string) => OracleNode | null;
+
+export interface RunOptions {
+  equitySamples?: number;
+  /** Production passes a CSPRNG deal; the seeded deal is for tests and tooling. */
+  deal?: SimDeal;
+  /** Scripted actions (from a curated scenario) applied before any model or Hero decision. */
+  prefix?: { playerId: string; action: PlayerAction }[];
+  /** Branch Challenge: force a Villain choice at a given history index. */
+  villainOverrides?: Record<number, keyof ActionProbs>;
+  oracle?: SpotOracle;
 }
 
 export interface HeroDecisionInfo {
@@ -178,10 +219,20 @@ export interface HeroDecisionInfo {
   modelEquity: { equity: number; stdErr: number; samples: number; opponents: { id: string; archetype: Archetype; rangePct: number }[] };
   /** Legal actions at this decision (sent to the client only after the hand is over). */
   legal: LegalActions;
+  /** Present when a validated solver spot covers this decision. */
+  oracle?: { source: string; label: { en: string; vi: string }; actions: string[] };
+  /** Curriculum concepts present at the decision (from public information only). */
+  topics: string[];
   solver: null | { role: PushFoldSpotInfo['role']; stackBB: number; deadBB: number; heroClass: string; frequency: number; evAggressiveBB: number };
 }
 
+export type Assessment = 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assumedRange' | 'heuristicCoaching' | 'notEvaluated';
+
 export interface HeroFeedback {
+  /** What kind of reference stands behind this feedback (shown on every decision). */
+  assessment?: Assessment;
+  /** Heuristic coaching for decisions without a validated answer — guidance, never a grade. */
+  coaching?: { en: string; vi: string };
   graded: boolean;
   grade?: Grade;
   evLossBB?: number;
@@ -253,41 +304,95 @@ function sizeAggressive(state: HandState, legal: LegalActions, arch: Archetype, 
   return { type, amount: to };
 }
 
-function villainAct(seed: number, state: HandState, cfg: SimConfig, ranges: Record<string, Float64Array>): { action: PlayerAction; event: VillainEvent } {
+const categoryOf = (a: PlayerAction): keyof ActionProbs => (a.type === 'fold' ? 'fold' : a.type === 'check' || a.type === 'call' ? 'passive' : 'aggressive');
+
+/** The model's action probabilities for every combo at Villain's decision (solver, oracle or heuristic). */
+function villainModel(state: HandState, cfg: SimConfig, oracle?: SpotOracle): { probsFor: (i: number) => ActionProbs; source: VillainEvent['source']; node: OracleNode | null; shoveOnly: boolean } {
   const legal = legalActions(state)!;
   const actor = state.players[state.toAct]!;
   const arch = cfg.villains[actor.id]!;
+  const node = oracle?.(state, actor.id) ?? null;
+  if (node) {
+    const cat = node.actions.map((x) => categoryOf(x.make));
+    return {
+      source: 'solver',
+      node,
+      shoveOnly: false,
+      probsFor: (i) => {
+        const st = node.strategy(COMBOS[i]!);
+        const out = { fold: 0, passive: 0, aggressive: 0 };
+        if (st) st.f.forEach((f, k) => (out[cat[k]!] += f));
+        return out;
+      },
+    };
+  }
   const spot = pushFoldSpot(state);
-  let probsFor: (i: number) => ActionProbs;
-  let source: VillainEvent['source'] = 'heuristic';
   if (spot && spot.actorId === actor.id) {
-    source = 'solver';
     const sol = solvePushFold({ stackBB: spot.stackBB, deadBB: spot.deadBB });
     const freq = spot.role === 'sbShove' ? sol.push : sol.call;
-    probsFor = (i) => {
-      const f = freq[classIndex(comboClass(i))]!;
-      return spot.role === 'sbShove' ? { fold: 1 - f, passive: 0, aggressive: f } : { fold: 1 - f, passive: f, aggressive: 0 };
+    return {
+      source: 'solver',
+      node: null,
+      shoveOnly: true,
+      probsFor: (i) => {
+        const f = freq[classIndex(comboClass(i))]!;
+        return spot.role === 'sbShove' ? { fold: 1 - f, passive: 0, aggressive: f } : { fold: 1 - f, passive: f, aggressive: 0 };
+      },
     };
-  } else {
-    const ctx = ctxFor(state, legal);
-    const x = strengthOf(state);
-    probsFor = (i) => policy(arch, ctx, x(i));
   }
-  const own = comboIndex(actor.cards![0]!, actor.cards![1]!);
-  const pr = probsFor(own);
-  const r = createRng(hashString(`${seed}:${state.history.length}:${actor.id}`))();
-  const chosen: keyof ActionProbs = r < pr.fold ? 'fold' : r < pr.fold + pr.passive ? 'passive' : 'aggressive';
-  const w = ranges[actor.id]!;
+  const ctx = ctxFor(state, legal);
+  const x = strengthOf(state);
+  return { source: 'heuristic', node: null, shoveOnly: false, probsFor: (i) => policy(arch, ctx, x(i)) };
+}
+
+function updateRange(w: Float64Array, probsFor: (i: number) => ActionProbs, chosen: keyof ActionProbs) {
   for (let i = 0; i < w.length; i++) {
     if (w[i] === 0) continue;
     const p = probsFor(i)[chosen];
     w[i] = Number.isFinite(p) ? w[i]! * p : 0;
   }
+}
+
+function villainAct(seed: number, state: HandState, cfg: SimConfig, ranges: Record<string, Float64Array>, opts: RunOptions): { action: PlayerAction; event: VillainEvent } {
+  const legal = legalActions(state)!;
+  const actor = state.players[state.toAct]!;
+  const arch = cfg.villains[actor.id]!;
+  const m = villainModel(state, cfg, opts.oracle);
+  const own = comboIndex(actor.cards![0]!, actor.cards![1]!);
+  const pr = m.probsFor(own);
+  const r = createRng(hashString(`${seed}:${state.history.length}:${actor.id}`))();
+  const forcedCat = opts.villainOverrides?.[state.history.length];
+  let chosen: keyof ActionProbs = forcedCat ?? (r < pr.fold ? 'fold' : r < pr.fold + pr.passive ? 'passive' : 'aggressive');
+  // a forced fold where checking is free is a check; a forced raise when raising is impossible is a call
+  if (chosen === 'fold' && legal.canCheck) chosen = 'passive';
+  if (chosen === 'aggressive' && !legal.canBet && !legal.canRaise) chosen = 'passive';
+  updateRange(ranges[actor.id]!, m.probsFor, chosen);
   let action: PlayerAction;
-  if (chosen === 'fold') action = legal.canFold ? { type: 'fold' } : { type: 'check' };
+  if (m.node && !forcedCat) {
+    // sample the solver action itself (sizes come from the solved tree)
+    const st = m.node.strategy([actor.cards![0]!, actor.cards![1]!])!;
+    let t = createRng(hashString(`${seed}:o:${state.history.length}`))() * st.f.reduce((a, b) => a + b, 0);
+    let k = 0;
+    for (; k < st.f.length - 1; k++) if ((t -= st.f[k]!) < 0) break;
+    action = m.node.actions[k]!.make;
+    chosen = categoryOf(action);
+  } else if (chosen === 'fold') action = { type: 'fold' };
   else if (chosen === 'passive') action = legal.canCheck ? { type: 'check' } : { type: 'call' };
-  else action = sizeAggressive(state, legal, arch, source === 'solver');
-  return { action, event: { historyIndex: state.history.length, playerId: actor.id, archetype: arch, source, chosen } };
+  else action = sizeAggressive(state, legal, arch, m.shoveOnly);
+  const sx = strengthOf(state)(own);
+  return {
+    action,
+    event: {
+      historyIndex: state.history.length,
+      playerId: actor.id,
+      archetype: arch,
+      source: m.source,
+      chosen,
+      ...(forcedCat ? { forced: true } : {}),
+      probs: { fold: Math.round(pr.fold * 1000) / 1000, passive: Math.round(pr.passive * 1000) / 1000, aggressive: Math.round(pr.aggressive * 1000) / 1000 },
+      strength: { kind: state.street === 'preflop' ? 'preflopTop' : 'postflop', value: Math.round(sx * 1000) / 1000 },
+    },
+  };
 }
 
 /** Monte Carlo equity of Hero against one weighted range per opponent (multiway supported). */
@@ -396,6 +501,7 @@ function heroInfo(run: { seed: number; config: SimConfig; ranges: Record<string,
     requiredEquity: req ? Math.round(req.required * 10000) / 10000 : null,
     spr: state.street === 'preflop' ? null : Math.round((eff / Math.max(1, totalPot(state))) * 100) / 100,
     legal,
+    topics: topicsFor(state, hero.id, hero.cards!, 'MTT'),
     modelEquity: { equity: Math.round(eq.equity * 10000) / 10000, stdErr: Math.round(eq.stdErr * 10000) / 10000, samples: eq.samples, opponents: opps.map((p) => ({ id: p.id, archetype: run.config.villains[p.id]!, rangePct: Math.round(live(run.ranges[p.id]!) * 1000) / 10 })) },
     solver,
   };
@@ -403,7 +509,7 @@ function heroInfo(run: { seed: number; config: SimConfig; ranges: Record<string,
 
 const pct = (x: number) => `${(100 * x).toFixed(1)}%`;
 
-function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerAction): HeroFeedback {
+function gradeHeroBase(info: HeroDecisionInfo, state: HandState, action: PlayerAction): HeroFeedback {
   const legal = legalActions(state)!;
   const bb = state.config.bigBlind;
   if (info.solver) {
@@ -486,21 +592,80 @@ function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerActio
   };
 }
 
+function oracleGrade(node: OracleNode, info: HeroDecisionInfo, state: HandState, action: PlayerAction): HeroFeedback {
+  const hero = state.players[state.toAct]!;
+  const idx = node.matchHero(action);
+  const st = node.strategy([hero.cards![0]!, hero.cards![1]!]);
+  if (idx < 0 || !st)
+    return {
+      assessment: 'notEvaluated',
+      graded: false,
+      basis: 'none',
+      track: null,
+      note:
+        idx < 0
+          ? { en: `Outside the solved tree (${node.actions.map((x) => x.key).join(', ')}), so this action is not graded.`, vi: `Nằm ngoài cây đã giải (${node.actions.map((x) => x.key).join(', ')}), nên hành động này không được chấm.` }
+          : { en: 'Your hand is outside the range the solver assumed for this spot, so it is not graded.', vi: 'Tay bài nằm ngoài range mà solver giả định cho spot này, nên không được chấm.' },
+    };
+  const best = Math.max(...st.ev);
+  const loss = Math.max(0, best - st.ev[idx]!);
+  const inMix = st.f[idx]! >= 0.1;
+  const grade: Grade = loss <= node.noiseBB || (inMix && loss <= 3 * node.noiseBB) ? 'excellent' : gradeFromEvLoss(loss, DEFAULT_THRESHOLDS.bb);
+  const bestKey = node.actions[st.ev.indexOf(best)]!.key;
+  const freqs = node.actions.map((x, k) => `${x.key} ${Math.round(st.f[k]! * 100)}%`).join(', ');
+  void info;
+  return {
+    assessment: 'solverVerified',
+    graded: true,
+    grade,
+    evLossBB: Math.round(loss * 1000) / 1000,
+    basis: 'solverEv',
+    track: 'strategy',
+    best: bestKey,
+    evByAction: Object.fromEntries(node.actions.map((x, k) => [x.key, Math.round(st.ev[k]! * 1000) / 1000])),
+    note: { en: `${node.label.en}. Solver strategy for your hand: ${freqs}.`, vi: `${node.label.vi}. Chiến lược solver cho tay bài của bạn: ${freqs}.` },
+  };
+}
+
+/** Heuristic coaching for ungraded decisions: guidance from the stated model, clearly not a grade. */
+function coachingFor(info: HeroDecisionInfo, action: PlayerAction): { en: string; vi: string } | undefined {
+  const eq = info.modelEquity.equity;
+  if (!Number.isFinite(eq)) return undefined;
+  const p = (x: number) => `${Math.round(x * 100)}%`;
+  if (info.requiredEquity !== null) {
+    const margin = eq - info.requiredEquity;
+    const verdict = margin > 0.1 ? ['continuing looks profitable', 'tiếp tục có vẻ có lãi'] : margin < -0.1 ? ['folding looks reasonable unless you expect fold equity or implied odds', 'bỏ bài có vẻ hợp lý trừ khi bạn kỳ vọng fold equity hoặc implied odds'] : ['this is close — position, stack depth and Villain type decide it', 'quyết định sát — vị trí, độ sâu stack và kiểu đối thủ sẽ quyết định'];
+    return { en: `Coaching (model, not a grade): ${p(eq)} equity vs ${p(info.requiredEquity)} needed — ${verdict[0]}. You chose ${action.type}.`, vi: `Gợi ý (mô hình, không phải điểm): equity ${p(eq)} so với cần ${p(info.requiredEquity)} — ${verdict[1]}. Bạn chọn ${action.type}.` };
+  }
+  const verdict = eq > 0.65 ? ['betting for value is natural vs this model', 'cược value là tự nhiên trước mô hình này'] : eq < 0.35 ? ['checking or giving up is natural unless a bluff has good fold equity', 'check hoặc bỏ cuộc là tự nhiên trừ khi bluff có fold equity tốt'] : ['a mixed spot — pot control or a small bet are both reasonable', 'spot trung tính — kiểm soát pot hoặc cược nhỏ đều hợp lý'];
+  return { en: `Coaching (model, not a grade): ${p(eq)} equity vs the modelled ranges — ${verdict[0]}. You chose ${action.type}.`, vi: `Gợi ý (mô hình, không phải điểm): equity ${p(eq)} so với range mô hình — ${verdict[1]}. Bạn chọn ${action.type}.` };
+}
+
+function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerAction, node: OracleNode | null = null): HeroFeedback {
+  if (node) return oracleGrade(node, info, state, action);
+  const fb = gradeHeroBase(info, state, action);
+  if (fb.basis === 'solverEv') return { ...fb, assessment: 'solverVerified' };
+  if (fb.basis === 'modelEv') return { ...fb, assessment: 'assumedRange' };
+  const coaching = coachingFor(info, action);
+  return { ...fb, assessment: coaching ? 'heuristicCoaching' : 'notEvaluated', ...(coaching ? { coaching } : {}) };
+}
+
 /**
  * Deterministically (re)build a hand from its seed, config and Hero's actions. Villains act by the
  * model; streets are dealt from the fixed board. Stops when Hero must act or the hand is over.
  * Throws IllegalActionError if a Hero action is not legal.
  */
-export function runSim(seed: number, config: SimConfig, heroActions: readonly PlayerAction[], opts: { equitySamples?: number; deal?: SimDeal } = {}): SimRun {
+export function runSim(seed: number, config: SimConfig, heroActions: readonly PlayerAction[], opts: RunOptions = {}): SimRun {
   validateSimConfig(config);
-  // Production passes a deal shuffled with a CSPRNG; the seeded deal is for tests and tooling only.
   const deal = opts.deal ?? dealSim(seed, config);
   let state = createHand(tableFor(config, deal));
   const ranges: Record<string, Float64Array> = {};
   for (const id of Object.keys(config.villains)) ranges[id] = new Float64Array(COMBOS.length).fill(1);
   const run: SimRun = { seed, config, deal, state, decisions: [], villainEvents: [], ranges, awaitingHero: false };
   const samples = opts.equitySamples ?? 2500;
+  const prefix = opts.prefix ?? [];
   let k = 0;
+  let pi = 0;
   for (let guard = 0; guard < 400; guard++) {
     if (state.complete) break;
     if (state.awaitingBoard) {
@@ -509,8 +674,22 @@ export function runSim(seed: number, config: SimConfig, heroActions: readonly Pl
       continue;
     }
     const actor = state.players[state.toAct]!;
+    if (pi < prefix.length) {
+      // scripted part of a curated scenario: exactly as authored; Villain ranges still follow the model
+      const p = prefix[pi++]!;
+      if (p.playerId !== actor.id) throw new Error(`Scripted action for ${p.playerId}, but ${actor.id} is to act`);
+      if (actor.id !== config.heroPos) {
+        const m = villainModel(state, config);
+        updateRange(ranges[actor.id]!, m.probsFor, categoryOf(p.action));
+        run.villainEvents.push({ historyIndex: state.history.length, playerId: actor.id, archetype: config.villains[actor.id]!, source: 'scripted', chosen: categoryOf(p.action) });
+      }
+      state = applyAction(state, p.action);
+      continue;
+    }
     if (actor.id === config.heroPos) {
+      const node = opts.oracle?.(state, actor.id) ?? null;
       const info = heroInfo(run, state, run.decisions.length, samples);
+      if (node) info.oracle = { source: node.source, label: node.label, actions: node.actions.map((x) => x.key) };
       if (k >= heroActions.length) {
         run.decisions.push({ info });
         run.awaitingHero = true;
@@ -518,11 +697,11 @@ export function runSim(seed: number, config: SimConfig, heroActions: readonly Pl
       }
       const action = heroActions[k++]!;
       const next = applyAction(state, action);
-      run.decisions.push({ info, action, feedback: gradeHero(info, state, action) });
+      run.decisions.push({ info, action, feedback: gradeHero(info, state, action, node) });
       state = next;
       continue;
     }
-    const { action, event } = villainAct(seed, state, config, ranges);
+    const { action, event } = villainAct(seed, state, config, ranges, opts);
     run.villainEvents.push(event);
     state = applyAction(state, action);
   }
@@ -537,29 +716,106 @@ export interface TimelineEntry {
   toBB: number;
   addedBB: number;
   allIn: boolean;
-  /** Villain action source / model, or Hero decision index. */
-  villain?: { archetype: Archetype; source: 'solver' | 'heuristic' };
+  /** Villain action source / model (+ the model's reasoning, shown only after the hand). */
+  villain?: Omit<VillainEvent, 'historyIndex' | 'playerId'>;
   heroDecision?: number;
 }
 
-/** Hand review after completion: every action, Hero feedback references, showdown cards only, net results. */
+/**
+ * Hand review after completion: every action (with the Villain model's reasoning), Hero feedback
+ * references, showdown cards of players entitled to show, winners with hand categories, payouts.
+ */
 export function simReview(run: SimRun) {
-  const bb = run.state.config.bigBlind;
+  const s = run.state;
+  const bb = s.config.bigBlind;
   const events = new Map(run.villainEvents.map((e) => [e.historyIndex, e]));
   const heroIdx = new Map(run.decisions.map((d, i) => [d.info.historyIndex, i]));
-  const timeline: TimelineEntry[] = run.state.history.map((h, i) => ({
-    street: h.street,
-    playerId: h.playerId,
-    type: h.type,
-    toBB: h.amount / bb,
-    addedBB: h.added / bb,
-    allIn: h.allIn,
-    villain: events.has(i) ? { archetype: events.get(i)!.archetype, source: events.get(i)!.source } : undefined,
-    heroDecision: heroIdx.get(i),
-  }));
-  const showdown = run.state.result?.showdown ? run.state.players.filter((p) => !p.folded).map((p) => ({ id: p.id, cards: p.cards! })) : [];
-  const net = Object.fromEntries(run.state.players.map((p) => [p.id, Math.round(((run.state.result?.awards[p.id] ?? 0) - p.totalCommitted - p.anteCommitted) / bb * 100) / 100]));
-  return { timeline, showdown, net, board: run.state.board, decisions: run.decisions };
+  const timeline: TimelineEntry[] = s.history.map((h, i) => {
+    const e = events.get(i);
+    return {
+      street: h.street,
+      playerId: h.playerId,
+      type: h.type,
+      toBB: h.amount / bb,
+      addedBB: h.added / bb,
+      allIn: h.allIn,
+      villain: e ? { archetype: e.archetype, source: e.source, chosen: e.chosen, forced: e.forced, probs: e.probs, strength: e.strength } : undefined,
+      heroDecision: heroIdx.get(i),
+    };
+  });
+  const showdown = s.result?.showdown ? s.players.filter((p) => !p.folded).map((p) => ({ id: p.id, cards: p.cards!, category: s.board.length === 5 ? handCategory(evaluate([...p.cards!, ...s.board])) : null })) : [];
+  const net = Object.fromEntries(s.players.map((p) => [p.id, Math.round((((s.result?.awards[p.id] ?? 0) - p.totalCommitted - p.anteCommitted) / bb) * 100) / 100]));
+  const awards = Object.entries(s.result?.awards ?? {}).filter(([, v]) => v > 0).map(([id, v]) => ({ id, amountBB: Math.round((v / bb) * 100) / 100 }));
+  const winners = awards.map((a) => ({ ...a, category: showdown.find((x) => x.id === a.id)?.category ?? null }));
+  const lastVoluntary = [...s.history].reverse().find((h) => ['fold', 'check', 'call', 'bet', 'raise'].includes(h.type));
+  return {
+    timeline,
+    showdown,
+    net,
+    winners,
+    pots: (s.result?.pots ?? []).map((p) => ({ amountBB: p.amount / bb, eligible: p.eligible })),
+    endedBy: s.result?.showdown ? 'showdown' : 'fold',
+    terminalStreet: s.board.length === 5 ? 'river' : s.board.length === 4 ? 'turn' : s.board.length === 3 ? 'flop' : 'preflop',
+    lastAction: lastVoluntary?.type ?? null,
+    board: s.board,
+    decisions: run.decisions,
+  };
+}
+
+/**
+ * Simulator-only, after the hand is over: the cards nobody saw (folded opponents' hands and the
+ * community cards that were never dealt). Hypothetical — not information Hero had or could have had.
+ */
+export function simHiddenInfo(run: SimRun) {
+  if (!run.state.complete) throw new Error('Hand not finished');
+  const s = run.state;
+  return {
+    runout: run.deal.board.slice(s.board.length),
+    opponents: s.players.filter((p) => p.id !== run.config.heroPos).map((p) => ({ id: p.id, cards: p.cards!, folded: p.folded })),
+  };
+}
+
+/**
+ * Continue a curated scenario as a full hand: same table, stacks, Hero cards and authored board
+ * (where defined); every unknown card is dealt with the supplied CSPRNG; the scenario's actions
+ * become a scripted prefix; from there on Villains follow the model (default TAG, labelled).
+ */
+export function scenarioContinuation(
+  sc: { format: { tableSize: number }; table: { heroPos: string; heroCards: string; smallBlind: number; bigBlind: number; ante: number; anteMode: 'none' | 'each' | 'bigBlind'; players: { pos: string; stackBB: number; cards?: string }[] }; board: { flop?: string; turn?: string; river?: string } },
+  endState: HandState,
+  randomInt: (maxExclusive: number) => number,
+  archetype: Archetype = 'tag',
+): { config: SimConfig; deal: SimDeal; prefix: { playerId: string; action: PlayerAction }[] } {
+  const layout = positionsFor(sc.format.tableSize);
+  const toCards = (x?: string) => (x ? (x.match(/.{2}/g) as Card[]) : []);
+  const used = new Set<Card>();
+  const holes: Record<string, [Card, Card]> = {};
+  holes[sc.table.heroPos] = toCards(sc.table.heroCards) as [Card, Card];
+  for (const p of sc.table.players) if (p.cards && p.pos !== sc.table.heroPos) holes[p.pos] = toCards(p.cards) as [Card, Card];
+  const authored = [...toCards(sc.board.flop), ...toCards(sc.board.turn), ...toCards(sc.board.river)];
+  for (const c of [...Object.values(holes).flat(), ...authored]) used.add(c);
+  const deck = fullDeck().filter((c) => !used.has(c));
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [deck[i], deck[j]] = [deck[j]!, deck[i]!];
+  }
+  let k = 0;
+  for (const pos of layout) if (!holes[pos]) holes[pos] = [deck[k++]!, deck[k++]!];
+  const board = [...authored];
+  while (board.length < 5) board.push(deck[k++]!);
+  const bb = sc.table.bigBlind;
+  const config: SimConfig = {
+    tableSize: sc.format.tableSize,
+    heroPos: sc.table.heroPos,
+    stacksBB: Object.fromEntries(sc.table.players.map((p) => [p.pos, p.stackBB])),
+    anteMode: sc.table.anteMode,
+    villains: Object.fromEntries(layout.filter((p) => p !== sc.table.heroPos).map((p) => [p, archetype])),
+    chips: { smallBlind: sc.table.smallBlind, bigBlind: bb, ante: sc.table.ante },
+  };
+  const prefix = endState.history
+    .filter((h) => h.type === 'fold' || h.type === 'check' || h.type === 'call' || h.type === 'bet' || h.type === 'raise')
+    .map((h) => ({ playerId: h.playerId, action: (h.type === 'bet' || h.type === 'raise' ? { type: h.type, amount: h.amount } : { type: h.type }) as PlayerAction }));
+  return { config, deal: { holes, board }, prefix };
 }
 
 /**
@@ -576,9 +832,8 @@ export function simFingerprint(cfg: SimConfig, deal: SimDeal, originKey = 'rando
   return [originKey, cfg.tableSize, cfg.heroPos, `<=${bucket}`, classOfCombo(hero[0], hero[1]), opp].join('|');
 }
 
-/** Exact-deal key: identical cards in identical seats on an identical table. */
+/** Exact-deal key: identical cards in identical seats on an identical table (server-side only). */
 export function simExactKey(cfg: SimConfig, deal: SimDeal): string {
   const seats = positionsFor(cfg.tableSize).map((p) => `${p}:${cfg.stacksBB[p]}:${cfg.villains[p] ?? 'H'}:${[...deal.holes[p]!].sort().join('')}`);
-  // server-side only (it contains the cards)
   return `${seats.join('/')}#${deal.board.join('')}#${cfg.anteMode}`;
 }

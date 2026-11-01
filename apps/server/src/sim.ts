@@ -10,9 +10,14 @@ import {
   SIM_MODEL_VERSION,
   type SimConfig,
   type SimDeal,
+  type SpotOracle,
+  type Scenario,
+  scenarioContinuation,
+  simHiddenInfo,
   type SimRun,
   dealSimSecure,
   type SkillKey,
+  classOfCombo,
   simExactKey,
   simFingerprint,
   type LeakKey,
@@ -32,6 +37,9 @@ import { requireUser } from './auth';
 import { prisma } from './db';
 import { HttpError, notFound, parse } from './http';
 import { recordAttempt } from './learning';
+import { postflopOracle, solverFlopHand } from './postflop';
+import { loadVersion } from './content';
+import { replay as replayScenario } from './runs';
 
 /**
  * Full-hand Hero simulator. The deal is derived from a server-held seed; responses only ever carry
@@ -50,7 +58,26 @@ interface Step {
 }
 
 const steps = (h: SimHand) => (h.steps as unknown as Step[]) ?? [];
-const build = (h: SimHand, s: Step[] = steps(h)) => runSim(h.seed, h.config as unknown as SimConfig, s.map((x) => x.action), { deal: (h.deal as unknown as SimDeal | null) ?? undefined });
+/** How a hand was created; replays and branches copy it (branches may add Villain overrides). */
+export interface Origin {
+  kind: 'random' | 'scenario' | 'solverFlop';
+  scenarioId?: string;
+  runId?: string;
+  flop?: string;
+  prefix?: { playerId: string; action: PlayerAction }[];
+  villainOverrides?: Record<number, 'fold' | 'passive' | 'aggressive'>;
+}
+const oracleFor = (o: Origin): SpotOracle | undefined => (o.kind === 'solverFlop' && o.flop ? postflopOracle(o.flop) : undefined);
+const originOf = (h: SimHand) => ((h.origin as unknown as Origin | null) ?? { kind: 'random' }) as Origin;
+const build = (h: SimHand, s: Step[] = steps(h)) => {
+  const o = originOf(h);
+  return runSim(h.seed, h.config as unknown as SimConfig, s.map((x) => x.action), {
+    deal: (h.deal as unknown as SimDeal | null) ?? undefined,
+    prefix: o.prefix,
+    villainOverrides: o.villainOverrides,
+    oracle: oracleFor(o),
+  });
+};
 
 /** Math facts available to Hero at the decision (no model equity — that would hint at the answer). */
 function facts(info: HeroDecisionInfo) {
@@ -69,7 +96,7 @@ function decisionsView(h: SimHand, run: SimRun) {
       confidence: st[i]?.confidence ?? null,
       reasoning: st[i]?.reasoning ?? null,
       facts: facts(d.info),
-      ...(reveal ? { modelEquity: d.info.modelEquity, solver: d.info.solver, feedback: d.feedback } : {}),
+      ...(reveal ? { modelEquity: d.info.modelEquity, solver: d.info.solver, oracle: d.info.oracle ?? null, topics: d.info.topics, feedback: d.feedback } : {}),
       // alternatives for the Branch Explorer — only once the hand is over
       ...(run.state.complete ? { legal: d.info.legal } : {}),
     }));
@@ -90,7 +117,9 @@ export function simView(h: SimHand, run: SimRun = build(h)) {
     parentId: h.parentId,
     branchAt: h.branchAt,
     modelVersion: h.modelVersion,
-    bigBlind: SIM_BB,
+    bigBlind: run.state.config.bigBlind,
+    origin: { kind: originOf(h).kind, scenarioId: originOf(h).scenarioId ?? null, flop: originOf(h).flop ?? null },
+    bookmarked: h.bookmarked,
     config: { tableSize: cfg.tableSize, heroPos: hero, stacksBB: cfg.stacksBB, anteMode: cfg.anteMode, villains: Object.fromEntries(Object.entries(cfg.villains).map(([k, a]) => [k, { archetype: a, label: ARCHETYPE_LABELS[a] }])) },
     state: publicState(run.state, hero),
     heroCards: run.state.players.find((p) => p.id === hero)!.cards,
@@ -104,9 +133,13 @@ export function simView(h: SimHand, run: SimRun = build(h)) {
           showdown: review.showdown,
           netBB: review.net,
           heroNetBB: review.net[hero],
+          winners: review.winners,
+          pots: review.pots,
+          endedBy: review.endedBy,
+          terminalStreet: review.terminalStreet,
           gradedCount: review.decisions.filter((d) => d.feedback?.graded).length,
           source: {
-            villains: { en: 'Villains follow heuristic archetype models (not GTO). Solver frequencies are used only in exact heads-up push/fold spots.', vi: 'Đối thủ theo mô hình tính cách heuristic (không phải GTO). Tần suất solver chỉ dùng ở spot push/fold đối đầu chính xác.' },
+            villains: { en: 'Villains follow heuristic archetype models (not GTO). Solver frequencies are used only where a solved spot exactly matches the hand (heads-up push/fold, and the postflop library\'s flop decisions).', vi: 'Đối thủ theo mô hình tính cách heuristic (không phải GTO). Tần suất solver chỉ dùng khi spot đã giải khớp chính xác (push/fold đối đầu, và quyết định flop trong thư viện postflop).' },
           },
         }
       : null,
@@ -120,6 +153,8 @@ async function load(userId: string, id: string) {
 }
 
 const Start = z.object({
+  table: z.enum(['random', 'solverFlop']).default('random'),
+  heroPos: z.enum(['BTN', 'BB']).optional(),
   tableSize: z.number().int().min(2).max(9).optional(),
   stackBB: z.number().int().min(5).max(200).optional(),
   archetype: z.enum([...ARCHETYPES, 'mixed']).optional(),
@@ -130,15 +165,20 @@ const Start = z.object({
 
 export async function createSimHand(
   userId: string,
-  o: { tableSize?: number; stackBB?: number; archetype?: (typeof ARCHETYPES)[number] | 'mixed'; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam'; sessionId?: string | null },
+  o: { table?: 'random' | 'solverFlop'; heroPos?: 'BTN' | 'BB'; tableSize?: number; stackBB?: number; archetype?: (typeof ARCHETYPES)[number] | 'mixed'; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam'; sessionId?: string | null },
   db: Prisma.TransactionClient = prisma,
 ) {
   // Security: the table config is public, so it comes from its own random value; the cards are
   // shuffled with a CSPRNG and stored server-side. Neither can be derived from what the client sees.
   // Hands that would be over before Hero acts (e.g. a walk in the big blind) are re-dealt.
-  const fresh = () => {
+  const fresh = (): { seed: number; config: SimConfig; deal: SimDeal; origin: Origin; originKey: string } => {
+    if (o.table === 'solverFlop') {
+      // exact postflop-library spot: scripted preflop (folds to BTN 2.2BB, BB calls), solved flop
+      const x = solverFlopHand((n) => randomInt(n), o.heroPos);
+      return { seed: randomInt(1, 2 ** 31 - 1), config: x.config, deal: x.deal, origin: { kind: 'solverFlop', flop: x.flop, prefix: x.prefix }, originKey: `solverFlop:${x.flop}` };
+    }
     const config = randomSimConfig(randomInt(1, 2 ** 31 - 1), { tableSize: o.tableSize, stackBB: o.stackBB, archetype: o.archetype });
-    return { seed: randomInt(1, 2 ** 31 - 1), config, deal: dealSimSecure(config, (n) => randomInt(n)) };
+    return { seed: randomInt(1, 2 ** 31 - 1), config, deal: dealSimSecure(config, (n) => randomInt(n)), origin: { kind: 'random' }, originKey: 'random' };
   };
   // Diversity: never an exact repeat; avoid the same strategic situation as any of the user's last
   // RECENT_SITUATIONS hands while alternatives exist (bounded retries, then accept the best found).
@@ -146,18 +186,18 @@ export async function createSimHand(
   let best: (ReturnType<typeof fresh> & { fp: string; key: string }) | null = null;
   for (let tries = 0; tries < MAX_DEAL_TRIES; tries++) {
     const h = fresh();
-    if (!runSim(h.seed, h.config, [], { equitySamples: 50, deal: h.deal }).awaitingHero) continue;
-    const c = { ...h, fp: simFingerprint(h.config, h.deal), key: simExactKey(h.config, h.deal) };
+    if (!runSim(h.seed, h.config, [], { equitySamples: 50, deal: h.deal, prefix: h.origin.prefix, oracle: oracleFor(h.origin) }).awaitingHero) continue;
+    const c = { ...h, fp: simFingerprint(h.config, h.deal, h.originKey), key: simExactKey(h.config, h.deal) };
     if (await db.simHand.findFirst({ where: { userId, exactKey: c.key }, select: { id: true } })) continue;
     best = c;
     if (!recent.has(c.fp)) break;
   }
   if (!best) {
     const h = fresh();
-    best = { ...h, fp: simFingerprint(h.config, h.deal), key: simExactKey(h.config, h.deal) };
+    best = { ...h, fp: simFingerprint(h.config, h.deal, h.originKey), key: simExactKey(h.config, h.deal) };
   }
   const created = await db.simHand.create({
-    data: { userId, seed: best.seed, deal: best.deal as object, config: best.config as object, fingerprint: best.fp, exactKey: best.key, origin: { kind: 'random' }, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null },
+    data: { userId, seed: best.seed, deal: best.deal as object, config: best.config as object, fingerprint: best.fp, exactKey: best.key, origin: best.origin as object, modelVersion: SIM_MODEL_VERSION, mode: o.mode, feedback: o.feedback, sessionId: o.sessionId ?? null },
   });
   await touchPlayed(userId, `sim:${best.fp}`, 'sim', created.id);
   return created;
@@ -231,15 +271,35 @@ simRouter.post('/hands/:id/act', async (req, res) => {
       mixed ||
       (await prisma.trainingSession.findFirst({ where: { userId, kind: 'sim', mode: h.mode, endedAt: null, startedAt: { gt: new Date(Date.now() - 2 * 3600 * 1000) } }, orderBy: { startedAt: 'desc' } })) ||
       (await prisma.trainingSession.create({ data: { userId, kind: 'sim', mode: h.mode } }));
+    const pf = d.info.solver; // heads-up push/fold equilibrium
+    const fl = d.info.oracle; // postflop library node
     const solver = fb.basis === 'solverEv';
     const street = d.info.street;
+    const cfgH = h.config as unknown as SimConfig;
+    const heroCards = run.state.players.find((p) => p.id === cfgH.heroPos)!.cards!;
+    const cls = classOfCombo(heroCards[0]!, heroCards[1]!);
+    // Anti-farming: solver-equivalent spots share a family, so repeats are familiarity-discounted
+    const family = pf ? `pf:${pf.role}:${pf.stackBB}:${pf.deadBB}:${pf.heroClass}` : fl ? `pfl:${originOf(h).flop}:${fl.actions.join('/')}:${street}:${cls}` : `sim:${h.id}`;
+    const facingBet = d.info.toCallBB > 0;
+    const leaks = ((): { leakOpportunities: LeakKey[]; optionLeaks: LeakKey[] } => {
+      if (pf) {
+        const opp: LeakKey[] = pf.role === 'sbShove' ? ['stackDepthAdjustments', 'excessivePreflopAllIns'] : ['potOdds'];
+        const leak: LeakKey = pf.role === 'sbShove' ? (body.action.type === 'fold' ? 'stackDepthAdjustments' : 'excessivePreflopAllIns') : 'potOdds';
+        return { leakOpportunities: opp, optionLeaks: isError(fb.grade!) ? [leak] : [] };
+      }
+      if (fl && !facingBet) {
+        const leak: LeakKey = body.action.type === 'check' ? 'underbluffing' : 'overbluffing';
+        return { leakOpportunities: ['underbluffing', 'overbluffing'], optionLeaks: isError(fb.grade!) ? [leak] : [] };
+      }
+      return { leakOpportunities: ['potOdds'], optionLeaks: isError(fb.grade!) ? ['potOdds'] : [] };
+    })();
     const outcome = await recordAttempt({
       userId,
       clientAttemptId: body.clientAttemptId,
       sessionId: session.id,
       attemptType: 'decision',
       itemRef: `sim:${h.id}:${st.length}`,
-      familyId: `sim:${h.id}`,
+      familyId: family,
       reviewType: 'quiz',
       reviewRef: 'sim',
       mode: h.mode as 'practice' | 'rated',
@@ -255,17 +315,12 @@ simRouter.post('/hands/:id/act', async (req, res) => {
       confidence: body.confidence,
       gradingMethodVersion: `${GRADING_METHOD_VERSION}+${SIM_MODEL_VERSION}`,
       street,
-      heroPosition: (h.config as unknown as SimConfig).heroPos,
-      effectiveStackBB: d.info.solver?.stackBB,
-      difficulty: solver ? (Math.abs(d.info.solver!.evAggressiveBB) < 0.3 ? 4 : Math.abs(d.info.solver!.evAggressiveBB) < 1 ? 3 : 2) : 3,
-      skills: (solver ? ['preflop', 'shortStack'] : [street, 'math']) as SkillKey[],
-      concepts: solver ? ['push-fold', 'full-hand'] : ['pot-odds', 'full-hand'],
-      ...(() => {
-        const role = d.info.solver?.role;
-        const opp: LeakKey[] = role === 'sbShove' ? ['stackDepthAdjustments', 'excessivePreflopAllIns'] : ['potOdds'];
-        const leak: LeakKey = role === 'sbShove' ? (body.action.type === 'fold' ? 'stackDepthAdjustments' : 'excessivePreflopAllIns') : 'potOdds';
-        return { leakOpportunities: opp, optionLeaks: isError(fb.grade!) ? [leak] : [] };
-      })(),
+      heroPosition: cfgH.heroPos,
+      effectiveStackBB: pf?.stackBB ?? (fl ? 32 : undefined),
+      difficulty: pf ? (Math.abs(pf.evAggressiveBB) < 0.3 ? 4 : Math.abs(pf.evAggressiveBB) < 1 ? 3 : 2) : 3,
+      skills: (pf ? ['preflop', 'shortStack'] : fl ? ['flop', 'rangeReading'] : [street, 'math']) as SkillKey[],
+      concepts: pf ? ['push-fold', 'full-hand'] : fl ? ['solver-flop', 'full-hand'] : ['pot-odds', 'full-hand'],
+      ...leaks,
       sourceClass: solver ? 'SOLVER_VERIFIED' : 'MATH_VERIFIED',
       track: fb.track,
       responseMs: body.responseMs,
@@ -330,6 +385,81 @@ simRouter.post('/hands/:id/branch', async (req, res) => {
 });
 
 /** The original hand with its replays and branches, for side-by-side comparison. */
+/**
+ * Continue a finished curated scenario as a full hand from its exact end state. A replayed
+ * (practice) scenario continues in practice; continuation decisions follow the simulator's grading.
+ */
+simRouter.post('/from-run/:runId', async (req, res) => {
+  const userId = requireUser(req);
+  const run = await prisma.scenarioRun.findFirst({ where: { id: String(req.params.runId), userId } });
+  if (!run) throw notFound('Run not found');
+  if (run.status !== 'completed') throw new HttpError(409, 'not_complete', 'Finish the scenario first');
+  const existing = await prisma.simHand.findFirst({ where: { userId, kind: 'play', origin: { path: ['runId'], equals: run.id } } });
+  if (existing) return void res.status(200).json(simView(existing));
+  const v = await loadVersion(run.scenarioVersionId);
+  if (!v) throw notFound('Scenario version missing');
+  const sc = v.scenario as Scenario;
+  const end = replayScenario(sc, run.steps as never).state;
+  if (end.complete) throw new HttpError(409, 'hand_over', 'This hand is already over');
+  const { config, deal, prefix } = scenarioContinuation(sc, end, (n) => randomInt(n));
+  const seed = randomInt(1, 2 ** 31 - 1);
+  const origin: Origin = { kind: 'scenario', scenarioId: sc.id, runId: run.id, prefix };
+  const h = await prisma.simHand.create({
+    data: { userId, seed, deal: deal as object, config: config as object, origin: origin as object, fingerprint: `scenario:${sc.id}`, modelVersion: SIM_MODEL_VERSION, mode: run.mode, feedback: 'guided', sessionId: run.sessionId },
+  });
+  res.status(201).json(simView(h));
+});
+
+/**
+ * Branch Challenge: after the hand, make one Villain take a different legal action and play on.
+ * Exploration only — never recorded or rated.
+ */
+simRouter.post('/hands/:id/branch-villain', async (req, res) => {
+  const userId = requireUser(req);
+  const body = parse(z.object({ historyIndex: z.number().int().min(0).max(500), choice: z.enum(['fold', 'passive', 'aggressive']) }), req.body);
+  const h = await load(userId, String(req.params.id));
+  const run = build(h);
+  if (!run.state.complete) throw new HttpError(409, 'not_complete', 'Finish the hand first');
+  const ev = run.villainEvents.find((e) => e.historyIndex === body.historyIndex && e.source !== 'scripted');
+  if (!ev) throw new HttpError(400, 'invalid_input', 'No modelled Villain decision at that point');
+  if (ev.chosen === body.choice) throw new HttpError(400, 'invalid_input', 'That is what Villain already did');
+  const keep = steps(h).filter((_, i) => run.decisions[i]!.info.historyIndex < body.historyIndex).map((x) => ({ action: x.action, clientAttemptId: `branch-${x.clientAttemptId}` }));
+  const o = originOf(h);
+  const origin: Origin = { ...o, villainOverrides: { ...(o.villainOverrides ?? {}), [body.historyIndex]: body.choice } };
+  const probe = runSim(h.seed, h.config as unknown as SimConfig, keep.map((x) => x.action), { deal: (h.deal as unknown as SimDeal | null) ?? undefined, prefix: o.prefix, villainOverrides: origin.villainOverrides, oracle: oracleFor(o), equitySamples: 50 });
+  const r = await prisma.simHand.create({
+    data: { userId, seed: h.seed, ...(h.deal ? { deal: h.deal as object } : {}), config: h.config as object, origin: origin as object, modelVersion: h.modelVersion, mode: 'practice', feedback: 'guided', kind: 'branch', parentId: h.parentId ?? h.id, branchAt: null, steps: keep as object, status: probe.state.complete ? 'complete' : 'active', completedAt: probe.state.complete ? new Date() : null },
+  });
+  res.status(201).json(simView(r));
+});
+
+/**
+ * After the hand only: the cards nobody saw — folded opponents' hands and the undealt runout.
+ * Simulator-only and hypothetical (labelled); it never changes the recorded result.
+ */
+simRouter.get('/hands/:id/hidden', async (req, res) => {
+  const userId = requireUser(req);
+  const h = await load(userId, String(req.params.id));
+  const run = build(h);
+  if (!run.state.complete) throw new HttpError(409, 'not_complete', 'Available after the hand is over');
+  res.json({
+    ...simHiddenInfo(run),
+    label: {
+      en: 'Simulator-only information Hero could not have known. The runout is hypothetical: the hand had already ended.',
+      vi: 'Thông tin chỉ có trong mô phỏng mà Hero không thể biết. Lá bài còn lại là giả định: ván đã kết thúc.',
+    },
+  });
+});
+
+/** Bookmark a simulated hand for later review. */
+simRouter.post('/hands/:id/bookmark', async (req, res) => {
+  const userId = requireUser(req);
+  const body = parse(z.object({ on: z.boolean() }), req.body);
+  const h = await load(userId, String(req.params.id));
+  await prisma.simHand.update({ where: { id: h.id }, data: { bookmarked: body.on } });
+  res.json({ ok: true });
+});
+
 simRouter.get('/hands/:id/family', async (req, res) => {
   const userId = requireUser(req);
   const h = await load(userId, String(req.params.id));

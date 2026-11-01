@@ -119,7 +119,7 @@ describe('Hero simulator API', () => {
       }
     }
     expect(found).not.toBeNull();
-    const att = await prisma.decisionAttempt.findMany({ where: { userId: u.id, familyId: `sim:${found}` } });
+    const att = await prisma.decisionAttempt.findMany({ where: { userId: u.id, itemRef: { startsWith: `sim:${found}:` } } });
     expect(att).toHaveLength(1);
     expect(att[0]!.track).toBe('strategy');
     expect(att[0]!.ratingApplied).toBe(true);
