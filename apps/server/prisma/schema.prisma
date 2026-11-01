@@ -512,6 +512,8 @@ model RealDecision {
   facingBetPct  Float?
   requiredEq    Float?
   formatGroup   String?
+  /// Heads-up push/fold solver verdict for this decision (chip EV), when the spot is an exact subgame
+  pfAudit       Json?
   contextV      Int     @default(0)
   playedAt     DateTime?
   createdAt    DateTime @default(now())

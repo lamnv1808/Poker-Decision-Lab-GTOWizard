@@ -210,7 +210,7 @@ export async function importV2(userId: string, dirOrSource: string | V2Source, l
         familyId: d.family_id,
         heroActionNo: Number(d.id.split('-').pop()),
         street: d.street,
-        ...(res.ok && snap && a.rec ? contextColumns(decisionContext(a.rec, snap, a.format)) : {}),
+        ...(res.ok && snap && a.rec ? { ...contextColumns(decisionContext(a.rec, snap, a.format)), pfAudit: pfAuditFor(a.rec, snap.actionIndex) ?? undefined } : {}),
         status: res.ok ? 'accepted' : 'quarantined',
         issues: res.issues as object,
         split,
@@ -277,7 +277,7 @@ export async function backfillContexts(userId: string, log: (m: string) => void 
       select: { id: true, raw: true, format: true, decisions: { where: { status: 'accepted', contextV: { lt: CONTEXT_VERSION } }, select: { id: true, heroActionNo: true } } },
     });
     if (!page.length) break;
-    const rows: { id: string; c: ReturnType<typeof contextColumns> }[] = [];
+    const rows: { id: string; c: ReturnType<typeof contextColumns>; pf: object | null }[] = [];
     for (const h of page) {
       const a = auditHand(h.raw);
       for (const d of h.decisions) {
@@ -286,17 +286,17 @@ export async function backfillContexts(userId: string, log: (m: string) => void 
           failed++;
           continue;
         }
-        rows.push({ id: d.id, c: contextColumns(decisionContext(a.rec, snap, h.format)) });
+        rows.push({ id: d.id, c: contextColumns(decisionContext(a.rec, snap, h.format)), pf: pfAuditFor(a.rec, snap.actionIndex) });
       }
     }
     if (rows.length) {
       // one UPDATE ... FROM (VALUES ...) per page instead of thousands of round trips
-      const values = rows.map((r) => [r.id, r.c.position, r.c.actionContext, r.c.heroAction, r.c.stackBucket, r.c.heroClass, r.c.spr, r.c.facingBetPct, r.c.requiredEq, r.c.formatGroup]);
+      const values = rows.map((r) => [r.id, r.c.position, r.c.actionContext, r.c.heroAction, r.c.stackBucket, r.c.heroClass, r.c.spr, r.c.facingBetPct, r.c.requiredEq, r.c.formatGroup, r.pf]);
       await prisma.$executeRawUnsafe(
-        `UPDATE "RealDecision" d SET "position" = v.position, "actionContext" = v.ac, "heroAction" = v.ha, "stackBucket" = v.sb, "heroClass" = v.hc, "spr" = v.spr, "facingBetPct" = v.fb, "requiredEq" = v.req, "formatGroup" = v.fg, "contextV" = ${CONTEXT_VERSION}
-         FROM jsonb_to_recordset($1::jsonb) AS v(id text, position text, ac text, ha text, sb text, hc text, spr float8, fb float8, req float8, fg text)
+        `UPDATE "RealDecision" d SET "position" = v.position, "actionContext" = v.ac, "heroAction" = v.ha, "stackBucket" = v.sb, "heroClass" = v.hc, "spr" = v.spr, "facingBetPct" = v.fb, "requiredEq" = v.req, "formatGroup" = v.fg, "pfAudit" = v.pf, "contextV" = ${CONTEXT_VERSION}
+         FROM jsonb_to_recordset($1::jsonb) AS v(id text, position text, ac text, ha text, sb text, hc text, spr float8, fb float8, req float8, fg text, pf jsonb)
          WHERE d.id = v.id AND d."userId" = $2`,
-        JSON.stringify(values.map((x) => ({ id: x[0], position: x[1], ac: x[2], ha: x[3], sb: x[4], hc: x[5], spr: x[6], fb: x[7], req: x[8], fg: x[9] }))),
+        JSON.stringify(values.map((x) => ({ id: x[0], position: x[1], ac: x[2], ha: x[3], sb: x[4], hc: x[5], spr: x[6], fb: x[7], req: x[8], fg: x[9], pf: x[10] }))),
         userId,
       );
     }
@@ -306,4 +306,11 @@ export async function backfillContexts(userId: string, log: (m: string) => void 
     if (hands % 3000 < batchHands) log(`${hands} hands, ${decisions} decisions`);
   }
   return { hands, decisions, failed };
+}
+
+/** The push/fold solver verdict for the decision at actionIndex, if it is an exact HU push/fold spot. */
+export function pfAuditFor(rec: ReconstructedHand, actionIndex: number) {
+  const pf = auditPushFold(rec);
+  if (!pf || pf.actionIndex !== actionIndex) return null;
+  return { role: pf.role, stackBB: pf.stackBB, deadBB: pf.deadBB, exactStackBB: pf.exactStackBB, heroClass: pf.heroClass, heroAction: pf.heroAction, grade: pf.grade, evLossBB: pf.evLossBB, bestAction: pf.bestAction, frequency: pf.frequency, evAggressive: pf.evAggressive };
 }

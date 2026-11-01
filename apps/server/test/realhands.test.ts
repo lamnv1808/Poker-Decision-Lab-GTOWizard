@@ -190,10 +190,11 @@ describe('Fundamentals and metrics', () => {
 describe('decision context (leak engine input)', () => {
   it('import fills a normalized context for every accepted decision; backfill reproduces it exactly', async () => {
     const { backfillContexts } = await import('../src/realhands/import');
-    const sel = { id: true, position: true, actionContext: true, heroAction: true, stackBucket: true, heroClass: true, spr: true, facingBetPct: true, requiredEq: true, formatGroup: true, contextV: true } as const;
+    const sel = { id: true, position: true, actionContext: true, heroAction: true, stackBucket: true, heroClass: true, spr: true, facingBetPct: true, requiredEq: true, formatGroup: true, pfAudit: true, contextV: true } as const;
     const before = await prisma.realDecision.findMany({ where: { userId: owner.id, status: 'accepted' }, select: sel, orderBy: { id: 'asc' } });
     expect(before.length).toBeGreaterThan(0);
-    expect(before.every((d) => d.contextV === 1 && d.position && d.actionContext && d.heroAction)).toBe(true);
+    const { CONTEXT_VERSION } = await import('@pdl/core');
+    expect(before.every((d) => d.contextV === CONTEXT_VERSION && d.position && d.actionContext && d.heroAction)).toBe(true);
     await prisma.realDecision.updateMany({ where: { userId: owner.id }, data: { contextV: 0, position: null, actionContext: null } });
     const r = await backfillContexts(owner.id);
     expect(r.failed).toBe(0);
@@ -201,5 +202,23 @@ describe('decision context (leak engine input)', () => {
     const after = await prisma.realDecision.findMany({ where: { userId: owner.id, status: 'accepted' }, select: sel, orderBy: { id: 'asc' } });
     expect(after).toEqual(before);
     expect((await backfillContexts(owner.id)).decisions).toBe(0); // idempotent
+  });
+});
+
+describe('real-hand leak report (engine v2)', () => {
+  it('returns labelled evidence; a tiny sample is never judged; users are isolated', async () => {
+    const r = (await owner.agent.get('/api/leaks/real').expect(200)).body;
+    expect(r.version).toBe('leaks-v2');
+    expect(r.decisions).toBeGreaterThan(0);
+    for (const p of r.patterns) {
+      expect(['pattern', 'descriptive']).toContain(p.evidence);
+      if (p.evidence === 'pattern' && p.n < 30) expect(p.verdict).toBe('insufficient');
+      expect(JSON.stringify(p)).not.toMatch(/evLoss/); // patterns never claim EV
+    }
+    expect(r.solver).toHaveProperty('verifiedMistakes');
+    const other = await newUser('leaks-other');
+    const o = (await other.agent.get('/api/leaks/real').expect(200)).body;
+    expect(o.decisions).toBe(0);
+    expect(o.patterns.every((p: { n: number }) => p.n === 0)).toBe(true);
   });
 });

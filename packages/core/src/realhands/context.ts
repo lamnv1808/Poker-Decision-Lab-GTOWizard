@@ -8,7 +8,8 @@ import type { EngineSnapshot } from './audit';
  * Normalized context of one real Hero decision — computed only from information available at the
  * decision (plus the action Hero actually took). This is the unit the leak engine aggregates over.
  */
-export const CONTEXT_VERSION = 1;
+/** v2: adds the push/fold solver verdict (pfAudit) where the spot is an exact HU push/fold subgame. */
+export const CONTEXT_VERSION = 2;
 
 export type PreflopContext = 'unopened' | 'limped' | 'vsOpen' | 'vs3bet' | 'vs4betPlus' | 'vsAllIn';
 export type PostflopContext = 'firstToAct' | 'checkedTo' | 'vsBet' | 'vsRaise' | 'vsAllIn';
