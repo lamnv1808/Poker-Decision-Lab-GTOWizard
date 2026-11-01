@@ -313,3 +313,31 @@ describe('GTO push/fold quiz and audit', () => {
     expect(a.body.worst[0].grade).toBe('excellent');
   });
 });
+
+describe('postflop GTO quiz', () => {
+  it('serves solved flop spots, hides the answer, grades by solver EV', async () => {
+    const { agent } = await newUser('pf');
+    const info = await agent.get('/api/gto/postflop/info').expect(200);
+    expect(info.body.flops).toBeGreaterThan(0);
+    for (const node of ['ip_vs_check', 'oop_vs_bet39', 'oop_vs_bet89']) {
+      const spot = await agent.get(`/api/gto/postflop/spot?node=${node}`).expect(200);
+      expect(spot.body.node).toBe(node);
+      expect(spot.body.state.board).toHaveLength(3);
+      expect(JSON.stringify(spot.body)).not.toMatch(/"f":|"ev":|freq/);
+      const hero = spot.body.state.players.find((p: { id: string }) => p.id === spot.body.hero);
+      expect(hero.cards).toEqual(spot.body.heroCards);
+      expect(spot.body.state.players.filter((p: { cards?: string[] }) => p.cards).length).toBe(1);
+      // pot on the flop is 5.9BB (+ the bet when facing a c-bet)
+      const pot = spot.body.state.deadAntes + spot.body.state.players.reduce((s: number, p: { totalCommitted: number }) => s + p.totalCommitted, 0);
+      expect(pot).toBeGreaterThanOrEqual(5900);
+      const r = await agent.post('/api/gto/postflop/answer').send({ token: spot.body.token, actionIndex: 0, clientAttemptId: cid() }).expect(200);
+      expect(r.body.options.length).toBe(spot.body.actions.length);
+      expect(r.body.options.some((o: { best: boolean }) => o.best)).toBe(true);
+      expect(r.body.source.classification).toBe('SOLVER_VERIFIED');
+      expect(Object.keys(r.body.rangeByClass).length).toBeGreaterThan(50);
+      expect(r.body.evLossBB).toBeGreaterThanOrEqual(0);
+    }
+    const spot = await agent.get('/api/gto/postflop/spot').expect(200);
+    expect((await agent.post('/api/gto/postflop/answer').send({ token: spot.body.token.slice(0, -3) + 'abc', actionIndex: 0, clientAttemptId: cid() })).status).toBe(400);
+  });
+});

@@ -1,0 +1,17 @@
+[package]
+name = "pdl-gto"
+version = "0.1.0"
+edition = "2021"
+publish = false
+# This tool links postflop-solver (AGPL-3.0-or-later), so the tool itself is AGPL-3.0-or-later.
+# It is run offline; only its JSON output is used by the app.
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+postflop-solver = { path = "../postflop-solver", default-features = false, features = ["rayon"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

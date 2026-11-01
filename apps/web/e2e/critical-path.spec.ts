@@ -106,6 +106,15 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await page.getByTestId('gto-actions').getByRole('button').last().click();
   await expect(page.getByTestId('gto-stats')).toContainText('Answered: 2');
 
+  // Postflop GTO tab: solved flop spot, answer with a number key, see solver frequencies/EVs
+  await page.getByRole('radio', { name: 'Postflop (flop)' }).click();
+  await expect(page.getByTestId('pf-actions')).toBeVisible();
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('pf-options')).toBeVisible();
+  await expect(page.getByTestId('strategy-grid')).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('pf-actions')).toBeVisible();
+
   // Hand-history import -> spot quiz -> queue
   await page.goto('/hands');
   await page.getByTestId('hh-file').setInputFiles({ name: 'gg.txt', mimeType: 'text/plain', buffer: fixture });

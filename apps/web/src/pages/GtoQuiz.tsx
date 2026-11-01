@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, newAttemptId } from '../api';
 import { GtoGrid } from '../components/GtoGrid';
 import { PokerTable } from '../components/PokerTable';
+import { GtoPostflop } from './GtoPostflop';
 import { ErrorNote, GradeBadge, Panel, SourceBadge, Spinner, Toggle } from '../components/ui';
 import { fmtNum, loc } from '../format';
 import { useT } from '../i18n';
@@ -41,6 +42,7 @@ export function GtoQuiz() {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<'push' | 'call'>('push');
   const [stats, setStats] = useState({ n: 0, ok: 0, ev: 0, streak: 0 });
+  const [street, setStreet] = useState<'preflop' | 'postflop'>(() => (new URLSearchParams(window.location.search).get('street') === 'postflop' ? 'postflop' : 'preflop'));
 
   const next = useCallback(async () => {
     setResult(null);
@@ -53,8 +55,8 @@ export function GtoQuiz() {
     }
   }, [range, role]);
   useEffect(() => {
-    void next();
-  }, [next]);
+    if (street === 'preflop') void next();
+  }, [next, street]);
 
   const answer = useCallback(
     async (action: 'shove' | 'call' | 'fold') => {
@@ -77,6 +79,7 @@ export function GtoQuiz() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (street !== 'preflop') return;
       if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'SELECT') return;
       if (!spot) return;
       const k = e.key.toLowerCase();
@@ -89,7 +92,7 @@ export function GtoQuiz() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [spot, result, answer, next]);
+  }, [spot, result, answer, next, street]);
 
   const aggressive = spot?.role === 'sbShove' ? 'shove' : 'call';
   return (
@@ -101,6 +104,10 @@ export function GtoQuiz() {
         </div>
         <Link to="/gto/audit" className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm hover:border-accent" data-testid="audit-link">{t('nav.audit')} →</Link>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Toggle label={t('pf.street')} value={street} onChange={setStreet} options={[{ value: 'preflop', label: t('pf.tabPreflop') }, { value: 'postflop', label: t('pf.tabPostflop') }]} />
+      </div>
+      {street === 'postflop' ? <GtoPostflop mode={mode} /> : (<>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Toggle label={t('gto.role')} value={role} onChange={setRole} options={[{ value: 'any', label: t('gto.any') }, { value: 'sbShove', label: t('gto.sbShove') }, { value: 'bbCall', label: t('gto.bbCall') }]} />
         <Toggle label={t('gto.stacks')} value={range} onChange={setRange} options={[{ value: '2-15', label: '2–15BB' }, { value: '2-7', label: '2–7' }, { value: '7-11', label: '7–11' }, { value: '11-15', label: '11–15' }]} />
@@ -172,6 +179,7 @@ export function GtoQuiz() {
           </Panel>
         </div>
       )}
+      </>)}
     </div>
   );
 }

@@ -6,3 +6,4 @@ coverage/
 test-results/
 playwright-report/
 apps/server/public/
+tools/postflop-solver/
