@@ -1,5 +1,5 @@
 import { type Card, parseCards } from '../cards/cards';
-import { type HandState, type PlayerAction, type TableConfig, applyAction, computePots, createHand, dealNextStreet, legalActions, positionsFor, totalPot } from '../engine';
+import { type HandState, type PlayerAction, type TableConfig, applyAction, computePots, createHand, dealNextStreet, forfeitAllIn, legalActions, positionsFor, totalPot } from '../engine';
 
 /**
  * GGPoker / Natural8-style tournament hand-history parser.
@@ -83,6 +83,7 @@ export const ggParser: HandHistoryParser = {
   parse(raw) {
     const lines = raw.split('\n');
     const header = lines[0] ?? '';
+    if (/Flipout/i.test(header)) throw new HandParseError('Flipout hands (automatic all-in format) are not supported', /#([A-Z]*\d+)/.exec(header)?.[1] ?? null, 1);
     const hm = /^Poker Hand #([A-Z]*\d+): Tournament #(\d+),\s*(.*?)\s+Hold'em No Limit - (Level\s*\d+)\(([\d,]+)\/([\d,]+)(?:\(([\d,]+)\))?\) - (\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2})/.exec(header);
     if (!hm) throw new HandParseError('Unrecognized header (only GGPoker No-Limit Hold’em tournament hands are supported)', /#([A-Z]*\d+)/.exec(header)?.[1] ?? null, 1);
     const hand: ParsedHand = {
@@ -275,6 +276,13 @@ export function reconstructHand(parsed: ParsedHand): ReconstructedHand {
   let allInSeen = false;
   for (const a of parsed.actions) {
     dealTo(a.street);
+    // GG records a "fold" for players already all-in (e.g. all-in from posting a blind): a forfeit.
+    const self = state.players.find((p) => p.id === a.player);
+    if (a.type === 'fold' && self?.allIn && !self.folded) {
+      statesBefore.push(state);
+      state = forfeitAllIn(state, a.player);
+      continue;
+    }
     const actor = state.players[state.toAct];
     if (!actor || actor.id !== a.player) throw new HandParseError(`Line ${a.line}: expected ${actor?.id ?? 'no one'} to act, history says ${a.player}`, parsed.handId, a.line);
     statesBefore.push(state);

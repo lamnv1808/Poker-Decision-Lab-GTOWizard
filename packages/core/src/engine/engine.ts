@@ -203,6 +203,16 @@ function canStillAct(p: PlayerState): boolean {
   return !p.folded && !p.allIn;
 }
 
+/**
+ * The amount this player must have in front of them to stay in: the current bet, capped at
+ * the most any live opponent can put in. Nobody has to match chips an opponent cannot cover
+ * (e.g. facing only a big blind that is all-in for less, a call matches that amount).
+ */
+function matchTarget(state: HandState, p: PlayerState): number {
+  const cover = Math.max(0, ...state.players.filter((o) => o !== p && !o.folded).map((o) => o.streetCommitted + o.stack));
+  return Math.min(state.currentBet, cover);
+}
+
 /** Find the next player (starting at `from`, inclusive if `inclusive`) who must act. */
 function nextToAct(state: HandState, from: number, inclusive: boolean): number {
   const n = state.players.length;
@@ -210,7 +220,9 @@ function nextToAct(state: HandState, from: number, inclusive: boolean): number {
     const idx = (from + k) % n;
     const p = state.players[idx]!;
     if (!canStillAct(p)) continue;
-    if (!p.hasActed || p.streetCommitted < state.currentBet) return idx;
+    if (p.streetCommitted < matchTarget(state, p)) return idx;
+    // Unacted but already matched (e.g. the BB option): only a decision if someone else can still act.
+    if (!p.hasActed && state.players.some((o) => o !== p && canStillAct(o))) return idx;
   }
   return -1;
 }
@@ -222,7 +234,7 @@ export function activePlayers(state: HandState): PlayerState[] {
 export function legalActions(state: HandState): LegalActions | null {
   if (state.complete || state.awaitingBoard || state.toAct < 0) return null;
   const p = state.players[state.toAct]!;
-  const toCall = Math.max(0, state.currentBet - p.streetCommitted);
+  const toCall = Math.max(0, matchTarget(state, p) - p.streetCommitted);
   const callAmount = Math.min(toCall, p.stack);
   const maxRaiseTo = p.streetCommitted + p.stack;
   const othersCanAct = state.players.some((o) => o !== p && canStillAct(o));
@@ -314,6 +326,23 @@ export function applyAction(prev: HandState, action: PlayerAction): HandState {
   return state;
 }
 
+/**
+ * Forfeit by a player who is already all-in (hand histories record this, e.g. a player
+ * all-in from posting a blind who then "folds"). Their chips stay in the pot as dead money.
+ */
+export function forfeitAllIn(prev: HandState, playerId: string): HandState {
+  const state = clone(prev);
+  const p = state.players.find((x) => x.id === playerId);
+  if (!p || !p.allIn || p.folded) throw new IllegalActionError('Only an all-in player can forfeit out of turn');
+  p.folded = true;
+  state.history.push({ street: state.street, playerId, type: 'fold', amount: 0, added: 0, allIn: true });
+  if (state.toAct < 0 || !legalActions(state)) {
+    state.toAct = nextToAct(state, 0, true);
+  }
+  settleIfRoundOver(state);
+  return state;
+}
+
 function returnUncalled(state: HandState): void {
   const commits = state.players.map((p) => p.streetCommitted);
   const max = Math.max(...commits);
@@ -390,9 +419,15 @@ export function dealNextStreet(prev: HandState, cards: readonly Card[]): HandSta
   return state;
 }
 
-/** Build main/side pots from contributions. Antes are dead money in the main pot. */
+/**
+ * Build main/side pots from contributions.
+ * Per-player antes count toward each player's contribution (as on GGPoker), so a short
+ * all-in stack wins at most its own total from each opponent. A big-blind ante is posted
+ * on behalf of the whole table and goes to the main pot as dead money.
+ */
 export function computePots(state: HandState): Pot[] {
-  const contrib = state.players.map((p) => ({ id: p.id, amt: p.totalCommitted, folded: p.folded }));
+  const antesInLevels = state.config.anteMode === 'each';
+  const contrib = state.players.map((p) => ({ id: p.id, amt: p.totalCommitted + (antesInLevels ? p.anteCommitted : 0), folded: p.folded }));
   const levels = [...new Set(contrib.filter((c) => !c.folded && c.amt > 0).map((c) => c.amt))].sort((a, b) => a - b);
   const pots: Pot[] = [];
   let prev = 0;
@@ -409,7 +444,7 @@ export function computePots(state: HandState): Pot[] {
     const live = contrib.filter((c) => !c.folded).map((c) => c.id);
     pots.push({ amount: 0, eligible: live });
   }
-  pots[0]!.amount += state.deadAntes;
+  if (!antesInLevels) pots[0]!.amount += state.deadAntes;
   pots[pots.length - 1]!.amount += leftover;
   // merge adjacent pots with identical eligibility
   const merged: Pot[] = [];

@@ -60,6 +60,50 @@ describe('blinds and antes', () => {
     expect(playerById(s, 'p0').allIn).toBe(true);
     expect(playerById(s, 'p1').allIn).toBe(true);
     expect(s.currentBet).toBe(1000);
+    // the button only has to match what the all-in blinds can cover
+    expect(legalActions(s)!.toCall).toBe(700);
+    expect(legalActions(s)!.canRaise).toBe(false); // both blinds are all-in: call or fold only
+  });
+});
+
+describe('real-history edge cases', () => {
+  it('limpers still pay the full BB when a short BB is all-in but others have chips', () => {
+    let s = createHand(table([50000, 850, 50000]));
+    expect(legalActions(s)!.toCall).toBe(1000); // BTN: SB can still cover the full blind
+    s = act(s, 'call');
+    expect(legalActions(s)!.toCall).toBe(500); // SB completes to the full BB
+  });
+  it('heads-up against an all-in short BB, the SB only matches the posted amount', () => {
+    let s = createHand(table([50000, 700]));
+    expect(legalActions(s)!.toCall).toBe(200);
+    s = act(s, 'call');
+    expect(s.toAct).toBe(-1);
+    expect(s.awaitingBoard).toBe(true);
+  });
+  it('a matched player need not act when everyone else is all-in (short all-in call of the BB)', () => {
+    let s = createHand(table([50000, 50000, 3000]));
+    s = act(s, 'call'); // BTN calls all-in? no: BTN has 3000, calls 1000
+    s = act(s, 'fold'); // SB
+    // BB option remains because BTN can still act? BTN is not all-in, so BB acts
+    expect(toActId(s)).toBe('p1');
+  });
+  it('ends betting when the only other live player is all-in for less than the big blind', () => {
+    let s = createHand(table([50000, 50000, 600]));
+    s = act(s, 'call'); // BTN all-in for 600 < BB
+    s = act(s, 'fold'); // SB folds
+    expect(s.toAct).toBe(-1);
+    expect(s.awaitingBoard).toBe(true);
+    // BB's unmatched 400 is returned
+    expect(playerById(s, 'p1').streetCommitted).toBe(600);
+  });
+  it('per-player antes count toward side-pot levels', () => {
+    let s = createHand(table([50000, 50000, 700], { ante: 100, anteMode: 'each' }));
+    s = act(s, 'call'); // BTN all-in: 100 ante + 600
+    s = act(s, 'fold');
+    const pots = computePots(s);
+    // main pot: 700 from each of BTN and BB (100 ante + 600) + SB 100 ante + 500 SB = 2000
+    expect(pots[0]).toEqual({ amount: 2000, eligible: ['p1', 'p2'] });
+    expect(pots.reduce((a, p) => a + p.amount, 0)).toBe(totalPot(s));
   });
 });
 
