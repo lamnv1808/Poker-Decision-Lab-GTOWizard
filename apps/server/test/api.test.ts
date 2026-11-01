@@ -172,8 +172,8 @@ describe('next test picker', () => {
     const v = await agent.post('/api/runs/next').send({ kind: 'villain', module: '11' }).expect(201);
     expect(v.body.scenario.mode).toBe('villain');
     expect(v.body.scenario.module).toBe('11');
-    const rated = await agent.post('/api/runs/next').send({ kind: 'hero', ratedOnly: true }).expect(201);
-    expect(['MATH_VERIFIED', 'SOLVER_VERIFIED', 'COACH_REVIEWED']).toContain(rated.body.scenario.source.classification);
+    // assumed-range models are Fundamentals; no hero scenario is solver- or coach-verified yet
+    expect((await agent.post('/api/runs/next').send({ kind: 'hero', ratedOnly: true })).status).toBe(404);
     expect((await agent.post('/api/runs/next').send({ kind: 'hero', module: '99' })).status).toBe(404);
   });
 });
@@ -347,5 +347,19 @@ describe('postflop GTO quiz', () => {
     }
     const spot = await agent.get('/api/gto/postflop/spot').expect(200);
     expect((await agent.post('/api/gto/postflop/answer').send({ token: spot.body.token.slice(0, -3) + 'abc', actionIndex: 0, clientAttemptId: cid() })).status).toBe(400);
+  });
+});
+
+describe('exact math facts', () => {
+  it('required equity excludes chips Hero cannot win when calling all-in for less', async () => {
+    const { mathFacts } = await import('../src/runs');
+    const { createHand, applyAction } = await import('@pdl/core');
+    // Hero (BB) has 10BB; SB shoves 30BB. Hero can only win 10 + 10 = 20BB total.
+    let s = createHand({ smallBlind: 500, bigBlind: 1000, ante: 0, anteMode: 'none', players: [{ id: 'SB', stack: 30000 }, { id: 'BB', stack: 10000 }] });
+    s = applyAction(s, { type: 'raise', amount: 30000 });
+    const f = mathFacts(s, 1000)!;
+    // call 9BB to win a 20BB pot → 45%, not 9/(31+9) = 22.5%
+    expect(f.requiredEquityPct).toBe(45);
+    expect(f.potOddsToOne).toBeCloseTo(11 / 9, 2);
   });
 });

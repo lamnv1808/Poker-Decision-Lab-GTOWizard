@@ -316,7 +316,6 @@ export function reconstructHand(parsed: ParsedHand): ReconstructedHand {
   if (parsed.totalPot !== null && parsed.totalPot !== potComputed) {
     throw new HandParseError(`Reconstructed pot ${potComputed} ≠ history total ${parsed.totalPot}`, parsed.handId);
   }
-  void computePots;
   return {
     parsed,
     table,
@@ -381,7 +380,8 @@ export function reviewSpots(h: ReconstructedHand): ReviewSpot[] {
       facts: {
         potBB: potBefore / bb,
         toCallBB: l.toCall / bb,
-        requiredEquityPct: l.toCall > 0 ? Math.round((l.callAmount / (potBefore + l.callAmount)) * 1000) / 10 : null,
+        // only the pot Hero can win counts (all-in for less excludes the unmatched excess)
+        requiredEquityPct: l.toCall > 0 ? Math.round((l.callAmount / computePots(applyAction(s, { type: 'call' })).filter((p) => p.eligible.includes(hero)).reduce((t, p) => t + p.amount, 0)) * 1000) / 10 : null,
         sprAtStreet: potBefore > 0 && a.street !== 'preflop' ? Math.round((eff / potBefore) * 100) / 100 : null,
         effectiveStackBB: Math.round((eff / bb) * 100) / 100,
         mdfPct: l.toCall > 0 ? Math.round(((potBefore - l.toCall) / potBefore) * 1000) / 10 : null,

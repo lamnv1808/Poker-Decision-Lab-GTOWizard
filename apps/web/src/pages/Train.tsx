@@ -10,7 +10,7 @@ import { useStartRun } from './ScenarioList';
 
 type Filter = 'due' | 'weak' | 'bookmarked' | 'missed' | 'new' | 'mixed';
 interface QueueItem {
-  kind: 'scenario' | 'quiz' | 'imported';
+  kind: 'scenario' | 'quiz' | 'imported' | 'real' | 'concept';
   ref: string;
   reason: string;
   dueAt?: string | null;
@@ -35,7 +35,9 @@ export function Train() {
   }, [filter]);
   const open = (i: QueueItem) => {
     if (i.kind === 'scenario') void start(i.ref, mode).catch(setError);
-    else if (i.kind === 'quiz') nav(i.ref === 'gto' ? '/gto' : `/math?kind=${i.ref}`);
+    else if (i.kind === 'quiz') nav(i.ref === 'gto' ? '/gto' : i.ref === 'gtopf' ? '/gto?street=postflop' : i.ref === 'potodds' ? '/fundamentals' : `/math?kind=${i.ref}`);
+    else if (i.kind === 'real') nav(`/replay?decision=${i.ref}`);
+    else if (i.kind === 'concept') nav(`/replay?topic=${i.ref}`);
     else nav(`/hands/${i.ref.split(':')[0]}?spot=${i.ref.split(':')[1]}`);
   };
   return (
@@ -75,6 +77,8 @@ export function Train() {
                     </div>
                   )}
                   {i.kind === 'quiz' && <span className="text-sm">{i.ref === 'gto' ? t('nav.gto') : `${t('nav.math')} · ${t(`quiz.${i.ref}`)}`}</span>}
+                  {i.kind === 'concept' && <span className="text-sm">{t('replay.conceptReview')} · {t(`topic.${i.ref}`)}</span>}
+                  {i.kind === 'real' && <span className="text-sm">{t('nav.replay')}</span>}
                   {i.kind === 'imported' && <span className="text-sm">{t('nav.hands')} · #{i.hand?.externalHandId} · {t('hands.spot')} {Number(i.ref.split(':')[1]) + 1}</span>}
                   <div className="text-[11px] text-ink-400">
                     {i.mastery != null && <>{t('list.mastery')} {Math.round(i.mastery * 100)}% · </>}

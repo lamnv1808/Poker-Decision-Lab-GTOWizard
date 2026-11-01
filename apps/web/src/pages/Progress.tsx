@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api';
+import { LearningMetrics } from '../components/LearningMetrics';
 import { Empty, ErrorNote, Panel, Spinner } from '../components/ui';
 import { useT } from '../i18n';
 
@@ -53,6 +54,7 @@ export function ProgressPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">{t('nav.progress')}</h1>
       <p className="text-xs text-ink-400">{t('progress.note')}</p>
+      <LearningMetrics />
       <Panel title={t('progress.ratingOverTime')}>
         {overall.length < 2 ? <Empty>{t('progress.noData')}</Empty> : (
           <div className="h-64" data-testid="rating-chart">

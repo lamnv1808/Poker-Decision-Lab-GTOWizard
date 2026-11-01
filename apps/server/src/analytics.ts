@@ -160,7 +160,7 @@ analyticsRouter.get('/curriculum', async (req, res) => {
       return {
         ...m,
         scenarioCount: sc.length,
-        ratedScenarioCount: sc.filter((v) => ['MATH_VERIFIED', 'SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification)).length,
+        ratedScenarioCount: sc.filter((v) => ['SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification)).length,
         attempted: done.length,
         masteryPct: mastery === null ? null : Math.round(mastery * 100),
         reviewDue: sc.filter((v) => (reviews.get(v.scenarioId)?.dueAt ?? now) < now && reviews.has(v.scenarioId)).length,

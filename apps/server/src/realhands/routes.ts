@@ -59,8 +59,8 @@ async function loadDecision(userId: string, id: string) {
  */
 function questionPayload(d: Awaited<ReturnType<typeof loadDecision>>['d'], rec: ReconstructedHand, snap: NonNullable<ReturnType<typeof snapshotForHeroAction>>) {
   const bb = rec.parsed.bigBlind;
-  const missing = ['payout structure (ICM)', 'opponent tendencies'];
-  if (d.format === 'PKO') missing.push('bounty sizes (not in hand history)');
+  const missing = ['payouts', 'tendencies'];
+  if (d.format === 'PKO') missing.push('bounties');
   return {
     decisionId: d.id,
     street: d.street,

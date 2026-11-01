@@ -37,7 +37,7 @@ export function PokerTable({ state, heroId, bigBlind, showBB, labels = {}, meta 
   const fmt = (c: number) => fmtAmount(c, bigBlind, showBB);
 
   return (
-    <div className="relative mx-auto aspect-[1/1] w-full max-w-3xl select-none min-[480px]:aspect-[4/3] sm:aspect-[2/1]" data-testid="poker-table">
+    <div className="relative mx-auto aspect-[1/1] w-full max-w-3xl select-none [overflow-x:clip] min-[480px]:aspect-[4/3] sm:aspect-[2/1]" data-testid="poker-table">
       <div className="felt absolute inset-[9%_5%_11%_5%] rounded-[50%]" />
       {/* centre: board + pot */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 sm:gap-2">
@@ -59,7 +59,7 @@ export function PokerTable({ state, heroId, bigBlind, showBB, labels = {}, meta 
       {state.players.map((p, i) => {
         const k = (i - heroIdx + n) % n;
         const angle = Math.PI / 2 + (k * 2 * Math.PI) / n;
-        const x = 50 + 44 * Math.cos(angle);
+        const x = 50 + (n >= 7 ? 40 : 44) * Math.cos(angle);
         const y = 50 + 40 * Math.sin(angle);
         const bx = 50 + 27 * Math.cos(angle);
         const by = 50 + 24 * Math.sin(angle);

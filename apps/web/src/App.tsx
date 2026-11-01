@@ -11,6 +11,9 @@ import { HandDetailPage, HandsPage } from './pages/Hands';
 import { HistoryPage } from './pages/History';
 import { LeaksPage } from './pages/Leaks';
 import { Launcher } from './pages/Launcher';
+import { AnnotatePage } from './pages/Annotate';
+import { FundamentalsPage } from './pages/Fundamentals';
+import { ReplayPage } from './pages/Replay';
 import { MathLab } from './pages/MathLab';
 import { ProgressPage } from './pages/Progress';
 import { RunPage } from './pages/RunPage';
@@ -47,6 +50,10 @@ export function App() {
         <Route path="villain/browse" element={<ScenarioList mode="villain" />} />
         <Route path="run/:id" element={<RunPage />} />
         <Route path="math" element={<MathLab />} />
+        <Route path="fundamentals" element={<FundamentalsPage />} />
+        <Route path="replay" element={<ReplayPage kind="replay" />} />
+        <Route path="strategy" element={<ReplayPage kind="strategy" />} />
+        <Route path="annotate" element={<AnnotatePage />} />
         <Route path="gto" element={<GtoQuiz />} />
         <Route path="gto/audit" element={<GtoAudit />} />
         <Route path="hands" element={<HandsPage />} />

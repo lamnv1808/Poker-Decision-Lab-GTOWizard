@@ -127,9 +127,9 @@ export function ActionBar({ state, legal, bigBlind, showBB, disabled, onAct, sho
           type="button"
           disabled={disabled || !canSize || !valid}
           onClick={() => act(sizeAction(amount))}
-          className={`rounded-lg py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-25 ${isAllIn ? 'bg-gold text-ink-950 hover:brightness-110' : 'bg-felt-500 hover:bg-felt-600'}`}
+          className={`rounded-lg py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-25 ${isAllIn && canSize ? 'bg-gold text-ink-950 hover:brightness-110' : 'bg-felt-500 hover:bg-felt-600'}`}
         >
-          {isAllIn ? `${t('action.allIn')} ${fmt(legal.maxRaiseTo)}` : `${sizeVerb} ${fmt(amount)}`}
+          {!canSize ? t('act.raise') : isAllIn ? `${t('action.allIn')} ${fmt(legal.maxRaiseTo)}` : `${sizeVerb} ${fmt(amount)}`}
         </button>
       </div>
       {showConfidence && (

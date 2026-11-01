@@ -18,6 +18,8 @@ import {
   publicState,
   startScenario,
   isRunout,
+  applyAction,
+  computePots,
 } from '@pdl/core';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -59,12 +61,18 @@ export function mathFacts(state: HandState, bb: number, action?: PlayerAction) {
   const live = state.players.filter((p) => !p.folded && p.id !== me.id);
   const eff = Math.min(me.stack, Math.max(0, ...live.map((p) => p.stack + p.streetCommitted - me.streetCommitted)));
   const r = (x: number) => Math.round(x * 10) / 10;
+  let winnable: number | null = null;
+  if (legal.toCall > 0) {
+    const after = applyAction(state, { type: 'call' });
+    winnable = computePots(after).filter((p) => p.eligible.includes(me.id)).reduce((s, p) => s + p.amount, 0);
+  }
   const facts: Record<string, number | null> = {
     potBB: r(legal.pot / bb),
     toCallBB: r(legal.toCall / bb),
     effectiveStackBB: r(eff / bb),
-    requiredEquityPct: legal.toCall > 0 ? r((legal.callAmount / (legal.pot + legal.callAmount)) * 100) : null,
-    potOddsToOne: legal.toCall > 0 ? Math.round((legal.pot / legal.callAmount) * 100) / 100 : null,
+    // Price uses only the pot Hero can win: when Hero calls all-in for less, the excess is not winnable.
+    requiredEquityPct: winnable !== null ? r((legal.callAmount / winnable) * 100) : null,
+    potOddsToOne: winnable !== null ? Math.round(((winnable - legal.callAmount) / legal.callAmount) * 100) / 100 : null,
     // MDF only applies when facing a real bet (not merely the blinds preflop)
     mdfPct: legal.toCall > 0 && (state.street !== 'preflop' || state.currentBet > bb) ? r(((legal.pot - legal.toCall) / legal.pot) * 100) : null,
     spr: state.street !== 'preflop' && legal.pot > 0 ? Math.round((eff / legal.pot) * 100) / 100 : null,
@@ -199,7 +207,7 @@ runsRouter.post('/next', async (req, res) => {
   });
   let pool = versions
     .filter((v) => (body.difficulty ? v.difficulty === body.difficulty : true))
-    .filter((v) => (body.ratedOnly ? ['MATH_VERIFIED', 'SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification) : true))
+    .filter((v) => (body.ratedOnly ? ['SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification) : true))
     .map((v) => v.scenarioId);
   if (pool.length > 1 && body.excludeScenarioId) pool = pool.filter((id) => id !== body.excludeScenarioId);
   if (!pool.length) throw new HttpError(404, 'no_scenarios', 'No scenarios match these filters');
@@ -435,7 +443,7 @@ scenariosRouter.get('/', async (req, res) => {
         skills: v.skills,
         concepts: v.concepts,
         classification: v.source.classification,
-        rated: ['MATH_VERIFIED', 'SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification),
+        rated: ['SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification),
         bookmarked: bookmarks.has(v.scenarioId),
         attempted: attemptedScenarios.has(v.scenarioId),
         mastery: r?.mastery ?? null,

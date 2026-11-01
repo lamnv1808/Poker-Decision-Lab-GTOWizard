@@ -48,6 +48,12 @@ export function SettingsPage() {
         {row(t('settings.strategy'), <Toggle label={t('settings.strategy')} value={p.strategyView} onChange={(v) => void save({ strategyView: v })} options={[{ value: 'gto', label: t('fb.gto') }, { value: 'exploit', label: t('fb.exploit') }]} />)}
         {row(t('settings.units'), <Toggle label={t('settings.units')} value={p.showBB ? 'bb' : 'chips'} onChange={(v) => void save({ showBB: v === 'bb' })} options={[{ value: 'bb', label: 'BB' }, { value: 'chips', label: t('settings.chips') }]} />)}
       </Panel>
+      <Panel title={t('export.title')}>
+        <div className="flex flex-wrap gap-2 text-sm">
+          <a href="/api/export" download className="rounded-lg border border-ink-600 px-3 py-1.5 hover:border-accent" data-testid="export">{t('export.json')}</a>
+          <a href="/api/export?raw=1" download className="rounded-lg border border-ink-600 px-3 py-1.5 hover:border-accent">{t('export.json')} + {t('export.raw')}</a>
+        </div>
+      </Panel>
       <Panel title={t('settings.about')}>
         <p className="text-sm text-ink-300">{t('settings.aboutText')}</p>
       </Panel>
