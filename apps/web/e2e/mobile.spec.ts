@@ -17,3 +17,16 @@ test('mobile: navigation, table and action bar fit the screen', async ({ page })
   await expect(page.getByTestId('feedback')).toBeVisible();
   await page.screenshot({ path: 'test-results/mobile-feedback.png', fullPage: true });
 });
+
+test('mobile: Today and My Leaks fit the screen', async ({ page }) => {
+  await register(page, 'MobileToday');
+  await waitForContent(page);
+  for (const path of ['/today', '/leaks']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  }
+  await page.screenshot({ path: 'test-results/mobile-leaks.png', fullPage: true });
+});

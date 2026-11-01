@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { Empty, ErrorNote, GradeBadge, Panel, Spinner, Stat, Toggle } from '../components/ui';
-import { fmtNum, fmtPct } from '../format';
+import { fmtNum, fmtPct, loc } from '../format';
 import { useT } from '../i18n';
 import { useApp } from '../store';
-import type { Grade } from '../types';
+import type { Grade, Localized } from '../types';
 
 type Focus = 'fullhand' | 'preflop' | 'postflop' | 'math' | 'villain' | 'replay';
 const FOCUS: Focus[] = ['fullhand', 'preflop', 'postflop', 'math', 'villain', 'replay'];
@@ -29,6 +29,7 @@ interface Summary {
   ratingDelta: { strategy: number | null; fundamentals: number | null };
   mistakes: { type: string | null; grade: Grade | null; evLossBB: number | null; at: string }[];
   recommendation: string | null;
+  daily: { planned: number; done: number; leaks: { leakKey: string; label: Localized; evidence: string; served: number; total: number; correct: number }[] } | null;
 }
 
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
@@ -147,7 +148,7 @@ export function MixedRunner() {
 
 export function MixedSummary() {
   const { id } = useParams();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [s, setS] = useState<Summary | null>(null);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
@@ -165,6 +166,19 @@ export function MixedSummary() {
         <Stat label={t('dash.strategyRating')} value={d(s.ratingDelta.strategy)} sub={t('mixed.change')} />
         <Stat label={t('dash.fundamentalsRating')} value={d(s.ratingDelta.fundamentals)} sub={t('mixed.change')} />
       </div>
+      {s.daily && (
+        <Panel title={t('today.summary', { done: s.daily.done, n: s.daily.planned })}>
+          <ul className="space-y-1 text-sm" data-testid="daily-summary">
+            {s.daily.leaks.map((l) => (
+              <li key={l.leakKey} className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{loc(l.label, lang)}</span>
+                <span className="tabular text-ink-300">{l.total ? t('today.drillResult', { c: l.correct, n: l.total }) : t('today.drillUngraded', { n: l.served })}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] text-ink-500">{t('today.summaryNote')}</p>
+        </Panel>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <Panel title={t('mixed.byType')}>
           {s.byType.length === 0 ? <Empty>{t('mixed.nothing')}</Empty> : (

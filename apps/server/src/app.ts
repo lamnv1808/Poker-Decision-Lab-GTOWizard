@@ -8,6 +8,7 @@ import { historyRouter } from './history';
 import { realLeaksRouter } from './leakEngine';
 import { memoryRouter } from './leakMemory';
 import { dailyRouter } from './daily';
+import { improvementRouter } from './improvement';
 import { invitesRouter } from './invites';
 import { trainingProgressRouter } from './trainingProgress';
 import { analyticsRouter } from './analytics';
@@ -85,6 +86,7 @@ export function createApp() {
   app.use('/api/leaks/real', realLeaksRouter);
   app.use('/api/memory', memoryRouter);
   app.use('/api/daily', dailyRouter);
+  app.use('/api/improvement', improvementRouter);
   app.use('/api/invites', invitesRouter);
   app.use('/api/training-progress', trainingProgressRouter);
   app.use('/api/sim', simRouter);

@@ -136,3 +136,27 @@ describe('Today plan (D4)', () => {
     expect(plan.focus.some((f: { leakKey: string }) => f.leakKey === 'pattern:rfi:UTG')).toBe(false);
   });
 });
+
+describe('improvement 7/30/60 (D5)', () => {
+  it('reports real play and training separately, with honest verdicts', async () => {
+    const r = (await a.agent.get('/api/improvement').expect(200)).body;
+    expect(r.realPlay.periods.map((p: { days: number }) => p.days)).toEqual([7, 30, 60]);
+    // anchored at the last hand played, not at today
+    const latest = await prisma.realDecision.findFirstOrThrow({ where: { userId: a.id, status: 'accepted' }, orderBy: { playedAt: 'desc' } });
+    expect(new Date(r.realPlay.anchor).getTime() - latest.playedAt!.getTime()).toBe(1000);
+    for (const p of r.realPlay.periods) {
+      expect(['better', 'worse', 'noClearChange', 'insufficient']).toContain(p.solver.verdict);
+      if (p.solver.current.n < 20 || p.solver.previous.n < 20) expect(p.solver.verdict).toBe('insufficient');
+    }
+    // training: the GTO answer and the replay from earlier tests are in the current 7 days
+    const t7 = r.training.periods[0];
+    expect(t7.attempts.current).toBeGreaterThanOrEqual(2);
+    expect(t7.dailySessions).toBeGreaterThanOrEqual(1);
+    expect(t7.drills.some((d: { leakKey: string }) => d.leakKey === 'pf:sbShove:tooTight:6.5–10')).toBe(true);
+    // a new user has nothing to compare
+    const b = await newUser('impB');
+    const e = (await b.agent.get('/api/improvement').expect(200)).body;
+    expect(e.realPlay.anchor).toBeNull();
+    expect(e.training.periods.every((p: { errors: { verdict: string } }) => p.errors.verdict === 'insufficient')).toBe(true);
+  });
+});

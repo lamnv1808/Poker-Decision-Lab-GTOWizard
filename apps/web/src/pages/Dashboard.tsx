@@ -49,7 +49,8 @@ export function Dashboard() {
         <h1 className="text-xl font-bold">{t('nav.dashboard')}</h1>
         <div className="flex gap-2">
           {d.reviewDue > 0 && <Link to="/train" className="rounded-lg border border-gold/50 px-3 py-1.5 text-sm text-gold">{t('dash.reviewDue', { n: d.reviewDue })}</Link>}
-          <Link to="/train" className="rounded-lg bg-felt-500 px-3 py-1.5 text-sm font-semibold hover:bg-felt-600">{t('dash.startTraining')}</Link>
+          <Link to="/today" className="rounded-lg bg-felt-500 px-3 py-1.5 text-sm font-semibold hover:bg-felt-600" data-testid="dash-today">{t('dash.today')}</Link>
+          <Link to="/train" className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm font-semibold hover:border-ink-400">{t('dash.startTraining')}</Link>
         </div>
       </div>
       <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_1fr]" data-testid="competency">

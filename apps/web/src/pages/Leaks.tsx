@@ -5,6 +5,7 @@ import { loc } from '../format';
 import { useT } from '../i18n';
 import type { Localized } from '../types';
 import { useStartRun } from './ScenarioList';
+import { ImprovementPanel, LeakMemoryPanel } from './LeakMemory';
 
 interface Leak {
   leak: string;
@@ -66,8 +67,12 @@ export function LeaksPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-bold">{t('nav.leaks')}</h1>
-        <p className="text-sm text-ink-300">{t('leak.intro')}</p>
+        <p className="text-sm text-ink-300">{t('leak.pageIntro')}</p>
       </div>
+      <LeakMemoryPanel />
+      <ImprovementPanel />
+      <h2 className="pt-2 text-lg font-semibold">{t('leak.trainingTitle')}</h2>
+      <p className="text-sm text-ink-300">{t('leak.intro')}</p>
       <Panel title={t('leak.ranked')}>{ranked.length ? <ul className="space-y-2">{ranked.map(row)}</ul> : <Empty>{t('leak.noneRanked')}</Empty>}</Panel>
       {pending.length > 0 && <Panel title={t('leak.pending')}><ul className="space-y-2">{pending.map(row)}</ul></Panel>}
     </div>
