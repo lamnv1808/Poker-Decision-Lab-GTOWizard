@@ -21,6 +21,7 @@ import {
   reconstructHand,
   reviewSrs,
   snapshotForHeroAction,
+  pushFoldChoiceVerdict,
 } from '@pdl/core';
 import { Prisma } from '@prisma/client';
 import { Router } from 'express';
@@ -313,6 +314,15 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
   }
   const facts = mathFacts(snap.state, bb, body.action);
   const topics = d.topics as Topic[];
+  // exact heads-up push/fold spot: show the solver's chip-EV verdict for the learner's answer
+  // (informational; it does not grade the replay or move any rating)
+  const pfa = d.pfAudit as { role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string } | null;
+  let pushFold: ReturnType<typeof pushFoldChoiceVerdict> | null = null;
+  if (pfa) {
+    const behind = (snap.state.players.find((p) => p.id === snap.heroId)?.stack ?? 0) + (snap.state.players.find((p) => p.id === snap.heroId)?.streetCommitted ?? 0);
+    const choice = body.action.type === 'fold' ? 'fold' : pfa.role === 'bbCall' ? (body.action.type === 'call' ? 'aggressive' : 'other') : (body.action.type === 'raise' || body.action.type === 'bet') && (body.action.amount ?? 0) >= behind * 0.9 ? 'aggressive' : 'other';
+    pushFold = pushFoldChoiceVerdict(pfa, choice, d.formatGroup);
+  }
   const result = {
     decisionId: d.id,
     street: d.street,
@@ -322,6 +332,7 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
     facts,
     topics: topics.map((t) => ({ key: t, label: TOPIC_LABELS[t] })),
     strategy,
+    pushFold,
     reasoning: body.reasoning,
     confidence: body.confidence,
   };

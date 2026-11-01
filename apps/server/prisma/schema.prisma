@@ -19,28 +19,30 @@ model User {
   displayName  String
   createdAt    DateTime @default(now())
 
-  sessions       Session[]
-  preference     UserPreference?
+  sessions         Session[]
+  preference       UserPreference?
   trainingSessions TrainingSession[]
-  runs           ScenarioRun[]
-  attempts       DecisionAttempt[]
-  ratings        Rating[]
-  ratingHistory  RatingHistory[]
+  runs             ScenarioRun[]
+  attempts         DecisionAttempt[]
+  ratings          Rating[]
+  ratingHistory    RatingHistory[]
   leakObservations LeakObservation[]
-  reviewItems    ReviewItem[]
-  bookmarks      Bookmark[]
-  notes          UserNote[]
-  importedFiles  ImportedFile[]
-  tournaments    Tournament[]
-  hands          HandHistory[]
-  importErrors   ImportError[]
-  realHands      RealHand[]
-  realDecisions  RealDecision[]
-  annotations    Annotation[] @relation("AnnotationOwner")
-  simHands       SimHand[]
-  ratingModel    RatingModelState?
-  scenarioHistory ScenarioHistory[]
-  invitesCreated InviteCode[] @relation("InviteCreator")
+  reviewItems      ReviewItem[]
+  bookmarks        Bookmark[]
+  notes            UserNote[]
+  importedFiles    ImportedFile[]
+  tournaments      Tournament[]
+  hands            HandHistory[]
+  importErrors     ImportError[]
+  realHands        RealHand[]
+  realDecisions    RealDecision[]
+  annotations      Annotation[]      @relation("AnnotationOwner")
+  simHands         SimHand[]
+  ratingModel      RatingModelState?
+  scenarioHistory  ScenarioHistory[]
+  invitesCreated   InviteCode[]      @relation("InviteCreator")
+  leakMemories     LeakMemory[]
+  leakMemoryState  LeakMemoryState?
 }
 
 model Session {
@@ -56,16 +58,16 @@ model Session {
 }
 
 model UserPreference {
-  userId          String   @id
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  language        String   @default("en") // en | vi
-  defaultMode     String   @default("practice") // practice | rated
-  explanationView String   @default("quick") // quick | deep
-  strategyView    String   @default("gto") // gto | exploit
-  showBB          Boolean  @default(true)
+  userId          String    @id
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language        String    @default("en") // en | vi
+  defaultMode     String    @default("practice") // practice | rated
+  explanationView String    @default("quick") // quick | deep
+  strategyView    String    @default("gto") // gto | exploit
+  showBB          Boolean   @default(true)
   /// "Reset completion history": history before this instant is ignored for selection (nothing is deleted)
   historyResetAt  DateTime?
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime  @updatedAt
 }
 
 model SkillCategory {
@@ -99,9 +101,9 @@ model Scenario {
 }
 
 model ScenarioVersion {
-  id               String   @id @default(uuid())
+  id               String         @id @default(uuid())
   scenarioId       String
-  scenario         Scenario @relation(fields: [scenarioId], references: [id])
+  scenario         Scenario       @relation(fields: [scenarioId], references: [id])
   version          Int
   contentHash      String
   definition       Json
@@ -111,8 +113,8 @@ model ScenarioVersion {
   skills           String[]
   concepts         String[]
   validationReport Json
-  validatedAt      DateTime @default(now())
-  createdAt        DateTime @default(now())
+  validatedAt      DateTime       @default(now())
+  createdAt        DateTime       @default(now())
 
   nodes    DecisionNode[]
   runs     ScenarioRun[]
@@ -130,7 +132,7 @@ model DecisionNode {
   skills            String[]
   concepts          String[]
   leakOpportunities String[]
-  hasModel          Boolean @default(false)
+  hasModel          Boolean         @default(false)
 
   options  StrategyOption[]
   attempts DecisionAttempt[]
@@ -140,21 +142,21 @@ model DecisionNode {
 
 /// An answer option at a decision node together with its strategy reference.
 model StrategyOption {
-  id             String       @id @default(uuid())
-  decisionNodeId String
-  decisionNode   DecisionNode @relation(fields: [decisionNodeId], references: [id], onDelete: Cascade)
-  optionKey      String
-  actionType     String // fold | check | call | raise | allin | choice
-  sizingMinBB    Float?
-  sizingMaxBB    Float?
-  sizingMinPot   Float?
-  sizingMaxPot   Float?
-  modelKey       String?
-  rubricGrade    String?
+  id              String       @id @default(uuid())
+  decisionNodeId  String
+  decisionNode    DecisionNode @relation(fields: [decisionNodeId], references: [id], onDelete: Cascade)
+  optionKey       String
+  actionType      String // fold | check | call | raise | allin | choice
+  sizingMinBB     Float?
+  sizingMaxBB     Float?
+  sizingMinPot    Float?
+  sizingMaxPot    Float?
+  modelKey        String?
+  rubricGrade     String?
   /// Solver-only fields; null unless the version's source is SOLVER_VERIFIED.
   solverFrequency Float?
   solverEv        Float?
-  correct        Boolean?
+  correct         Boolean?
 
   @@unique([decisionNodeId, optionKey])
 }
@@ -177,18 +179,18 @@ model TrainingSession {
 }
 
 model ScenarioRun {
-  id                String          @id @default(uuid())
+  id                String           @id @default(uuid())
   userId            String
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessionId         String?
   session           TrainingSession? @relation(fields: [sessionId], references: [id])
   scenarioVersionId String
-  scenarioVersion   ScenarioVersion @relation(fields: [scenarioVersionId], references: [id])
+  scenarioVersion   ScenarioVersion  @relation(fields: [scenarioVersionId], references: [id])
   mode              String // practice | rated
-  status            String @default("active") // active | completed
+  status            String           @default("active") // active | completed
   /// Hero actions / answers taken so far; the run state is rebuilt deterministically by replay.
-  steps             Json   @default("[]")
-  startedAt         DateTime @default(now())
+  steps             Json             @default("[]")
+  startedAt         DateTime         @default(now())
   completedAt       DateTime?
 
   attempts DecisionAttempt[]
@@ -198,18 +200,18 @@ model ScenarioRun {
 
 /// Immutable record of one graded (or ungraded) decision. Never updated after insert.
 model DecisionAttempt {
-  id                   String   @id @default(uuid())
+  id                   String           @id @default(uuid())
   userId               String
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   clientAttemptId      String
   sessionId            String?
   session              TrainingSession? @relation(fields: [sessionId], references: [id])
   runId                String?
-  run                  ScenarioRun? @relation(fields: [runId], references: [id])
+  run                  ScenarioRun?     @relation(fields: [runId], references: [id])
   scenarioVersionId    String?
   scenarioVersion      ScenarioVersion? @relation(fields: [scenarioVersionId], references: [id])
   decisionNodeId       String?
-  decisionNode         DecisionNode? @relation(fields: [decisionNodeId], references: [id])
+  decisionNode         DecisionNode?    @relation(fields: [decisionNodeId], references: [id])
   attemptType          String // decision | question | quiz | imported
   itemRef              String // stable reference used for familiarity + review (e.g. scenarioId:nodeKey)
   mode                 String // practice | rated
@@ -222,8 +224,8 @@ model DecisionAttempt {
   evUnit               String?
   score                Float?
   ratingEligible       Boolean
-  ratingApplied        Boolean @default(false)
-  ratingWeight         Float   @default(0)
+  ratingApplied        Boolean          @default(false)
+  ratingWeight         Float            @default(0)
   isError              Boolean
   confidence           Int?
   gradingMethodVersion String
@@ -236,14 +238,14 @@ model DecisionAttempt {
   leakKeys             String[]
   result               Json
   /// fundamentals | replay | strategy — scores are never mixed across tracks
-  track                String   @default("strategy")
+  track                String           @default("strategy")
   /// Hand family (real hands) for familiarity limits and train/assessment separation
   familyId             String?
   responseMs           Int?
   reasoning            String?
   /// Annotation version that graded this attempt (scores from different versions are not comparable)
   annotationId         String?
-  createdAt            DateTime @default(now())
+  createdAt            DateTime         @default(now())
 
   ratingHistory    RatingHistory[]
   leakObservations LeakObservation[]
@@ -258,36 +260,36 @@ model DecisionAttempt {
 }
 
 model Rating {
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  skill      String // overall | preflop | ...
-  rating     Float
-  rd         Float
-  vol        Float
-  games      Int      @default(0)
-  updatedAt  DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     String // overall | preflop | ...
+  rating    Float
+  rd        Float
+  vol       Float
+  games     Int      @default(0)
+  updatedAt DateTime @updatedAt
 
   @@id([userId, skill])
 }
 
 model RatingHistory {
-  id            String          @id @default(uuid())
-  userId        String
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  attemptId     String
-  attempt       DecisionAttempt @relation(fields: [attemptId], references: [id])
-  skill         String
-  ratingBefore  Float
-  rdBefore      Float
-  volBefore     Float
-  ratingAfter   Float
-  rdAfter       Float
-  volAfter      Float
-  weight        Float
-  score         Float
+  id             String          @id @default(uuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attemptId      String
+  attempt        DecisionAttempt @relation(fields: [attemptId], references: [id])
+  skill          String
+  ratingBefore   Float
+  rdBefore       Float
+  volBefore      Float
+  ratingAfter    Float
+  rdAfter        Float
+  volAfter       Float
+  weight         Float
+  score          Float
   opponentRating Float
-  methodVersion String
-  createdAt     DateTime @default(now())
+  methodVersion  String
+  createdAt      DateTime        @default(now())
 
   @@unique([attemptId, skill])
   @@index([userId, skill, createdAt])
@@ -302,28 +304,28 @@ model LeakObservation {
   leakKey   String
   isError   Boolean
   evLossBB  Float?
-  createdAt DateTime @default(now())
+  createdAt DateTime        @default(now())
 
   @@index([userId, leakKey])
 }
 
 model ReviewItem {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   itemType      String // scenario | quiz | imported
   itemRef       String
-  repetitions   Int      @default(0)
-  ease          Float    @default(2.5)
-  intervalDays  Int      @default(0)
+  repetitions   Int       @default(0)
+  ease          Float     @default(2.5)
+  intervalDays  Int       @default(0)
   dueAt         DateTime
-  lastQuality   Int      @default(0)
-  lapses        Int      @default(0)
-  mastery       Float    @default(0)
+  lastQuality   Int       @default(0)
+  lapses        Int       @default(0)
+  mastery       Float     @default(0)
   lastAttemptAt DateTime?
   lastGrade     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([userId, itemType, itemRef])
   @@index([userId, dueAt])
@@ -361,9 +363,9 @@ model ImportedFile {
   sizeBytes      Int
   format         String?
   status         String // completed | failed
-  handsParsed    Int @default(0)
-  handsDuplicate Int @default(0)
-  handsFailed    Int @default(0)
+  handsParsed    Int      @default(0)
+  handsDuplicate Int      @default(0)
+  handsFailed    Int      @default(0)
   createdAt      DateTime @default(now())
 
   hands  HandHistory[]
@@ -387,13 +389,13 @@ model Tournament {
 }
 
 model HandHistory {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   importedFileId String
   importedFile   ImportedFile @relation(fields: [importedFileId], references: [id], onDelete: Cascade)
   tournamentId   String?
-  tournament     Tournament? @relation(fields: [tournamentId], references: [id])
+  tournament     Tournament?  @relation(fields: [tournamentId], references: [id])
   site           String
   externalHandId String
   playedAt       DateTime?
@@ -406,11 +408,11 @@ model HandHistory {
   raw            String
   parsed         Json
   /// Private to the owner unless explicitly shared.
-  shared         Boolean @default(false)
+  shared         Boolean      @default(false)
   /// Heads-up push/fold decision graded against the equilibrium, when the hand contains one.
   gtoAudit       Json?
-  hasGtoSpot     Boolean @default(false)
-  createdAt      DateTime @default(now())
+  hasGtoSpot     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
 
   actions HandAction[]
 
@@ -420,39 +422,39 @@ model HandHistory {
 }
 
 model HandAction {
-  id      String      @id @default(uuid())
-  handId  String
-  hand    HandHistory @relation(fields: [handId], references: [id], onDelete: Cascade)
-  seq     Int
-  street  String
-  player  String
-  type    String
-  amount  Int
-  allIn   Boolean
-  isHero  Boolean
+  id     String      @id @default(uuid())
+  handId String
+  hand   HandHistory @relation(fields: [handId], references: [id], onDelete: Cascade)
+  seq    Int
+  street String
+  player String
+  type   String
+  amount Int
+  allIn  Boolean
+  isHero Boolean
 
   @@unique([handId, seq])
 }
 
 model ImportError {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   importedFileId String
   importedFile   ImportedFile @relation(fields: [importedFileId], references: [id], onDelete: Cascade)
   externalHandId String?
   message        String
   lineNo         Int?
   raw            String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
 }
 
 /// A real hand from the owner's history (Real Hand Source v2 or upload). Private: the raw text,
 /// future streets and showdowns never leave the server.
 model RealHand {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   handId         String
   tournamentId   String?
   tournamentName String?
@@ -465,7 +467,7 @@ model RealHand {
   /// training | assessment (by tournament, latest tournaments held out)
   split          String
   source         String // v2 | upload
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   decisions RealDecision[]
 
@@ -475,33 +477,33 @@ model RealHand {
 
 /// A Hero decision point inside a real hand. `observed` is historical behaviour, not an answer.
 model RealDecision {
-  id           String   @id @default(uuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  externalId   String
-  realHandId   String
-  realHand     RealHand @relation(fields: [realHandId], references: [id], onDelete: Cascade)
-  familyId     String
-  heroActionNo Int
-  street       String
-  status       String // accepted | quarantined
-  issues       Json
-  split        String
-  format       String
-  stackDepthBB Float
-  potBB        Float
-  toCallBB     Float
-  investedBB   Float
-  playersInPot Int
-  multiway     Boolean
-  facingAllIn  Boolean
-  topics       String[]
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalId    String
+  realHandId    String
+  realHand      RealHand  @relation(fields: [realHandId], references: [id], onDelete: Cascade)
+  familyId      String
+  heroActionNo  Int
+  street        String
+  status        String // accepted | quarantined
+  issues        Json
+  split         String
+  format        String
+  stackDepthBB  Float
+  potBB         Float
+  toCallBB      Float
+  investedBB    Float
+  playersInPot  Int
+  multiway      Boolean
+  facingAllIn   Boolean
+  topics        String[]
   /// Supplied review tags (e.g. hero_all_in) describe observed actions: review queue only.
-  reviewTags   String[]
+  reviewTags    String[]
   /// Observed historical action; hidden until the learner submits.
-  observed     Json
+  observed      Json
   /// Pot-odds benchmark (Fundamentals) when the supplied quiz passed the audit.
-  potOdds      Json?
+  potOdds       Json?
   /// Normalized decision context (packages/core realhands/context.ts), for leak analysis
   position      String?
   actionContext String?
@@ -514,9 +516,9 @@ model RealDecision {
   formatGroup   String?
   /// Heads-up push/fold solver verdict for this decision (chip EV), when the spot is an exact subgame
   pfAudit       Json?
-  contextV      Int     @default(0)
-  playedAt     DateTime?
-  createdAt    DateTime @default(now())
+  contextV      Int       @default(0)
+  playedAt      DateTime?
+  createdAt     DateTime  @default(now())
 
   annotations Annotation[]
 
@@ -528,35 +530,35 @@ model RealDecision {
 
 /// Versioned evaluation of a real decision. Never edited in place: a change is a new version.
 model Annotation {
-  id            String   @id @default(uuid())
-  decisionId    String
-  decision      RealDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User     @relation("AnnotationOwner", fields: [userId], references: [id], onDelete: Cascade)
-  version       Int
+  id             String       @id @default(uuid())
+  decisionId     String
+  decision       RealDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("AnnotationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  version        Int
   /// draft | verified | retired
-  status        String   @default("draft")
+  status         String       @default("draft")
   /// calculation | human | solver
-  source        String
+  source         String
   /// human | ai | system — AI/system output always starts as draft
-  authorKind    String
-  infoAvailable Json
-  assumedRanges Json
-  economics     Json
-  missingInfo   String[]
+  authorKind     String
+  infoAvailable  Json
+  assumedRanges  Json
+  economics      Json
+  missingInfo    String[]
   /// [{ action, sizeToBB?, ev?, freq? }] — EV/freq only when genuinely computed
-  evaluated     Json
+  evaluated      Json
   recommendation String
-  explanationVi String
-  explanationEn String?
-  confidence    String // low | medium | high
-  scope         String
-  solverMeta    Json?
-  toleranceBB   Float?
-  verifiedById  String?
-  verifiedAt    DateTime?
-  supersedesId  String?
-  createdAt     DateTime @default(now())
+  explanationVi  String
+  explanationEn  String?
+  confidence     String // low | medium | high
+  scope          String
+  solverMeta     Json?
+  toleranceBB    Float?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  supersedesId   String?
+  createdAt      DateTime     @default(now())
 
   @@unique([decisionId, version])
   @@index([userId, status])
@@ -565,34 +567,34 @@ model Annotation {
 /// A full hand played against modelled Villains. The deal (incl. the 5 board cards) is derived from
 /// `seed` server-side and never sent to the client; state is rebuilt from seed + config + Hero steps.
 model SimHand {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  seed        Int
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seed         Int
   /// Hole cards + all five board cards, shuffled with a CSPRNG. Never sent to the client.
-  deal        Json?
-  config      Json
+  deal         Json?
+  config       Json
   modelVersion String
-  mode        String    // practice | rated
-  feedback    String    // guided | exam
-  kind        String    @default("play") // play | replay | branch
-  parentId    String?
-  branchAt    Int?
-  sessionId   String?
+  mode         String // practice | rated
+  feedback     String // guided | exam
+  kind         String    @default("play") // play | replay | branch
+  parentId     String?
+  branchAt     Int?
+  sessionId    String?
   /// Hero decisions: [{ action, confidence, reasoning, responseMs, clientAttemptId, attemptId }]
-  steps       Json      @default("[]")
-  version     Int       @default(0)
-  status      String    @default("active") // active | complete | abandoned
+  steps        Json      @default("[]")
+  version      Int       @default(0)
+  status       String    @default("active") // active | complete | abandoned
   /// Strategic fingerprint (position, stack bucket, hand class, table, opponents, origin) for diversity
-  fingerprint String?
+  fingerprint  String?
   /// Exact-deal key (cards + config) to never repeat an identical hand
-  exactKey    String?
+  exactKey     String?
   /// How the hand was created: random | scenario continuation | solver flop spot (with scripted prefix)
-  origin      Json?
-  bookmarked  Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  completedAt DateTime?
+  origin       Json?
+  bookmarked   Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  completedAt  DateTime?
 
   @@index([userId, status, updatedAt])
   @@index([parentId])
@@ -618,7 +620,7 @@ model ScenarioHistory {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// scenario:<scenarioId> | sim:<fingerprint>
   contentKey     String
-  module         String   // hero | villain | sim
+  module         String // hero | villain | sim
   firstPlayedAt  DateTime @default(now())
   lastPlayedAt   DateTime @default(now())
   timesPlayed    Int      @default(0)
@@ -650,4 +652,73 @@ model InviteCode {
   createdAt   DateTime  @default(now())
 
   @@index([createdById])
+}
+
+/// Persistent per-user memory of one detected leak (real-hand solver/pattern evidence or training).
+/// Never deleted by refreshes: a leak that stops showing up becomes improving/resolved, keeping history.
+model LeakMemory {
+  id                String         @id @default(uuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leakKey           String // e.g. pattern:rfi:UTG, pf:sbShove:tooTight:6.5–10, training:potOdds
+  source            String // real | training
+  evidence          String // solver | pattern | training
+  category          String
+  street            String?
+  decisionType      String?
+  label             Json // {en, vi}
+  drill             String
+  status            String // active | improving | resolved
+  firstDetectedAt   DateTime       @default(now())
+  lastDetectedAt    DateTime       @default(now())
+  timesDetected     Int            @default(1)
+  severity          Float // 0..1, comparable across evidence classes
+  confidence        String // low | medium | high
+  n                 Int
+  rate              Float?
+  ciLo              Float?
+  ciHi              Float?
+  bandLo            Float?
+  bandHi            Float?
+  evLossBB          Float?
+  recentN           Int            @default(0)
+  recentRate        Float?
+  recentVerdict     String?
+  examples          String[]
+  lastSeenAt        DateTime?
+  drillCount        Int            @default(0)
+  lastDrilledAt     DateTime?
+  lastDrillAccuracy Float?
+  updatedAt         DateTime       @updatedAt
+  snapshots         LeakSnapshot[]
+
+  @@unique([userId, leakKey])
+  @@index([userId, status])
+}
+
+model LeakSnapshot {
+  id            String     @id @default(uuid())
+  memoryId      String
+  memory        LeakMemory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  at            DateTime   @default(now())
+  status        String
+  n             Int
+  rate          Float?
+  ciLo          Float?
+  ciHi          Float?
+  severity      Float
+  evLossBB      Float?
+  recentN       Int        @default(0)
+  recentRate    Float?
+  drillAccuracy Float?
+
+  @@index([memoryId, at])
+}
+
+model LeakMemoryState {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshedAt DateTime
+  decisions   Int
+  engine      String
 }

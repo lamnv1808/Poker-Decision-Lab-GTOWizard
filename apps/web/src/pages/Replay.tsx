@@ -42,6 +42,7 @@ interface ReplayResult {
   sameAsObserved: boolean;
   facts: Record<string, number | null> | null;
   topics: { key: string; label: Localized }[];
+  pushFold?: { class: 'correct' | 'minor' | 'verified' | 'inconclusiveBounty' | 'outsideModel'; role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string; grade: Grade | null; evLossBB: number | null; bestAction: string | null; frequency: number | null } | null;
   strategy: {
     status: 'unreviewed' | 'verified';
     evaluation?: 'ev' | 'qualitative' | 'not_evaluated';
@@ -232,6 +233,23 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
                   <div className="font-semibold">{t(`act.${result.observed.type}`)}{result.observed.amountBB ? ` ${fmtNum(result.observed.amountBB, 2)} BB` : ''}{result.observed.allIn ? ` (${t('table.allIn')})` : ''}</div>
                   <div className="text-xs text-ink-400">{loc(result.observed.note, lang)}</div>
                 </div>
+                {result.pushFold && (
+                  <div className="rounded-md border border-emerald-500/30 bg-emerald-900/10 p-2.5 text-xs" data-testid="replay-pushfold">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <b className="text-emerald-200">{t('replay.pf.title')}</b>
+                      {result.pushFold.grade && <GradeBadge grade={result.pushFold.grade} />}
+                      <span className="text-[10px] uppercase text-ink-400">{t(`replay.pf.class.${result.pushFold.class}`)}</span>
+                    </div>
+                    {result.pushFold.class === 'outsideModel' ? (
+                      <p className="text-ink-300">{t('replay.pf.outside')}</p>
+                    ) : (
+                      <p className="text-ink-200">
+                        {t('replay.pf.line', { role: t(result.pushFold.role === 'sbShove' ? 'replay.pf.sb' : 'replay.pf.bb'), stack: result.pushFold.stackBB, hand: result.pushFold.heroClass, best: result.pushFold.bestAction === 'mixed' ? t('replay.pf.mixed') : result.pushFold.bestAction === 'shove' ? t('table.allIn') : t(`act.${result.pushFold.bestAction}`), loss: fmtNum(result.pushFold.evLossBB, 2) })}
+                      </p>
+                    )}
+                    <p className="mt-1 text-ink-400">{t('replay.pf.note')}</p>
+                  </div>
+                )}
                 {s?.status === 'unreviewed' ? (
                   <div className="rounded-md border border-amber-500/30 bg-amber-900/10 p-2.5 text-xs text-amber-200" data-testid="unreviewed">{t('replay.noJudgement')}</div>
                 ) : s ? (

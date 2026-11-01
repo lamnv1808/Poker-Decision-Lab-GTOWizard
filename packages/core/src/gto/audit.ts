@@ -1,6 +1,6 @@
 import { classOfCombo } from '../cards/range';
 import type { ReconstructedHand } from '../hh/gg';
-import { type GtoAction, type GtoRole, gradeGtoSpot } from './quiz';
+import { type GtoAction, type GtoRole, type GtoSpot, gradeGtoSpot } from './quiz';
 import { solvePushFold } from './pushfold';
 import type { Grade } from '../scenario/grading';
 
@@ -97,4 +97,26 @@ export function auditPushFold(h: ReconstructedHand): PushFoldAudit | null {
     bestAction: probe.bestAction,
     actionIndex: h.parsed.actions.indexOf(a),
   };
+}
+
+/**
+ * Solver verdict for a learner's answer to a real push/fold spot (Replay). Uses only the stored
+ * audit facts (role, stack, dead money, hand class) and the same equilibrium as the GTO quiz.
+ * Chip EV only: in a bounty (PKO) tournament an aggressive "mistake" is inconclusive (the bounty
+ * adds EV to shoving/calling), while folding a chip-EV shove/call stays a verified loss.
+ */
+export function pushFoldChoiceVerdict(
+  audit: { role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string },
+  choice: 'fold' | 'aggressive' | 'other',
+  formatGroup: 'PKO' | 'regular' | string | null,
+) {
+  const aggressive: GtoAction = audit.role === 'sbShove' ? 'shove' : 'call';
+  const base = { role: audit.role, stackBB: audit.stackBB, deadBB: audit.deadBB, heroClass: audit.heroClass, unit: 'chipEV-BB' as const };
+  if (choice === 'other') return { ...base, class: 'outsideModel' as const, grade: null, evLossBB: null, bestAction: null, frequency: null };
+  const spot = { seed: 0, role: audit.role, stackBB: audit.stackBB, anteFormat: 'none' as const, deadBB: audit.deadBB, heroCards: [] as unknown as GtoSpot['heroCards'], heroClass: audit.heroClass };
+  const g = gradeGtoSpot(spot as GtoSpot, choice === 'fold' ? 'fold' : aggressive, solvePushFold({ stackBB: audit.stackBB, deadBB: audit.deadBB }));
+  const mistake = g.grade === 'mistake' || g.grade === 'major';
+  // 'minor': a small chip-EV loss that the quiz does not count as a mistake (acceptable/marginal)
+  const cls = !mistake ? (g.grade === 'excellent' || g.grade === 'good' ? 'correct' : 'minor') : choice === 'aggressive' && formatGroup === 'PKO' ? 'inconclusiveBounty' : 'verified';
+  return { ...base, class: cls as 'correct' | 'minor' | 'verified' | 'inconclusiveBounty', grade: g.grade, evLossBB: Math.round(g.evLossBB * 1000) / 1000, bestAction: g.bestAction, frequency: g.frequency };
 }

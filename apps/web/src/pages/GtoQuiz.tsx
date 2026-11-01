@@ -33,8 +33,15 @@ interface Result {
 export function GtoQuiz() {
   const { t, lang } = useT();
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
-  const [role, setRole] = useState<'any' | Role>('any');
-  const [range, setRange] = useState<'2-15' | '2-7' | '7-11' | '11-15'>('2-15');
+  // a daily-plan item can pre-select the spot family that matches a detected leak
+  const [role, setRole] = useState<'any' | Role>(() => {
+    const r = new URLSearchParams(window.location.search).get('role');
+    return r === 'sbShove' || r === 'bbCall' ? r : 'any';
+  });
+  const [range, setRange] = useState<'2-15' | '2-7' | '7-11' | '11-15'>(() => {
+    const r = new URLSearchParams(window.location.search).get('range');
+    return r === '2-7' || r === '7-11' || r === '11-15' ? r : '2-15';
+  });
   const [mode, setMode] = useState<'rated' | 'practice'>('rated');
   const [spot, setSpot] = useState<Spot | null>(null);
   const [result, setResult] = useState<Result | null>(null);

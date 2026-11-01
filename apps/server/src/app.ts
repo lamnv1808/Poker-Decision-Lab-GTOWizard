@@ -6,6 +6,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { adminRouter } from './admin';
 import { historyRouter } from './history';
 import { realLeaksRouter } from './leakEngine';
+import { memoryRouter } from './leakMemory';
+import { dailyRouter } from './daily';
 import { invitesRouter } from './invites';
 import { trainingProgressRouter } from './trainingProgress';
 import { analyticsRouter } from './analytics';
@@ -81,6 +83,8 @@ export function createApp() {
   app.use('/api/admin', adminRouter);
   app.use('/api/history', historyRouter);
   app.use('/api/leaks/real', realLeaksRouter);
+  app.use('/api/memory', memoryRouter);
+  app.use('/api/daily', dailyRouter);
   app.use('/api/invites', invitesRouter);
   app.use('/api/training-progress', trainingProgressRouter);
   app.use('/api/sim', simRouter);

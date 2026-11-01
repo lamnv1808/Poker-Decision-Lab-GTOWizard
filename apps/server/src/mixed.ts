@@ -1,4 +1,4 @@
-import { createRng, hashString } from '@pdl/core';
+import { type PlanItem, createRng, hashString } from '@pdl/core';
 import type { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -7,6 +7,7 @@ import { prisma } from './db';
 import { HttpError, notFound, parse } from './http';
 import { pickScenario } from './runs';
 import { createSimHand } from './sim';
+import { recordLeakDrills } from './leakMemory';
 
 /**
  * Mixed Training: one timed session that interleaves item types, chosen adaptively. Each item is
@@ -37,7 +38,9 @@ interface MixedConfig {
   mix?: Mix;
   /** item types found exhausted in this session (e.g. no unseen scenarios left) */
   exhausted?: MixedType[];
-  served: { type: MixedType; at: string; ref?: string }[];
+  served: { type: MixedType; at: string; ref?: string; leakKey?: string; reason?: PlanItem['reason'] }[];
+  /** Today's plan (Phase 1 D4): served in order first, then the session adapts as usual. */
+  daily?: { version: string; items: PlanItem[]; focus: { leakKey: string; label: { en: string; vi: string }; evidence: string }[] };
 }
 
 /** Time allowed after the clock runs out to finish the item already on screen. */
@@ -176,8 +179,17 @@ async function nextItem(tx: Prisma.TransactionClient, userId: string, s: { id: s
   const open = await tx.simHand.findFirst({ where: { userId, sessionId: s.id, status: 'active' } });
   if (open) return { done: false, type: 'sim', href: `/play/${open.id}?mixed=${s.id}`, remainingSec, served: cfg.served.length, resumed: true };
   const hasReal = (await tx.realDecision.count({ where: { userId, status: 'accepted' }, take: 1 })) > 0;
-  let w = await weights(userId, cfg, hasReal);
   const q = `mixed=${s.id}`;
+  const planned = cfg.daily?.items[cfg.served.length];
+  if (planned) {
+    const r = await servePlanned(tx, userId, s, cfg, planned, hasReal, q);
+    if (r) {
+      cfg.served.push({ type: r.type, at: new Date().toISOString(), ref: r.ref, leakKey: planned.leakKey, reason: planned.reason });
+      await tx.trainingSession.update({ where: { id: s.id }, data: { config: cfg as object } });
+      return { done: false, type: r.type, href: r.href, remainingSec, served: cfg.served.length, planned: { reason: planned.reason, leakKey: planned.leakKey ?? null, index: cfg.served.length, of: cfg.daily!.items.length } };
+    }
+  }
+  let w = await weights(userId, cfg, hasReal);
   let type: MixedType | null = null;
   let href = '';
   let ref: string | undefined;
@@ -219,10 +231,73 @@ async function nextItem(tx: Prisma.TransactionClient, userId: string, s: { id: s
   return { done: false, type, href, remainingSec, served: cfg.served.length, weights: w };
 }
 
+/** One planned item → where to go. Null when it cannot be served (e.g. no scenario left in the pool). */
+async function servePlanned(tx: Prisma.TransactionClient, userId: string, s: { id: string; mode: string }, cfg: MixedConfig, it: PlanItem, hasReal: boolean, q: string): Promise<{ type: MixedType; href: string; ref?: string } | null> {
+  const mode = s.mode as 'practice' | 'rated';
+  const p = it.params ?? {};
+  switch (it.type) {
+    case 'scenario':
+    case 'villain': {
+      const pools = it.reason === 'new' ? (['new'] as const) : ([p.pool ?? 'newDue', 'newDue', 'all'] as const);
+      for (const pool of [...new Set(pools)]) {
+        const r = await pickScenario(userId, { kind: it.type === 'scenario' ? 'hero' : 'villain', mode, pool, sessionId: s.id });
+        if (r.ok) return { type: it.type, href: `/run/${r.view.runId}?${q}`, ref: r.view.runId };
+      }
+      return null;
+    }
+    case 'sim': {
+      const h = await createSimHand(userId, { ...(p.tableSize ? { tableSize: p.tableSize, stackBB: p.stackBB } : simOpts(cfg.difficulty, cfg.served.length)), mode, feedback: 'guided', sessionId: s.id }, tx);
+      return { type: 'sim', href: `/play/${h.id}?${q}`, ref: h.id };
+    }
+    case 'solverFlop': {
+      const h = await createSimHand(userId, { table: 'solverFlop', mode, feedback: 'guided', sessionId: s.id }, tx);
+      return { type: 'solverFlop', href: `/play/${h.id}?${q}`, ref: h.id };
+    }
+    case 'gto': {
+      const f = new URLSearchParams();
+      if (p.role) f.set('role', p.role);
+      if (p.range) f.set('range', p.range);
+      return { type: 'gto', href: `/gto?${f.toString() ? `${f.toString()}&` : ''}${q}` };
+    }
+    case 'gtopf':
+      return { type: 'gtopf', href: `/gto?street=postflop&${q}` };
+    case 'replay':
+      if (!hasReal) return null;
+      return { type: 'replay', href: p.decisionId ? `/replay?decision=${encodeURIComponent(p.decisionId)}&${q}` : `/replay?${q}`, ref: p.decisionId };
+    case 'potodds':
+      return hasReal ? { type: 'potodds', href: `/fundamentals?${q}` } : null;
+    case 'math':
+      return { type: 'math', href: `/math?level=${await mathLevel(userId, cfg.difficulty)}&${q}` };
+  }
+}
+
+/**
+ * Graded results per drilled leak in a daily session. Each attempt belongs to the item that was on
+ * screen when it was made: the last item served at or before the attempt.
+ */
+export async function dailyLeakResults(userId: string, sessionId: string, cfg: MixedConfig) {
+  const out = new Map<string, { correct: number; total: number; served: number }>();
+  for (const x of cfg.served) if (x.leakKey) out.set(x.leakKey, { correct: 0, total: 0, served: (out.get(x.leakKey)?.served ?? 0) + 1 });
+  if (!out.size) return out;
+  const atts = await prisma.decisionAttempt.findMany({ where: { userId, sessionId, graded: true }, select: { isError: true, createdAt: true } });
+  const served = cfg.served.map((x) => ({ ...x, t: new Date(x.at).getTime() }));
+  for (const a of atts) {
+    let owner: (typeof served)[number] | undefined;
+    for (const x of served) if (x.t <= a.createdAt.getTime()) owner = x;
+    if (!owner?.leakKey) continue;
+    const r = out.get(owner.leakKey)!;
+    r.total++;
+    if (!a.isError) r.correct++;
+  }
+  return out;
+}
+
 mixedRouter.post('/sessions/:id/end', async (req, res) => {
   const userId = requireUser(req);
-  const { s } = await load(userId, String(req.params.id));
-  if (!s.endedAt) await prisma.trainingSession.update({ where: { id: s.id }, data: { endedAt: new Date() } });
+  const { s, cfg } = await load(userId, String(req.params.id));
+  // exactly one caller ends the session (and records leak drills) even with concurrent requests
+  const ended = await prisma.trainingSession.updateMany({ where: { id: s.id, endedAt: null }, data: { endedAt: new Date() } });
+  if (ended.count === 1 && cfg.daily) await recordLeakDrills(userId, await dailyLeakResults(userId, s.id, cfg));
   res.json({ ok: true });
 });
 
@@ -285,5 +360,15 @@ mixedRouter.get('/sessions/:id/summary', async (req, res) => {
     ratingDelta: { strategy: delta('overall'), fundamentals: delta('fundamentals') },
     mistakes: atts.filter((a) => a.isError).sort((a, b) => (b.evLoss ?? 0) - (a.evLoss ?? 0)).slice(0, 8).map((a) => ({ type: typeOf(a.itemRef), grade: a.grade, evLossBB: a.evLoss, at: a.createdAt })),
     recommendation: weakest ? weakest.type : null,
+    daily: cfg.daily
+      ? {
+          planned: cfg.daily.items.length,
+          done: Math.min(cfg.served.length, cfg.daily.items.length),
+          leaks: await (async () => {
+            const r = await dailyLeakResults(userId, s.id, cfg);
+            return cfg.daily!.focus.map((f) => ({ ...f, ...(r.get(f.leakKey) ?? { served: 0, total: 0, correct: 0 }) }));
+          })(),
+        }
+      : null,
   });
 });

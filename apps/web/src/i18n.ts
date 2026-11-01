@@ -804,6 +804,18 @@ const en: Dict = {
   "invite.status.open": "unused",
   "invite.status.used": "used",
   "invite.status.expired": "expired",
+  "replay.pf.title": "Solver push/fold verdict",
+  "replay.pf.class.correct": "chip-EV correct",
+  "replay.pf.class.verified": "verified chip-EV mistake",
+  "replay.pf.class.inconclusiveBounty": "inconclusive (bounty)",
+  "replay.pf.class.outsideModel": "outside the push/fold model",
+  "replay.pf.outside": "Your answer is not an all-in or a fold, so the push/fold solver cannot judge it.",
+  "replay.pf.line": "{role} at {stack} BB with {hand}: equilibrium play is {best}. Your answer loses {loss} BB chip EV.",
+  "replay.pf.sb": "SB shove-or-fold",
+  "replay.pf.bb": "BB call-or-fold vs a shove",
+  "replay.pf.mixed": "a mix (both actions are fine)",
+  "replay.pf.note": "Heads-up push/fold Nash, chip EV only (no ICM). In bounty events a bounty can justify a shove/call that loses chip EV. Informational: this replay is not rated.",
+  "replay.pf.class.minor": "small chip-EV loss",
 };
 
 const vi: Dict = {
@@ -1606,6 +1618,18 @@ const vi: Dict = {
   "invite.status.open": "chưa dùng",
   "invite.status.used": "đã dùng",
   "invite.status.expired": "hết hạn",
+  "replay.pf.title": "Phán quyết solver push/fold",
+  "replay.pf.class.correct": "đúng theo chip EV",
+  "replay.pf.class.verified": "lỗi chip EV đã kiểm chứng",
+  "replay.pf.class.inconclusiveBounty": "chưa kết luận (bounty)",
+  "replay.pf.class.outsideModel": "ngoài mô hình push/fold",
+  "replay.pf.outside": "Câu trả lời không phải all-in hay bỏ bài nên solver push/fold không chấm được.",
+  "replay.pf.line": "{role} ở {stack} BB với {hand}: chiến lược cân bằng là {best}. Câu trả lời của bạn mất {loss} BB chip EV.",
+  "replay.pf.sb": "SB đẩy hoặc bỏ",
+  "replay.pf.bb": "BB theo hoặc bỏ trước all-in",
+  "replay.pf.mixed": "trộn (cả hai hành động đều ổn)",
+  "replay.pf.note": "Push/fold Nash đối đầu, chỉ chip EV (không ICM). Ở giải bounty, tiền thưởng có thể biện minh cho all-in/theo bị lỗ chip EV. Chỉ để tham khảo: replay này không tính điểm.",
+  "replay.pf.class.minor": "lỗ chip EV nhỏ",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, vi };
