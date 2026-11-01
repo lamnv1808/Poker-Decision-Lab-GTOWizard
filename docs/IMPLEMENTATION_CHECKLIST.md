@@ -51,6 +51,16 @@ Legend: ✅ done & tested · ◐ partial · ⛔ blocked/not done
 - ✅ Bulk import: 19k hands in ~50 s within a 320 MB heap (Render free plan)
 - Limits: push/fold model only (no limp/min-raise), heads-up subgame, chip EV (no ICM/bounty). Multi-way and postflop solving are future work.
 
+## Trainer data V1 + V2 ✅ (local branch, not deployed)
+- ✅ V2 audit against the engine; quarantine with reasons (see `docs/REAL_HANDS.md`)
+- ✅ Fundamentals / Real Hand Replay / Reviewed Strategy as separate modes and score tracks
+- ✅ Leakage-safe question payloads; reasoning + confidence before reveal; observed action = historical
+- ✅ Versioned annotations (draft → verified), review queue with filters; 1,097 solver drafts (0 verified)
+- ✅ Train/assessment split by tournament and time; family-based familiarity limits
+- ✅ Concept topics + concept-level spaced repetition; per-track metrics (calibration, response time, per-standard)
+- ✅ Export/backup
+- ⛔ V1 package not received
+
 ## Phase 9 — Tournament expansion ◐
 - ✅ PKO (3), bubble/final-table ICM (2), short-stack modules; ChipEV vs ICM vs bounty distinguished
 - ◐ Content depth: 44 scenarios (23 math-verified, 21 heuristic). More final-table/PKO depth is content work, not engine work.

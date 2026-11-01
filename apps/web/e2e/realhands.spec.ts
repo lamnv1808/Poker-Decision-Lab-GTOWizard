@@ -15,7 +15,7 @@ test('real hand replay, fundamentals pot odds, annotation and reviewed strategy'
   await expect(page.getByTestId('poker-table')).toBeVisible();
   const html = await page.content();
   expect(html).not.toMatch(/hero_all_in|actual_action/);
-  await page.getByTestId('action-bar').getByRole('button').filter({ hasText: /^(Fold|Check)$/ }).first().click();
+  await page.getByTestId('action-bar').locator('button:not([disabled])').filter({ hasText: /^(Fold|Check)$/ }).first().click();
   await expect(page.getByTestId('replay-submit')).toBeDisabled();
   await page.getByTestId('reasoning').fill('Villain range is strong here');
   await page.getByTestId('confidence-2').click();
