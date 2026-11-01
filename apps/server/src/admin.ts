@@ -92,3 +92,15 @@ adminRouter.get('/jobs/:id', (req, res) => {
   if (!job) return void res.status(404).json({ error: 'not_found' });
   res.json(job);
 });
+
+/** Row counts for one user's imported real-hand data (verification after an import). */
+adminRouter.get('/users/:id/real-stats', async (req, res) => {
+  const userId = String(req.params.id);
+  const [hands, decisions, annotations, quizzes] = await Promise.all([
+    prisma.realHand.groupBy({ by: ['status'], where: { userId }, _count: true }),
+    prisma.realDecision.groupBy({ by: ['status', 'split'], where: { userId }, _count: true }),
+    prisma.annotation.groupBy({ by: ['status', 'source'], where: { userId }, _count: true }),
+    prisma.$queryRaw<{ status: string; n: bigint }[]>`SELECT "potOdds"->>'status' AS status, COUNT(*) AS n FROM "RealDecision" WHERE "userId" = ${userId} AND "potOdds" IS NOT NULL GROUP BY 1`,
+  ]);
+  res.json({ hands, decisions, annotations, quizzes: quizzes.map((q) => ({ status: q.status, n: Number(q.n) })) });
+});

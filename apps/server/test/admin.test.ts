@@ -43,3 +43,12 @@ describe('admin bundle import', () => {
     await request(app).post('/api/admin/import-v2').set('x-admin-token', tok).send({ bundleId: up.body.bundleId, userId: u.id }).expect(404);
   });
 });
+
+describe('admin real-stats', () => {
+  it('requires the token and returns grouped counts', async () => {
+    const u = await newUser('stats');
+    await request(app).get(`/api/admin/users/${u.id}/real-stats`).expect(401);
+    const r = await request(app).get(`/api/admin/users/${u.id}/real-stats`).set('x-admin-token', adminToken()).expect(200);
+    expect(r.body).toEqual({ hands: [], decisions: [], annotations: [], quizzes: [] });
+  });
+});
