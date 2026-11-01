@@ -7,8 +7,10 @@ import { useT } from '../i18n';
 import { useApp } from '../store';
 import type { Grade } from '../types';
 
-type Focus = 'fullhand' | 'preflop' | 'postflop' | 'math';
-const FOCUS: Focus[] = ['fullhand', 'preflop', 'postflop', 'math'];
+type Focus = 'fullhand' | 'preflop' | 'postflop' | 'math' | 'villain' | 'replay';
+const FOCUS: Focus[] = ['fullhand', 'preflop', 'postflop', 'math', 'villain', 'replay'];
+type Mix = 'balanced' | 'heroFocus' | 'newOnly' | 'weak' | 'due';
+const MIXES: Mix[] = ['balanced', 'heroFocus', 'newOnly', 'weak', 'due'];
 interface SessionInfo { id: string; mode: string; durationMin: number; served: number; answered: number; remainingSec: number; ended: boolean }
 interface Summary {
   id: string;
@@ -19,7 +21,11 @@ interface Summary {
   graded: number;
   accuracyPct: number | null;
   minutes: number;
-  byType: { type: string; attempts: number; graded: number; accuracyPct: number | null; avgEvLossBB: number | null }[];
+  byType: { type: string; attempts: number; graded: number; strategyRated: number; fundamentalsRated: number; ungraded: number; accuracyPct: number | null; avgEvLossBB: number | null }[];
+  strategyRated: number;
+  fundamentalsRated: number;
+  ungraded: number;
+  exhausted: string[];
   ratingDelta: { strategy: number | null; fundamentals: number | null };
   mistakes: { type: string | null; grade: Grade | null; evLossBB: number | null; at: string }[];
   recommendation: string | null;
@@ -46,11 +52,12 @@ export function MixedSetup() {
   const [difficulty, setDifficulty] = useState<'adaptive' | 'easy' | 'medium' | 'hard'>('adaptive');
   const [focus, setFocus] = useState<Focus[]>(FOCUS);
   const [mode, setMode] = useState<'practice' | 'rated'>(defaultMode);
+  const [mix, setMix] = useState<Mix>('balanced');
   const [error, setError] = useState<unknown>(null);
   const next = useMixedNext();
   const start = async () => {
     try {
-      const s = await api.post<{ id: string }>('/mixed/sessions', { durationMin: Number(duration), difficulty, focus, mode });
+      const s = await api.post<{ id: string }>('/mixed/sessions', { durationMin: Number(duration), difficulty, focus, mode, mix });
       await next(s.id);
     } catch (e) {
       setError(e);
@@ -68,6 +75,12 @@ export function MixedSetup() {
           <Toggle label={t('mixed.difficulty')} value={difficulty} onChange={setDifficulty} options={(['adaptive', 'easy', 'medium', 'hard'] as const).map((d) => ({ value: d, label: t(`mixed.diff.${d}`) }))} />
           <Toggle label={t('mode.label')} value={mode} onChange={setMode} options={[{ value: 'practice', label: t('mode.practice') }, { value: 'rated', label: t('mode.rated') }]} />
         </div>
+        <label className="mt-3 block text-xs uppercase text-ink-400">
+          {t('mixed.mix')}
+          <select value={mix} onChange={(e) => setMix(e.target.value as Mix)} className="mt-1 block w-full rounded-md border border-ink-600 bg-ink-850 px-2 py-1.5 text-sm normal-case text-ink-100" data-testid="mixed-mix">
+            {MIXES.map((m) => <option key={m} value={m}>{t(`mixed.mix.${m}`)}</option>)}
+          </select>
+        </label>
         <fieldset className="mt-3">
           <legend className="text-xs uppercase text-ink-400">{t('mixed.focus')}</legend>
           <div className="mt-1 flex flex-wrap gap-2">
@@ -148,7 +161,7 @@ export function MixedSummary() {
       <h1 className="text-xl font-bold">{t('mixed.summary')}</h1>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={t('mixed.items')} value={s.attempts} sub={`${s.graded} ${t('dash.graded')} · ${s.minutes} min`} />
-        <Stat label={t('dash.accuracy')} value={fmtPct(s.accuracyPct)} />
+        <Stat label={t('dash.accuracy')} value={fmtPct(s.accuracyPct)} sub={`${s.strategyRated} ${t('mixed.strategyRated')} · ${s.fundamentalsRated} ${t('mixed.fundRated')} · ${s.ungraded} ${t('mixed.ungraded')}`} />
         <Stat label={t('dash.strategyRating')} value={d(s.ratingDelta.strategy)} sub={t('mixed.change')} />
         <Stat label={t('dash.fundamentalsRating')} value={d(s.ratingDelta.fundamentals)} sub={t('mixed.change')} />
       </div>
@@ -161,6 +174,7 @@ export function MixedSummary() {
                   <tr key={b.type} className="border-t border-ink-800">
                     <td className="py-1.5">{t(`mixed.type.${b.type}`)}</td>
                     <td className="tabular text-right">{b.attempts}</td>
+                    <td className="tabular text-right text-[11px] text-ink-400">{b.strategyRated}/{b.fundamentalsRated}/{b.ungraded}</td>
                     <td className="tabular text-right">{fmtPct(b.accuracyPct)}</td>
                     <td className="tabular text-right text-ink-300">{b.avgEvLossBB === null ? '' : `${fmtNum(b.avgEvLossBB, 2)} BB`}</td>
                   </tr>
@@ -168,6 +182,8 @@ export function MixedSummary() {
               </tbody>
             </table>
           )}
+          <p className="mt-2 text-[11px] text-ink-500">{t('mixed.columns')}</p>
+          {s.exhausted.length > 0 && <p className="mt-1 text-xs text-gold">{t('mixed.exhausted', { types: s.exhausted.map((x) => t(`mixed.type.${x}`)).join(', ') })}</p>}
           {s.recommendation && <p className="mt-3 text-sm">{t('mixed.recommend')}: <b>{t(`mixed.type.${s.recommendation}`)}</b></p>}
         </Panel>
         <Panel title={t('mixed.mistakes')}>

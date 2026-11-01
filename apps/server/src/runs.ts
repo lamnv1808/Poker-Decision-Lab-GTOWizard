@@ -219,21 +219,22 @@ runsRouter.post('/', async (req, res) => {
  */
 export const POOLS = ['new', 'newDue', 'all', 'played', 'bookmarked', 'weak'] as const;
 const RECENT_WINDOW = 5;
-runsRouter.post('/next', async (req, res) => {
-  const userId = requireUser(req);
-  const body = parse(
-    z.object({
-      kind: z.enum(['hero', 'villain']),
-      mode: z.enum(['practice', 'rated']).default('practice'),
-      module: z.string().max(4).optional(),
-      difficulty: z.number().int().min(1).max(5).optional(),
-      ratedOnly: z.boolean().default(false),
-      excludeScenarioId: z.string().max(200).optional(),
-      pool: z.enum(POOLS).default('new'),
-      sessionId: z.string().uuid().optional(),
-    }),
-    req.body,
-  );
+export interface PickInput {
+  kind: 'hero' | 'villain';
+  mode: 'practice' | 'rated';
+  module?: string;
+  difficulty?: number;
+  ratedOnly?: boolean;
+  excludeScenarioId?: string;
+  pool: (typeof POOLS)[number];
+  sessionId?: string;
+}
+export type PickResult =
+  | { ok: true; view: ReturnType<typeof runView> & { pickReason: string; poolSize: number; replay: boolean; ratedBlocked: boolean } }
+  | { ok: false; status: 404 | 409; body: { error: string; message: string; pool?: string; counts?: Record<string, number> } };
+
+/** Pick and start the next scenario from a pool (shared by Launcher and Mixed Training). */
+export async function pickScenario(userId: string, body: PickInput): Promise<PickResult> {
   const scenarios = await prisma.scenario.findMany({ where: { published: true, mode: body.kind, module: body.module || undefined } });
   const versions = await prisma.scenarioVersion.findMany({
     where: { OR: scenarios.map((s) => ({ scenarioId: s.id, version: s.currentVersion })) },
@@ -243,7 +244,7 @@ runsRouter.post('/next', async (req, res) => {
     .filter((v) => (body.difficulty ? v.difficulty === body.difficulty : true))
     .filter((v) => (body.ratedOnly ? ['SOLVER_VERIFIED', 'COACH_REVIEWED'].includes(v.source.classification) : true))
     .map((v) => v.scenarioId);
-  if (!filtered.length) throw new HttpError(404, 'no_scenarios', 'No scenarios match these filters');
+  if (!filtered.length) return { ok: false, status: 404, body: { error: 'no_scenarios', message: 'No scenarios match these filters' } };
   const states = await scenarioStates(userId, filtered);
   const bookmarks = new Set((await prisma.bookmark.findMany({ where: { userId, scenarioId: { in: filtered } }, select: { scenarioId: true } })).map((b) => b.scenarioId));
   const st = (id: string) => states.get(id)!;
@@ -265,8 +266,7 @@ runsRouter.post('/next', async (req, res) => {
   }
   if (!pool.length) {
     const counts = { available: filtered.length, completed: filtered.filter((id) => st(id).timesCompleted > 0).length, due: filtered.filter((id) => st(id).status === 'due').length, bookmarked: bookmarks.size };
-    res.status(409).json({ error: 'pool_exhausted', message: 'No scenarios left in this pool', pool: body.pool, counts });
-    return;
+    return { ok: false, status: 409, body: { error: 'pool_exhausted', message: 'No scenarios left in this pool', pool: body.pool, counts } };
   }
   // due first within the pool, then new, then least-recently played
   const due = pool.filter((id) => st(id).status === 'due');
@@ -275,7 +275,27 @@ runsRouter.post('/next', async (req, res) => {
   const scenarioId = tier[Math.floor(Math.random() * tier.length)]!;
   const { v, run, replay, ratedBlocked } = await startRun(userId, scenarioId, body.mode, body.sessionId);
   const reason = tier === due ? 'due' : tier === fresh ? 'new' : 'review';
-  res.status(201).json({ ...runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []), pickReason: reason, poolSize: pool.length, replay, ratedBlocked });
+  return { ok: true, view: { ...runView(run, v.id, v.scenario, v.sourceClass, startScenario(v.scenario), []), pickReason: reason, poolSize: pool.length, replay, ratedBlocked } };
+}
+
+runsRouter.post('/next', async (req, res) => {
+  const userId = requireUser(req);
+  const body = parse(
+    z.object({
+      kind: z.enum(['hero', 'villain']),
+      mode: z.enum(['practice', 'rated']).default('practice'),
+      module: z.string().max(4).optional(),
+      difficulty: z.number().int().min(1).max(5).optional(),
+      ratedOnly: z.boolean().default(false),
+      excludeScenarioId: z.string().max(200).optional(),
+      pool: z.enum(POOLS).default('new'),
+      sessionId: z.string().uuid().optional(),
+    }),
+    req.body,
+  );
+  const r = await pickScenario(userId, body);
+  if (!r.ok) return void res.status(r.status).json(r.body);
+  res.status(201).json(r.view);
 });
 
 runsRouter.get('/:id', async (req, res) => {

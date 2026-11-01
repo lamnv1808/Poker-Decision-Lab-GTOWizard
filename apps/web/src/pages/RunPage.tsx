@@ -119,6 +119,8 @@ export function RunPage() {
   const nextTest = useNextTest();
   const goNext = async () => {
     if (!view) return;
+    const mixed = mixedSessionId();
+    if (mixed) return nav(`/mixed/${mixed}`); // inside a Mixed session the session decides what comes next
     setBusy(true);
     setLatest(null);
     try {

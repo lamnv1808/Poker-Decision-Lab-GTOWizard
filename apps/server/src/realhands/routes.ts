@@ -266,9 +266,13 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
       confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]),
       responseMs: z.number().int().min(0).max(3_600_000).optional(),
       mode: z.enum(['practice', 'rated']).default('practice'),
+      sessionId: z.string().uuid().optional(),
     }),
     req.body,
   );
+  // a Mixed session's practice/rated choice overrides the page's toggle
+  const mixedS = await mixedSessionFor(userId, body.sessionId);
+  if (mixedS) body.mode = mixedS.mode;
   const { d, rec, snap } = await loadDecision(userId, String(req.params.id));
   const dup = await prisma.decisionAttempt.findUnique({ where: { userId_clientAttemptId: { userId, clientAttemptId: body.clientAttemptId } } });
   if (dup) return void res.json(dup.result);
@@ -324,6 +328,7 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
   const outcome = await recordAttempt({
     userId,
     clientAttemptId: body.clientAttemptId,
+    sessionId: mixedS?.id ?? null,
     attemptType: 'replay',
     itemRef: `real:${d.familyId}:${d.id}`,
     reviewType: 'real',

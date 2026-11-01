@@ -1,7 +1,7 @@
 import type { HandState, LegalActions, PlayerAction } from '@pdl/core/engine';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, newAttemptId, ApiError } from '../api';
+import { api, newAttemptId, ApiError, mixedSessionId } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { CardText } from '../components/Cards';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
@@ -126,7 +126,7 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
     if (!q || !pending || !confidence || reasoning.trim().length < 3) return;
     setBusy(true);
     try {
-      const r = await api.post<ReplayResult>(`/real/decisions/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), action: pending, reasoning, confidence, responseMs: Date.now() - shownAt.current, mode });
+      const r = await api.post<ReplayResult>(`/real/decisions/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), action: pending, reasoning, confidence, responseMs: Date.now() - shownAt.current, mode, sessionId: mixedSessionId() });
       setResult(r);
     } catch (e) {
       setError(e);
