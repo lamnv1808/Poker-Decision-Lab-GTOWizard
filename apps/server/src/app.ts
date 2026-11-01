@@ -3,6 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cookieParser from 'cookie-parser';
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { adminRouter } from './admin';
 import { analyticsRouter } from './analytics';
 import { authRouter, loadUser, preferencesRouter } from './auth';
 import { env, isProd } from './env';
@@ -71,6 +72,7 @@ export function createApp() {
   app.use('/api/hands', handsRouter);
   app.use('/api/real', realRouter);
   app.use('/api/export', exportRouter);
+  app.use('/api/admin', adminRouter);
   app.use('/api/gto/postflop', postflopRouter);
   app.use('/api/gto', gtoRouter);
   app.use('/api', analyticsRouter);

@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs';
+import { createGunzip } from 'node:zlib';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import {
@@ -25,11 +26,51 @@ export const ASSESSMENT_SHARE = 0.2;
 
 const lines = (f: string) => createInterface({ input: createReadStream(f), crlfDelay: Infinity })[Symbol.asyncIterator]();
 
+export interface V2Bundle {
+  hand: V2HandRecord;
+  decisions: V2Decision[];
+  quizzes: V2Quiz[];
+}
+/** A V2 source can be iterated more than once (two passes: splits, then import). */
+export type V2Source = () => AsyncGenerator<V2Bundle>;
+
+/** The original package layout: hands.jsonl + decisions.jsonl + pot_odds_quizzes.jsonl (same hand order). */
+export function dirSource(dir: string): V2Source {
+  return async function* () {
+    const hands = lines(join(dir, 'hands.jsonl'));
+    const decs = lines(join(dir, 'decisions.jsonl'));
+    const quizzes = lines(join(dir, 'pot_odds_quizzes.jsonl'));
+    const nextDec = async () => { const r = await decs.next(); return r.done ? null : (JSON.parse(r.value) as V2Decision); };
+    const nextQuiz = async () => { const r = await quizzes.next(); return r.done ? null : (JSON.parse(r.value) as V2Quiz); };
+    let pd = await nextDec();
+    let pq = await nextQuiz();
+    for (let r = await hands.next(); !r.done; r = await hands.next()) {
+      const hand = JSON.parse(r.value) as V2HandRecord;
+      const decisions: V2Decision[] = [];
+      const qs: V2Quiz[] = [];
+      while (pd && pd.family_id === hand.hand_id) { decisions.push(pd); pd = await nextDec(); }
+      while (pq && pq.family_id === hand.hand_id) { qs.push(pq); pq = await nextQuiz(); }
+      yield { hand, decisions, quizzes: qs };
+    }
+  };
+}
+
+/** A gzip JSONL bundle: one `{hand, decisions, quizzes}` object per line (used for server-side upload). */
+export function bundleSource(file: string): V2Source {
+  return async function* () {
+    const rl = createInterface({ input: createReadStream(file).pipe(createGunzip()), crlfDelay: Infinity });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      yield JSON.parse(line) as V2Bundle;
+    }
+  };
+}
+
 /** Pass 1: tournament start times → split. All decisions of a tournament (and so of a hand) share a split. */
-export async function computeSplits(handsFile: string): Promise<Map<string, 'training' | 'assessment'>> {
+export async function computeSplits(source: V2Source): Promise<Map<string, 'training' | 'assessment'>> {
   const first = new Map<string, string>();
-  for (let it = lines(handsFile), r = await it.next(); !r.done; r = await it.next()) {
-    const raw = (JSON.parse(r.value) as V2HandRecord).raw;
+  for await (const { hand } of source()) {
+    const raw = hand.raw;
     const tid = /Tournament #(\d+)/.exec(raw)?.[1];
     const at = /(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2})/.exec(raw)?.[1] ?? '';
     if (!tid) continue;
@@ -84,16 +125,10 @@ export interface ImportSummary {
 }
 
 /** Import a Real Hand Source v2 directory for one user. Idempotent (existing rows are skipped). */
-export async function importV2(userId: string, dir: string, log: (m: string) => void = () => {}): Promise<ImportSummary> {
-  const splits = await computeSplits(join(dir, 'hands.jsonl'));
+export async function importV2(userId: string, dirOrSource: string | V2Source, log: (m: string) => void = () => {}): Promise<ImportSummary> {
+  const source = typeof dirOrSource === 'string' ? dirSource(dirOrSource) : dirOrSource;
+  const splits = await computeSplits(source);
   const sum: ImportSummary = { hands: { accepted: 0, quarantined: 0 }, decisions: { accepted: 0, quarantined: 0 }, quizzes: { accepted: 0, quarantined: 0 }, solverDrafts: 0, splits: { training: 0, assessment: 0 } };
-  const hands = lines(join(dir, 'hands.jsonl'));
-  const decs = lines(join(dir, 'decisions.jsonl'));
-  const quizzes = lines(join(dir, 'pot_odds_quizzes.jsonl'));
-  const nextDec = async () => { const r = await decs.next(); return r.done ? null : (JSON.parse(r.value) as V2Decision); };
-  const nextQuiz = async () => { const r = await quizzes.next(); return r.done ? null : (JSON.parse(r.value) as V2Quiz); };
-  let pd = await nextDec();
-  let pq = await nextQuiz();
   let handBatch: Prisma.RealHandCreateManyInput[] = [];
   let decBatch: Prisma.RealDecisionCreateManyInput[] = [];
   let annBatch: { externalId: string; data: ReturnType<typeof pushFoldDraft> }[] = [];
@@ -114,17 +149,15 @@ export async function importV2(userId: string, dir: string, log: (m: string) => 
     annBatch = [];
   };
   let n = 0;
-  for (let r = await hands.next(); !r.done; r = await hands.next()) {
-    const h = JSON.parse(r.value) as V2HandRecord;
+  for await (const bundle of source()) {
+    const h = bundle.hand;
     const a = auditHand(h.raw);
     const split = (a.tournamentId && splits.get(a.tournamentId)) || 'training';
     const realHandId = crypto.randomUUID();
     handBatch.push({ id: realHandId, userId, handId: h.hand_id, tournamentId: a.tournamentId, tournamentName: a.tournamentName, format: a.format, playedAt: a.playedAt ? new Date(`${a.playedAt}Z`) : null, raw: h.raw, status: a.ok ? 'accepted' : 'quarantined', issues: a.issues as object, notes: a.notes, split, source: 'v2' });
     a.ok ? sum.hands.accepted++ : sum.hands.quarantined++;
-    const quizFor = new Map<string, V2Quiz>();
-    const decsHere: V2Decision[] = [];
-    while (pd && pd.family_id === h.hand_id) { decsHere.push(pd); pd = await nextDec(); }
-    while (pq && pq.family_id === h.hand_id) { quizFor.set(pq.id.replace(/-odds$/, ''), pq); pq = await nextQuiz(); }
+    const quizFor = new Map<string, V2Quiz>(bundle.quizzes.map((q) => [q.id.replace(/-odds$/, ''), q]));
+    const decsHere = bundle.decisions;
     for (const d of decsHere) {
       const res = a.ok && a.rec ? auditDecision(d, a.rec) : { ok: false, issues: [{ code: 'hand_invalid', detail: a.issues.map((i) => i.code).join(',') }], snap: null };
       const snap = res.snap;
