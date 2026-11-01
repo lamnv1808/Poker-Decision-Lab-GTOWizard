@@ -16,6 +16,7 @@ import { handsRouter, importsRouter } from './imports';
 import { mathRouter } from './mathlab';
 import { bookmarksRouter, notesRouter, reviewRouter } from './review';
 import { runsRouter, scenariosRouter } from './runs';
+import { simRouter } from './sim';
 import { prisma } from './db';
 
 export function createApp() {
@@ -73,6 +74,7 @@ export function createApp() {
   app.use('/api/real', realRouter);
   app.use('/api/export', exportRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/sim', simRouter);
   app.use('/api/gto/postflop', postflopRouter);
   app.use('/api/gto', gtoRouter);
   app.use('/api', analyticsRouter);

@@ -37,6 +37,7 @@ model User {
   realHands      RealHand[]
   realDecisions  RealDecision[]
   annotations    Annotation[] @relation("AnnotationOwner")
+  simHands       SimHand[]
 }
 
 model Session {
@@ -534,4 +535,31 @@ model Annotation {
 
   @@unique([decisionId, version])
   @@index([userId, status])
+}
+
+/// A full hand played against modelled Villains. The deal (incl. the 5 board cards) is derived from
+/// `seed` server-side and never sent to the client; state is rebuilt from seed + config + Hero steps.
+model SimHand {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seed        Int
+  config      Json
+  modelVersion String
+  mode        String    // practice | rated
+  feedback    String    // guided | exam
+  kind        String    @default("play") // play | replay | branch
+  parentId    String?
+  branchAt    Int?
+  sessionId   String?
+  /// Hero decisions: [{ action, confidence, reasoning, responseMs, clientAttemptId, attemptId }]
+  steps       Json      @default("[]")
+  version     Int       @default(0)
+  status      String    @default("active") // active | complete | abandoned
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([userId, status, updatedAt])
+  @@index([parentId])
 }

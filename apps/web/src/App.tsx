@@ -1,3 +1,4 @@
+import { HeroSimPage, HeroSimSetup } from './pages/HeroSim';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -49,6 +50,8 @@ export function App() {
         <Route path="hero/browse" element={<ScenarioList mode="hero" />} />
         <Route path="villain/browse" element={<ScenarioList mode="villain" />} />
         <Route path="run/:id" element={<RunPage />} />
+        <Route path="play" element={<HeroSimSetup />} />
+        <Route path="play/:id" element={<HeroSimPage />} />
         <Route path="math" element={<MathLab />} />
         <Route path="fundamentals" element={<FundamentalsPage />} />
         <Route path="replay" element={<ReplayPage kind="replay" />} />

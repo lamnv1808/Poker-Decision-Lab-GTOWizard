@@ -6,7 +6,8 @@ import { useApp } from '../store';
 export const NAV = [
   { to: '/', key: 'dashboard', icon: '▦' },
   { to: '/train', key: 'train', icon: '◎' },
-  { to: '/hero', key: 'hero', icon: '♠' },
+  { to: '/play', key: 'play', icon: '♠' },
+  { to: '/hero', key: 'hero', icon: '♤' },
   { to: '/villain', key: 'villain', icon: '◐' },
   { to: '/fundamentals', key: 'fundamentals', icon: '∑' },
   { to: '/replay', key: 'replay', icon: '⟳' },
