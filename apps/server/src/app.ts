@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { adminRouter } from './admin';
 import { historyRouter } from './history';
+import { trainingProgressRouter } from './trainingProgress';
 import { analyticsRouter } from './analytics';
 import { authRouter, loadUser, preferencesRouter } from './auth';
 import { env, isProd } from './env';
@@ -77,6 +78,7 @@ export function createApp() {
   app.use('/api/export', exportRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/history', historyRouter);
+  app.use('/api/training-progress', trainingProgressRouter);
   app.use('/api/sim', simRouter);
   app.use('/api/mixed', mixedRouter);
   app.use('/api/gto/postflop', postflopRouter);

@@ -89,6 +89,7 @@ export function Dashboard() {
         <Stat label={t('dash.exploratory')} value={d.competency.exploratory.attempts} sub={t('dash.exploratoryNote')} />
       </div>
       <p className="text-xs text-ink-400">{t('dash.metricsNote')}</p>
+      <TrainingActivity />
       <div className="grid gap-4 md:grid-cols-3">
         <Panel title={t('dash.strengths')}>
           {d.strengths.length ? <ul className="space-y-1 text-sm">{d.strengths.map((s) => <li key={s.skill} className="flex justify-between"><span>{t(`skill.${s.skill}`)}</span><b className="tabular">{s.rating}</b></li>)}</ul> : <Empty>{t('dash.notEnoughEvidence')}</Empty>}
@@ -118,5 +119,74 @@ export function Dashboard() {
         ))}
       </div>
     </div>
+  );
+}
+
+interface Progress {
+  note: { en: string; vi: string };
+  fullHands: { completed: number; uniqueSituations: number; inProgress: number };
+  totals: { decisions: number; graded: number; ungraded: number };
+  modules: { module: string; decisions: number; graded: number; ungraded: number; correct: number; ratedDecisions: number; strategyDelta: number; fundamentalsDelta: number }[];
+  streetCoverage: Record<string, number>;
+  calibration: { confidence: number; n: number; accuracyPct: number | null }[];
+  reviewQueue: number;
+  streakDays: number;
+}
+
+/** Practice progress for every module — explicitly not a rating — plus each module's rating contribution. */
+function TrainingActivity() {
+  const { t, lang } = useT();
+  const [p, setP] = useState<Progress | null>(null);
+  useEffect(() => {
+    api.get<Progress>('/training-progress').then(setP).catch(() => setP(null));
+  }, []);
+  if (!p) return null;
+  const maxStreet = Math.max(1, ...Object.values(p.streetCoverage));
+  const delta = (x: number) => (x === 0 ? '—' : `${x > 0 ? '+' : ''}${x}`);
+  return (
+    <Panel title={t('prog.title')}>
+      <p className="mb-3 text-xs text-ink-400">{loc(p.note, lang)}</p>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5" data-testid="training-activity">
+        <Stat label={t('prog.decisions')} value={p.totals.decisions} sub={`${p.totals.graded} ${t('prog.graded')} · ${p.totals.ungraded} ${t('prog.ungraded')}`} />
+        <Stat label={t('prog.hands')} value={p.fullHands.completed} sub={t('prog.unique', { n: p.fullHands.uniqueSituations })} />
+        <Stat label={t('prog.streak')} value={p.streakDays} sub={t('prog.days')} />
+        <Stat label={t('prog.reviewQueue')} value={p.reviewQueue} />
+        <div>
+          <div className="mb-1 text-[11px] uppercase text-ink-400">{t('prog.streets')}</div>
+          {(['preflop', 'flop', 'turn', 'river'] as const).map((s) => (
+            <div key={s} className="flex items-center gap-2 text-[11px]">
+              <span className="w-12 text-ink-300">{t(`street.${s}`)}</span>
+              <div className="h-1.5 flex-1 rounded bg-ink-800"><div className="h-1.5 rounded bg-accent/70" style={{ width: `${(100 * (p.streetCoverage[s] ?? 0)) / maxStreet}%` }} /></div>
+              <span className="w-8 text-right tabular text-ink-400">{p.streetCoverage[s] ?? 0}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-xs tabular" data-testid="module-contribution">
+          <thead className="text-ink-400">
+            <tr><th className="py-1 text-left font-normal">{t('prog.module')}</th><th className="text-right font-normal">{t('prog.decisions')}</th><th className="text-right font-normal">{t('prog.graded')}</th><th className="text-right font-normal">{t('prog.rated')}</th><th className="text-right font-normal">{t('dash.strategyRating')}</th><th className="text-right font-normal">{t('dash.fundamentalsRating')}</th></tr>
+          </thead>
+          <tbody>
+            {p.modules.filter((m) => m.decisions > 0).map((m) => (
+              <tr key={m.module} className="border-t border-ink-800">
+                <td className="py-1">{t(`prog.mod.${m.module}`)}</td>
+                <td className="text-right">{m.decisions}</td>
+                <td className="text-right">{m.graded}</td>
+                <td className="text-right">{m.ratedDecisions}</td>
+                <td className="text-right">{delta(m.strategyDelta)}</td>
+                <td className="text-right">{delta(m.fundamentalsDelta)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-2 text-[11px] text-ink-500">{t('prog.whyNotRated')}</p>
+      </div>
+      {p.calibration.some((c) => c.n > 0) && (
+        <div className="mt-3 text-xs text-ink-300">
+          {t('prog.calibration')}: {p.calibration.filter((c) => c.n > 0).map((c) => `${t(`confidence.${c.confidence}`)} ${c.accuracyPct}% (n=${c.n})`).join(' · ')}
+        </div>
+      )}
+    </Panel>
   );
 }

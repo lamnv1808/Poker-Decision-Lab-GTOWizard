@@ -5,7 +5,17 @@ import { useApp } from '../store';
 import type { DecisionFeedback, Explanation, QuestionFeedback } from '../types';
 import { CardText } from './Cards';
 import { RangeGrid } from './RangeGrid';
+import { AssessmentBadge } from '../pages/HeroSim';
 import { GradeBadge, SourceBadge, Toggle } from './ui';
+
+/** Map a content source + grading basis to the assessment label shown on every decision. */
+export function assessmentOf(cls: string, basis: string): 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assumedRange' | 'heuristicCoaching' | 'notEvaluated' {
+  if (cls === 'SOLVER_VERIFIED') return 'solverVerified';
+  if (cls === 'COACH_REVIEWED') return 'reviewedStrategy';
+  if (cls === 'MATH_VERIFIED') return basis === 'exact' ? 'mathVerified' : 'assumedRange';
+  if (cls === 'HEURISTIC') return 'heuristicCoaching';
+  return 'notEvaluated';
+}
 
 function describeAction(a: { type: string; amount?: number }, bb: number, t: (k: string) => string) {
   if (a.type === 'bet' || a.type === 'raise') return `${t(a.type === 'bet' ? 'act.bet' : 'act.raiseTo')} ${Math.round(((a.amount ?? 0) / bb) * 100) / 100}BB`;
@@ -86,6 +96,9 @@ export function DecisionFeedbackView({ fb, bigBlind }: { fb: DecisionFeedback; b
   return (
     <div className="space-y-4" data-testid="feedback">
       <div className="flex flex-wrap items-center gap-2">
+        <AssessmentBadge a={assessmentOf(fb.source.classification, fb.basis)} />
+        {/* a rubric grade from heuristic content is coaching, not a verified strategic judgement */}
+        {fb.basis === 'rubric' && <span className="text-[10px] uppercase text-amber-300">{t('fb.coachingGrade')}</span>}
         <GradeBadge grade={fb.grade} large />
         {fb.evLoss !== null && (
           <span className="text-sm tabular text-ink-300" data-testid="ev-loss">
@@ -176,6 +189,7 @@ export function QuestionFeedbackView({ fb }: { fb: QuestionFeedback }) {
   return (
     <div className="space-y-3" data-testid="feedback">
       <div className="flex flex-wrap items-center gap-2">
+        <AssessmentBadge a={assessmentOf(fb.source.classification, fb.basis)} />
         <GradeBadge grade={fb.grade} large />
         <span className="rounded border border-ink-600 px-1.5 py-0.5 text-[10px] uppercase text-ink-300">{t(`basis.${fb.basis}`)}</span>
         <SourceBadge cls={fb.source.classification} />
