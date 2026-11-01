@@ -73,11 +73,17 @@ describe('continuation, Branch Challenge, hidden info, solver-flop table', () =>
   it('solver-flop table: flop decisions are solver-verified (strategy track) when the exact spot is reached', async () => {
     const u = await newUser('cont3');
     let solverGraded = 0;
-    for (let i = 0; i < 12 && !solverGraded; i++) {
+    for (let i = 0; i < 4; i++) {
       const v = (await u.agent.post('/api/sim/hands').send({ table: 'solverFlop', heroPos: 'BB', mode: 'rated' }).expect(201)).body as View;
       expect(v.origin.kind).toBe('solverFlop');
       expect(v.state.board).toHaveLength(3); // scripted preflop, Hero acts first on the flop
-      const r = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: { type: 'check' } }).expect(200);
+      // the solved tree's sizes are offered up front — structure only, never frequencies or EVs
+      const opts = (v as unknown as { current: { solverOptions: { key: string; action: { type: string; amount?: number } }[] } }).current.solverOptions;
+      expect(opts.map((o) => o.key)).toContain('Check');
+      expect(JSON.stringify(opts)).not.toMatch(/"f"|"ev"|freq/);
+      const bet = opts.find((o) => o.action.type === 'bet')!;
+      const choice = i % 2 ? bet.action : { type: 'check' };
+      const r = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: choice }).expect(200);
       const fb = r.body.feedback;
       if (fb?.assessment === 'solverVerified') {
         expect(fb.track).toBe('strategy');
@@ -88,6 +94,6 @@ describe('continuation, Branch Challenge, hidden info, solver-flop table', () =>
         expect(att.ratingApplied).toBe(true);
       }
     }
-    expect(solverGraded).toBe(1);
+    expect(solverGraded).toBeGreaterThanOrEqual(1);
   });
 });

@@ -9,7 +9,7 @@ test('mixed training session with summary', async ({ page }) => {
   await expect(page.getByTestId('train-continue')).toBeVisible();
   await page.goto('/mixed');
   // maths only, so the item type is predictable
-  for (const f of ['fullhand', 'preflop', 'postflop']) await page.getByTestId(`mixed-focus-${f}`).uncheck({ force: true });
+  for (const f of ['fullhand', 'preflop', 'postflop', 'villain', 'replay']) await page.getByTestId(`mixed-focus-${f}`).uncheck({ force: true });
   await page.getByTestId('mixed-start').click();
   await expect(page).toHaveURL(/\/math\?level=\d&mixed=/);
   await expect(page.getByTestId('mixed-bar')).toBeVisible();

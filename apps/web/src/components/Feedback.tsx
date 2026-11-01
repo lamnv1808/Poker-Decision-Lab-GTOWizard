@@ -6,7 +6,7 @@ import type { DecisionFeedback, Explanation, QuestionFeedback } from '../types';
 import { CardText } from './Cards';
 import { RangeGrid } from './RangeGrid';
 import { AssessmentBadge } from '../pages/HeroSim';
-import { GradeBadge, SourceBadge, Toggle } from './ui';
+import { GradeBadge, Toggle } from './ui';
 
 /** Map a content source + grading basis to the assessment label shown on every decision. */
 export function assessmentOf(cls: string, basis: string): 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assumedRange' | 'heuristicCoaching' | 'notEvaluated' {
@@ -105,7 +105,6 @@ export function DecisionFeedbackView({ fb, bigBlind }: { fb: DecisionFeedback; b
             {t('fb.evLoss')}: <b className="text-ink-100">{fmtNum(fb.evLoss, fb.unit === 'icmPct' ? 3 : 2)} {unitLabel}</b>
           </span>
         )}
-        <SourceBadge cls={fb.source.classification} />
         {fb.ratingEligible ? <span className="text-xs text-emerald-400">{t('fb.rated')}</span> : <span className="text-xs text-ink-400">{t('fb.notRated')}</span>}
         <div className="ml-auto">
           <Toggle label={t('fb.view')} value={deep ? 'deep' : 'quick'} onChange={(v) => setDeep(v === 'deep')} options={[{ value: 'quick', label: t('fb.quick') }, { value: 'deep', label: t('fb.deep') }]} />
@@ -192,7 +191,6 @@ export function QuestionFeedbackView({ fb }: { fb: QuestionFeedback }) {
         <AssessmentBadge a={assessmentOf(fb.source.classification, fb.basis)} />
         <GradeBadge grade={fb.grade} large />
         <span className="rounded border border-ink-600 px-1.5 py-0.5 text-[10px] uppercase text-ink-300">{t(`basis.${fb.basis}`)}</span>
-        <SourceBadge cls={fb.source.classification} />
         {fb.ratingEligible ? <span className="text-xs text-emerald-400">{t('fb.rated')}</span> : <span className="text-xs text-ink-400">{t('fb.notRated')}</span>}
         <div className="ml-auto">
           <Toggle label={t('fb.view')} value={deep ? 'deep' : 'quick'} onChange={(v) => setDeep(v === 'deep')} options={[{ value: 'quick', label: t('fb.quick') }, { value: 'deep', label: t('fb.deep') }]} />

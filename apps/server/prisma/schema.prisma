@@ -250,6 +250,10 @@ model DecisionAttempt {
   @@unique([userId, clientAttemptId])
   @@index([userId, createdAt])
   @@index([userId, itemRef])
+  /// familiarity / anti-farming lookups by hand family or solver-equivalent spot
+  @@index([userId, familyId])
+  /// Mixed Training and session summaries
+  @@index([sessionId])
 }
 
 model Rating {

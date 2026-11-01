@@ -76,6 +76,7 @@ const build = (h: SimHand, s: Step[] = steps(h)) => {
     prefix: o.prefix,
     villainOverrides: o.villainOverrides,
     oracle: oracleFor(o),
+    modelVersion: h.modelVersion,
   });
 };
 
@@ -125,7 +126,8 @@ export function simView(h: SimHand, run: SimRun = build(h)) {
     heroCards: run.state.players.find((p) => p.id === hero)!.cards,
     legal: current ? legalActions(run.state) : null,
     progress: { street: run.state.street, decisionNumber: run.decisions.filter((d) => d.action).length + (current ? 1 : 0), complete },
-    current: current ? facts(current.info) : null,
+    // the solved tree's actions (sizes only, never frequencies) so Hero can stay inside the tree
+    current: current ? { ...facts(current.info), solverOptions: current.info.oracle ? current.info.oracle.actions.map((key, i) => ({ key, action: current.info.oracle!.options[i]! })) : null } : null,
     decisions: decisionsView(h, run),
     review: review
       ? {
@@ -426,7 +428,7 @@ simRouter.post('/hands/:id/branch-villain', async (req, res) => {
   const keep = steps(h).filter((_, i) => run.decisions[i]!.info.historyIndex < body.historyIndex).map((x) => ({ action: x.action, clientAttemptId: `branch-${x.clientAttemptId}` }));
   const o = originOf(h);
   const origin: Origin = { ...o, villainOverrides: { ...(o.villainOverrides ?? {}), [body.historyIndex]: body.choice } };
-  const probe = runSim(h.seed, h.config as unknown as SimConfig, keep.map((x) => x.action), { deal: (h.deal as unknown as SimDeal | null) ?? undefined, prefix: o.prefix, villainOverrides: origin.villainOverrides, oracle: oracleFor(o), equitySamples: 50 });
+  const probe = runSim(h.seed, h.config as unknown as SimConfig, keep.map((x) => x.action), { deal: (h.deal as unknown as SimDeal | null) ?? undefined, prefix: o.prefix, villainOverrides: origin.villainOverrides, oracle: oracleFor(o), equitySamples: 50, modelVersion: h.modelVersion });
   const r = await prisma.simHand.create({
     data: { userId, seed: h.seed, ...(h.deal ? { deal: h.deal as object } : {}), config: h.config as object, origin: origin as object, modelVersion: h.modelVersion, mode: 'practice', feedback: 'guided', kind: 'branch', parentId: h.parentId ?? h.id, branchAt: null, steps: keep as object, status: probe.state.complete ? 'complete' : 'active', completedAt: probe.state.complete ? new Date() : null },
   });

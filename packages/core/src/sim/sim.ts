@@ -24,7 +24,8 @@ import { DEFAULT_THRESHOLDS, type Grade, gradeFromEvLoss } from '../scenario/gra
 import { COMBOS, PREFLOP_TOP_SHARE, comboClass, comboIndex, comboInts, postflopStrength } from './strength';
 import { ARCHETYPES, type ActionProbs, type Archetype, ARCHETYPE_PARAMS, type PolicyCtx, policy } from './villain';
 
-export const SIM_MODEL_VERSION = 'sim-v1';
+/** Villain model version; stored with each hand so it always rebuilds with the model it was dealt with. */
+export const SIM_MODEL_VERSION = 'sim-v1.1';
 /** Chips per big blind inside the simulator. */
 export const SIM_BB = 100;
 
@@ -204,6 +205,8 @@ export interface RunOptions {
   /** Branch Challenge: force a Villain choice at a given history index. */
   villainOverrides?: Record<number, keyof ActionProbs>;
   oracle?: SpotOracle;
+  /** Villain model version the hand was created with (default: current). */
+  modelVersion?: string;
 }
 
 export interface HeroDecisionInfo {
@@ -220,7 +223,8 @@ export interface HeroDecisionInfo {
   /** Legal actions at this decision (sent to the client only after the hand is over). */
   legal: LegalActions;
   /** Present when a validated solver spot covers this decision. */
-  oracle?: { source: string; label: { en: string; vi: string }; actions: string[] };
+  /** Solved tree at this decision: action keys and the exact engine actions (structure only — no frequencies). */
+  oracle?: { source: string; label: { en: string; vi: string }; actions: string[]; options: PlayerAction[] };
   /** Curriculum concepts present at the decision (from public information only). */
   topics: string[];
   solver: null | { role: PushFoldSpotInfo['role']; stackBB: number; deadBB: number; heroClass: string; frequency: number; evAggressiveBB: number };
@@ -307,7 +311,7 @@ function sizeAggressive(state: HandState, legal: LegalActions, arch: Archetype, 
 const categoryOf = (a: PlayerAction): keyof ActionProbs => (a.type === 'fold' ? 'fold' : a.type === 'check' || a.type === 'call' ? 'passive' : 'aggressive');
 
 /** The model's action probabilities for every combo at Villain's decision (solver, oracle or heuristic). */
-function villainModel(state: HandState, cfg: SimConfig, oracle?: SpotOracle): { probsFor: (i: number) => ActionProbs; source: VillainEvent['source']; node: OracleNode | null; shoveOnly: boolean } {
+function villainModel(state: HandState, cfg: SimConfig, oracle?: SpotOracle, modelVersion?: string): { probsFor: (i: number) => ActionProbs; source: VillainEvent['source']; node: OracleNode | null; shoveOnly: boolean } {
   const legal = legalActions(state)!;
   const actor = state.players[state.toAct]!;
   const arch = cfg.villains[actor.id]!;
@@ -342,7 +346,7 @@ function villainModel(state: HandState, cfg: SimConfig, oracle?: SpotOracle): { 
   }
   const ctx = ctxFor(state, legal);
   const x = strengthOf(state);
-  return { source: 'heuristic', node: null, shoveOnly: false, probsFor: (i) => policy(arch, ctx, x(i)) };
+  return { source: 'heuristic', node: null, shoveOnly: false, probsFor: (i) => policy(arch, ctx, x(i), modelVersion) };
 }
 
 function updateRange(w: Float64Array, probsFor: (i: number) => ActionProbs, chosen: keyof ActionProbs) {
@@ -357,7 +361,7 @@ function villainAct(seed: number, state: HandState, cfg: SimConfig, ranges: Reco
   const legal = legalActions(state)!;
   const actor = state.players[state.toAct]!;
   const arch = cfg.villains[actor.id]!;
-  const m = villainModel(state, cfg, opts.oracle);
+  const m = villainModel(state, cfg, opts.oracle, opts.modelVersion);
   const own = comboIndex(actor.cards![0]!, actor.cards![1]!);
   const pr = m.probsFor(own);
   const r = createRng(hashString(`${seed}:${state.history.length}:${actor.id}`))();
@@ -679,7 +683,7 @@ export function runSim(seed: number, config: SimConfig, heroActions: readonly Pl
       const p = prefix[pi++]!;
       if (p.playerId !== actor.id) throw new Error(`Scripted action for ${p.playerId}, but ${actor.id} is to act`);
       if (actor.id !== config.heroPos) {
-        const m = villainModel(state, config);
+        const m = villainModel(state, config, undefined, opts.modelVersion);
         updateRange(ranges[actor.id]!, m.probsFor, categoryOf(p.action));
         run.villainEvents.push({ historyIndex: state.history.length, playerId: actor.id, archetype: config.villains[actor.id]!, source: 'scripted', chosen: categoryOf(p.action) });
       }
@@ -689,7 +693,7 @@ export function runSim(seed: number, config: SimConfig, heroActions: readonly Pl
     if (actor.id === config.heroPos) {
       const node = opts.oracle?.(state, actor.id) ?? null;
       const info = heroInfo(run, state, run.decisions.length, samples);
-      if (node) info.oracle = { source: node.source, label: node.label, actions: node.actions.map((x) => x.key) };
+      if (node) info.oracle = { source: node.source, label: node.label, actions: node.actions.map((x) => x.key), options: node.actions.map((x) => x.make) };
       if (k >= heroActions.length) {
         run.decisions.push({ info });
         run.awaitingHero = true;

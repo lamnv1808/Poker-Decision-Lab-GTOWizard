@@ -20,14 +20,19 @@ export interface ArchetypeParams {
   callMargin: number;
   /** Postflop bet size as a fraction of the pot. */
   betFrac: number;
+  /**
+   * sim-v1.1: extra strength demanded when facing a bet, because a bettor's range is stronger than
+   * a random hand (the strength measure ranks against random hands). 0 = ignores the bet.
+   */
+  betRespect: number;
 }
 
 export const ARCHETYPE_PARAMS: Record<Archetype, ArchetypeParams> = {
-  nit: { vpip: 0.12, pfr: 0.1, aggression: 0.35, bluff: 0.03, callMargin: 0.15, betFrac: 0.5 },
-  tag: { vpip: 0.22, pfr: 0.18, aggression: 0.6, bluff: 0.1, callMargin: 0.07, betFrac: 0.66 },
-  lag: { vpip: 0.33, pfr: 0.27, aggression: 0.7, bluff: 0.2, callMargin: 0.03, betFrac: 0.75 },
-  station: { vpip: 0.5, pfr: 0.08, aggression: 0.25, bluff: 0.03, callMargin: -0.12, betFrac: 0.4 },
-  maniac: { vpip: 0.6, pfr: 0.5, aggression: 0.85, bluff: 0.35, callMargin: 0, betFrac: 1 },
+  nit: { vpip: 0.12, pfr: 0.1, aggression: 0.35, bluff: 0.03, callMargin: 0.15, betFrac: 0.5, betRespect: 0.3 },
+  tag: { vpip: 0.22, pfr: 0.18, aggression: 0.6, bluff: 0.1, callMargin: 0.07, betFrac: 0.66, betRespect: 0.25 },
+  lag: { vpip: 0.33, pfr: 0.27, aggression: 0.7, bluff: 0.2, callMargin: 0.03, betFrac: 0.75, betRespect: 0.18 },
+  station: { vpip: 0.5, pfr: 0.08, aggression: 0.25, bluff: 0.03, callMargin: -0.12, betFrac: 0.4, betRespect: 0.05 },
+  maniac: { vpip: 0.6, pfr: 0.5, aggression: 0.85, bluff: 0.35, callMargin: 0, betFrac: 1, betRespect: 0.1 },
 };
 
 export const ARCHETYPE_LABELS: Record<Archetype, { en: string; vi: string }> = {
@@ -65,7 +70,7 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
 /**
  * @param x preflop: top-share of the combo (0 = best); postflop: strength in [0,1] (1 = best).
  */
-export function policy(arch: Archetype, ctx: PolicyCtx, x: number): ActionProbs {
+export function policy(arch: Archetype, ctx: PolicyCtx, x: number, modelVersion = 'sim-v1.1'): ActionProbs {
   const p = ARCHETYPE_PARAMS[arch];
   let fold: number;
   let passive: number;
@@ -92,7 +97,8 @@ export function policy(arch: Archetype, ctx: PolicyCtx, x: number): ActionProbs 
       passive = 1 - aggressive;
       fold = 0;
     } else {
-      const cont = above(ctx.requiredEq + p.callMargin, s);
+      const respect = modelVersion === 'sim-v1' ? 0 : p.betRespect;
+      const cont = above(ctx.requiredEq + p.callMargin + respect, s);
       const raise = clamp(p.aggression * 0.5 * above(0.9, s, 0.02) + p.bluff * 0.25 * below(0.15, s, 0.03), 0, 1);
       aggressive = raise;
       passive = (1 - raise) * cont;

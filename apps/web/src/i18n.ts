@@ -132,7 +132,7 @@ const en: Dict = {
   'pf.mixNote': 'When GTO mixes, every action it uses has (almost) the same EV — choosing any of them is graded as correct.',
   'run.nextTest': 'Next test',
   'launch.start': 'Start a test',
-  'launch.how': 'The app picks for you: scenarios due for review first, then ones you have not tried, then a random one.',
+  'launch.how': 'The app picks from the pool you choose — by default only scenarios you have never played, so nothing repeats until you have seen them all. Replays are practice and never add rated points.',
   'launch.browse': 'Browse all scenarios',
   'launch.back': 'Back',
   'launch.allScenarios': 'all scenarios',
@@ -789,6 +789,8 @@ const en: Dict = {
   "mixed.ungraded": "ungraded",
   "mixed.columns": "Columns: answers · strategy-rated / fundamentals-rated / ungraded · accuracy · avg EV loss",
   "mixed.exhausted": "No unseen content left for: {types}. They were skipped.",
+  "sim.solverSpot": "Solved spot — these actions are in the solver's tree (other sizes are not graded):",
+  "sim.noRunout": "none — all five cards were dealt",
 };
 
 const vi: Dict = {
@@ -919,7 +921,7 @@ const vi: Dict = {
   'pf.mixNote': 'Khi GTO trộn, mọi hành động được dùng đều có EV (gần như) bằng nhau — chọn bất kỳ hành động nào trong số đó đều được tính là đúng.',
   'run.nextTest': 'Bài tiếp theo',
   'launch.start': 'Bắt đầu bài kiểm tra',
-  'launch.how': 'Ứng dụng tự chọn cho bạn: tình huống đến hạn ôn trước, rồi tình huống chưa làm, rồi ngẫu nhiên.',
+  'launch.how': 'Ứng dụng chọn từ nhóm bạn chọn — mặc định chỉ những tình huống bạn chưa chơi, nên không lặp lại cho đến khi bạn đã xem hết. Chơi lại là luyện tập và không cộng điểm xếp hạng.',
   'launch.browse': 'Xem tất cả tình huống',
   'launch.back': 'Quay lại',
   'launch.allScenarios': 'tất cả tình huống',
@@ -1576,6 +1578,8 @@ const vi: Dict = {
   "mixed.ungraded": "không chấm",
   "mixed.columns": "Cột: số câu · chiến thuật / nền tảng / không chấm · độ chính xác · mất EV trung bình",
   "mixed.exhausted": "Đã hết bài mới cho: {types}. Đã bỏ qua.",
+  "sim.solverSpot": "Spot đã giải — các hành động này nằm trong cây của solver (kích cỡ khác không được chấm):",
+  "sim.noRunout": "không có — đã chia đủ năm lá",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, vi };

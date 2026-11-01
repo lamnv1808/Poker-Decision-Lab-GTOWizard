@@ -11,7 +11,7 @@ import { useT } from '../i18n';
 import { useApp } from '../store';
 import type { Grade, Localized } from '../types';
 
-interface Facts { potBB: number; toCallBB: number; requiredEquity: number | null; spr: number | null; street: string }
+interface Facts { potBB: number; toCallBB: number; requiredEquity: number | null; spr: number | null; street: string; solverOptions?: { key: string; action: PlayerAction }[] | null }
 type Assessment = 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assumedRange' | 'heuristicCoaching' | 'notEvaluated';
 interface Feedback {
   assessment?: Assessment;
@@ -172,7 +172,7 @@ function Progress({ v }: { v: SimView }) {
     <div className="flex flex-wrap items-center gap-2" data-testid="sim-progress">
       <ol className="flex items-center gap-1 text-[11px]">
         {[...STREETS, 'showdown'].map((s, i) => (
-          <li key={s} className={`rounded-full px-2 py-0.5 ${i === cur ? 'bg-accent/20 text-accent' : i < cur && (i === 4 || i <= reached) ? 'text-ink-300' : 'text-ink-600 line-through'}`}>
+          <li key={s} className={`rounded-full px-2 py-0.5 ${i === cur ? 'bg-accent/20 text-accent' : i < cur && (i === 4 || i <= reached) ? 'text-ink-300' : v.review && i > reached && i < 4 ? 'text-ink-600 line-through' : 'text-ink-500'}`}>
             {i < cur && (i === 4 || i <= reached) ? '✓ ' : ''}{s === 'showdown' ? t('sim.handEnd') : t(`street.${s}`)}
           </li>
         ))}
@@ -328,6 +328,18 @@ export function HeroSimPage() {
                 </div>
               )}
               <textarea value={reasoning} onChange={(e) => setReasoning(e.target.value)} maxLength={1000} rows={2} placeholder={t('sim.reasoning')} className="mb-2 w-full rounded-md border border-ink-600 bg-ink-850 px-2 py-1.5 text-sm" data-testid="sim-reasoning" />
+              {v.current.solverOptions && (
+                <div className="mb-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs" data-testid="solver-options">
+                  <div className="mb-1 text-emerald-200">{t('sim.solverSpot')}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {v.current.solverOptions.map((o) => (
+                      <button key={o.key} type="button" disabled={busy} onClick={() => void act(o.action)} className="rounded border border-emerald-500/50 px-2 py-1 font-semibold">
+                        {o.action.type === 'bet' || o.action.type === 'raise' ? `${t(o.action.type === 'bet' ? 'act.bet' : 'act.raiseTo')} ${fmtNum((o.action.amount ?? 0) / bb, 2)} BB` : t(`act.${o.action.type}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <ActionBar state={v.state} legal={v.legal} bigBlind={bb} showBB={showBB} disabled={busy} onAct={(a, c) => void act(a, c)} />
             </Panel>
           )}
@@ -523,7 +535,7 @@ function HiddenInfo({ id }: { id: string }) {
       {h && (show.runout || show.cards) && (
         <div className="rounded border border-dashed border-amber-400/50 bg-amber-500/5 p-2" data-testid="sim-hidden-panel">
           <p className="mb-1 text-[11px] text-amber-200">{loc(h.label, lang)}</p>
-          {show.runout && <div>{t('sim.hypotheticalRunout')}: {h.runout.length ? <CardText cards={h.runout.join('')} /> : '—'}</div>}
+          {show.runout && <div>{t('sim.hypotheticalRunout')}: {h.runout.length ? <CardText cards={h.runout.join('')} /> : t('sim.noRunout')}</div>}
           {show.cards && <div className="space-y-0.5">{h.opponents.map((o) => <div key={o.id}>{o.id}: <CardText cards={o.cards.join('')} />{o.folded ? ` (${t('table.folded')})` : ''}</div>)}</div>}
         </div>
       )}

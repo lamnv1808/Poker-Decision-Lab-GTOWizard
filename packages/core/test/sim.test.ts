@@ -151,3 +151,15 @@ describe('full-hand simulator', () => {
     expect(open).toBeGreaterThan(0);
   });
 });
+
+describe('Villain model versions', () => {
+  it('sim-v1.1 respects bets by archetype (Nit folds most, Station least); sim-v1 hands rebuild unchanged', () => {
+    const ctx = { street: 'flop' as const, toCall: 100, raises: 1, requiredEq: 0.28, nOpp: 1, canCheck: false, canRaise: true };
+    const fold = (a: Parameters<typeof policy>[0], v?: string) => policy(a, ctx, 0.5, v).fold;
+    expect(fold('nit')).toBeGreaterThan(fold('tag'));
+    expect(fold('tag')).toBeGreaterThan(fold('lag'));
+    expect(fold('lag')).toBeGreaterThan(fold('station'));
+    // the stored version decides: v1 ignores the new term, so old hands replay exactly as dealt
+    expect(fold('nit', 'sim-v1')).toBeLessThan(fold('nit', 'sim-v1.1'));
+  });
+});
