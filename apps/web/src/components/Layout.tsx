@@ -8,6 +8,7 @@ export const NAV = [
   { to: '/train', key: 'train', icon: '◎' },
   { to: '/hero', key: 'hero', icon: '♠' },
   { to: '/villain', key: 'villain', icon: '◐' },
+  { to: '/gto', key: 'gto', icon: '◆' },
   { to: '/math', key: 'math', icon: '∑' },
   { to: '/hands', key: 'hands', icon: '⇪' },
   { to: '/leaks', key: 'leaks', icon: '⚠' },

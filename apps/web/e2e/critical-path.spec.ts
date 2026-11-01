@@ -81,6 +81,18 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await page.getByTestId('quiz-submit').click();
   await expect(page.getByTestId('quiz-result')).toBeVisible();
 
+  // GTO push/fold quiz: random spot, answer, equilibrium feedback, next spot via keyboard
+  await page.goto('/gto');
+  await expect(page.getByTestId('gto-spot')).toBeVisible();
+  await page.keyboard.press('f');
+  await expect(page.getByTestId('gto-result')).toBeVisible();
+  await expect(page.getByTestId('gto-grid')).toBeVisible();
+  await expect(page.getByTestId('gto-stats')).toContainText('Answered: 1');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('gto-actions')).toBeVisible();
+  await page.getByTestId('gto-actions').getByRole('button').last().click();
+  await expect(page.getByTestId('gto-stats')).toContainText('Answered: 2');
+
   // Hand-history import -> spot quiz -> queue
   await page.goto('/hands');
   await page.getByTestId('hh-file').setInputFiles({ name: 'gg.txt', mimeType: 'text/plain', buffer: fixture });
@@ -94,6 +106,10 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await expect(page.getByTestId('spot-result')).toContainText('Original action');
   await page.getByTestId('queue-spot').click();
   await expect(page.getByTestId('queue-spot')).toHaveText('Saved to queue');
+
+  // Push/fold audit page renders for the imported hands
+  await page.goto('/gto/audit');
+  await expect(page.getByText('Push/Fold Audit').first()).toBeVisible();
 
   // Review queue
   await page.goto('/train');

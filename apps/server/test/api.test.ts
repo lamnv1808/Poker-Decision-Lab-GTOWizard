@@ -234,3 +234,59 @@ describe('hand history import', () => {
     expect(r.body.errors[0].message).toMatch(/Unsupported/);
   });
 });
+
+describe('GTO push/fold quiz and audit', () => {
+  it('serves random equilibrium spots and grades answers server-side', async () => {
+    const { agent, id } = await newUser('gto');
+    const spot = await agent.get('/api/gto/spot?minStack=8&maxStack=10&role=sbShove').expect(200);
+    expect(spot.body.role).toBe('sbShove');
+    expect(spot.body.stackBB).toBeGreaterThanOrEqual(8);
+    expect(spot.body).not.toHaveProperty('frequency');
+    expect(spot.body.state.players.find((p: { id: string }) => p.id === 'SB').cards).toEqual(spot.body.heroCards);
+    expect(spot.body.state.players.find((p: { id: string }) => p.id === 'BB').cards).toBeUndefined();
+    const r = await agent.post('/api/gto/answer').send({ token: spot.body.token, action: 'shove', clientAttemptId: cid() }).expect(200);
+    expect(r.body.source.classification).toBe('SOLVER_VERIFIED');
+    expect(Object.keys(r.body.ranges.push)).toHaveLength(169);
+    expect(typeof r.body.evLossBB).toBe('number');
+    expect(r.body.ratingChanges.length).toBeGreaterThan(0);
+    expect((await agent.post('/api/gto/answer').send({ token: spot.body.token, action: 'call', clientAttemptId: cid() })).status).toBe(400);
+    const other = await newUser('gto2');
+    expect((await other.agent.post('/api/gto/answer').send({ token: spot.body.token, action: 'fold', clientAttemptId: cid() })).status).toBe(403);
+    expect(await prisma.decisionAttempt.count({ where: { userId: id, attemptType: 'quiz' } })).toBe(1);
+  });
+  it('audits push/fold decisions in imported hands', async () => {
+    const hand = [
+      "Poker Hand #TM9000000001: Tournament #900000001, Synthetic Test $1 Hold'em No Limit - Level12(1,000/2,000(250)) - 2026/10/20 21:15:03",
+      "Table '1' 6-max Seat #6 is the button",
+      'Seat 1: Hero (16,250 in chips)',
+      'Seat 2: bbplayer (40,000 in chips)',
+      'Seat 3: p3 (30,000 in chips)',
+      'Seat 4: p4 (30,000 in chips)',
+      'Seat 5: p5 (30,000 in chips)',
+      'Seat 6: p6 (30,000 in chips)',
+      ...['Hero', 'bbplayer', 'p3', 'p4', 'p5', 'p6'].map((p) => `${p}: posts the ante 250`),
+      'Hero: posts small blind 1,000',
+      'bbplayer: posts big blind 2,000',
+      '*** HOLE CARDS ***',
+      'Dealt to Hero [Ah 9c]',
+      'p3: folds',
+      'p4: folds',
+      'p5: folds',
+      'p6: folds',
+      'Hero: raises 14,000 to 16,000 and is all-in',
+      'bbplayer: folds',
+      'Uncalled bet (14,000) returned to Hero',
+      'Hero collected 5,500 from pot',
+      '*** SUMMARY ***',
+      'Total pot 5,500 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0',
+    ].join('\n');
+    const { agent } = await newUser('auditor');
+    const imp = await agent.post('/api/imports').attach('file', Buffer.from(hand), 'h.txt').expect(201);
+    expect(imp.body.handsParsed).toBe(1);
+    const a = await agent.get('/api/gto/audit').expect(200);
+    expect(a.body.sbShove.graded).toBe(1);
+    expect(a.body.worst[0].heroAction).toBe('shove');
+    expect(a.body.worst[0].stackBB).toBe(8);
+    expect(a.body.worst[0].grade).toBe('excellent');
+  });
+});

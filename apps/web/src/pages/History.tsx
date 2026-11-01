@@ -46,6 +46,7 @@ export function HistoryPage() {
     api.get<Bookmark[]>('/bookmarks').then(setBookmarks).catch(() => undefined);
   }, []);
   const itemLink = (a: Attempt) => {
+    if (a.attemptType === 'quiz' && a.itemRef.startsWith('gto:')) return <Link className="text-accent" to="/gto">{t('nav.gto')} · {a.itemRef.split(':')[4]} @ {a.itemRef.split(':')[2]}BB</Link>;
     if (a.attemptType === 'quiz') return <Link className="text-accent" to={`/math?kind=${a.itemRef.split(':')[1]}`}>{t(`quiz.${a.itemRef.split(':')[1]}`)}</Link>;
     if (a.attemptType === 'imported') return <Link className="text-accent" to={`/hands/${a.itemRef.split(':')[0]}?spot=${a.itemRef.split(':')[1]}`}>{t('nav.hands')}</Link>;
     const id = a.itemRef.split(':')[0]!;

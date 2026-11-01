@@ -7,6 +7,7 @@ import { analyticsRouter } from './analytics';
 import { authRouter, loadUser, preferencesRouter } from './auth';
 import { env, isProd } from './env';
 import { errorHandler } from './http';
+import { gtoRouter } from './gto';
 import { handsRouter, importsRouter } from './imports';
 import { mathRouter } from './mathlab';
 import { bookmarksRouter, notesRouter, reviewRouter } from './review';
@@ -65,6 +66,7 @@ export function createApp() {
   app.use('/api/notes', notesRouter);
   app.use('/api/imports', importsRouter);
   app.use('/api/hands', handsRouter);
+  app.use('/api/gto', gtoRouter);
   app.use('/api', analyticsRouter);
   app.use('/api', (_req, res) => void res.status(404).json({ error: 'not_found' }));
 

@@ -5,6 +5,8 @@ import { Spinner } from './components/ui';
 import { AuthPage } from './pages/AuthPage';
 import { CurriculumPage } from './pages/Curriculum';
 import { Dashboard } from './pages/Dashboard';
+import { GtoAudit } from './pages/GtoAudit';
+import { GtoQuiz } from './pages/GtoQuiz';
 import { HandDetailPage, HandsPage } from './pages/Hands';
 import { HistoryPage } from './pages/History';
 import { LeaksPage } from './pages/Leaks';
@@ -42,6 +44,8 @@ export function App() {
         <Route path="villain" element={<ScenarioList mode="villain" />} />
         <Route path="run/:id" element={<RunPage />} />
         <Route path="math" element={<MathLab />} />
+        <Route path="gto" element={<GtoQuiz />} />
+        <Route path="gto/audit" element={<GtoAudit />} />
         <Route path="hands" element={<HandsPage />} />
         <Route path="hands/:id" element={<HandDetailPage />} />
         <Route path="leaks" element={<LeaksPage />} />

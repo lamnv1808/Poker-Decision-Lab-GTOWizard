@@ -384,12 +384,16 @@ model HandHistory {
   parsed         Json
   /// Private to the owner unless explicitly shared.
   shared         Boolean @default(false)
+  /// Heads-up push/fold decision graded against the equilibrium, when the hand contains one.
+  gtoAudit       Json?
+  hasGtoSpot     Boolean @default(false)
   createdAt      DateTime @default(now())
 
   actions HandAction[]
 
   @@unique([userId, site, externalHandId])
   @@index([userId, playedAt])
+  @@index([userId, hasGtoSpot])
 }
 
 model HandAction {

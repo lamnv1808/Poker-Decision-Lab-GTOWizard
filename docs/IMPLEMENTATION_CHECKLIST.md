@@ -42,6 +42,15 @@ Legend: ✅ done & tested · ◐ partial · ⛔ blocked/not done
 ## Phase 8 — Hand-history import ✅
 - ✅ GG/Natural8 tournament TXT + ZIP, dedup, engine reconstruction with pot check, stored errors, hidden-action spot quiz, save-to-queue, per-user isolation
 
+## GTO push/fold module ✅
+- ✅ 169×169 preflop all-in equity table (seeded Monte Carlo, 20k samples/matchup, exact card-removal weights) — `packages/core/scripts/build-preflop-equity.ts`
+- ✅ Heads-up push/fold Nash solver (fictitious play), matches the published 10BB result (58.3% shove / 37.4% call); 189 precomputed solutions (2–15BB × 7 ante levels), worst exploitability 0.00011 BB — `scripts/build-pushfold-solutions.ts`
+- ✅ GTO Quiz: endless random spots (SB shove/fold, BB call/fold), EV-loss grading vs equilibrium, range heat-maps, keyboard play, rated as SOLVER_VERIFIED (source: this app's solver, stated model)
+- ✅ Push/Fold Audit of imported hands: every heads-up push/fold decision graded; too tight vs too loose, by stack band, costliest hands
+- ✅ Tested on 52,525 real GG/Natural8 hands: 52,483/52,486 Hold'em hands reconstruct exactly; four engine rule gaps found and fixed
+- ✅ Bulk import: 19k hands in ~50 s within a 320 MB heap (Render free plan)
+- Limits: push/fold model only (no limp/min-raise), heads-up subgame, chip EV (no ICM/bounty). Multi-way and postflop solving are future work.
+
 ## Phase 9 — Tournament expansion ◐
 - ✅ PKO (3), bubble/final-table ICM (2), short-stack modules; ChipEV vs ICM vs bounty distinguished
 - ◐ Content depth: 44 scenarios (23 math-verified, 21 heuristic). More final-table/PKO depth is content work, not engine work.

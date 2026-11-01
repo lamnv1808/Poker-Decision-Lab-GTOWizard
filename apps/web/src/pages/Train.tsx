@@ -35,14 +35,14 @@ export function Train() {
   }, [filter]);
   const open = (i: QueueItem) => {
     if (i.kind === 'scenario') void start(i.ref, mode).catch(setError);
-    else if (i.kind === 'quiz') nav(`/math?kind=${i.ref}`);
+    else if (i.kind === 'quiz') nav(i.ref === 'gto' ? '/gto' : `/math?kind=${i.ref}`);
     else nav(`/hands/${i.ref.split(':')[0]}?spot=${i.ref.split(':')[1]}`);
   };
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold">{t('nav.train')}</h1>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {['hero', 'villain', 'math', 'hands'].map((k) => (
+        {['gto', 'hero', 'villain', 'math', 'hands'].map((k) => (
           <Link key={k} to={`/${k}`} className="rounded-xl border border-ink-700 bg-ink-900 p-4 hover:border-ink-500">
             <div className="font-semibold">{t(`nav.${k}`)}</div>
             <div className="text-sm text-ink-300">{t(`${k}.intro`)}</div>
@@ -74,7 +74,7 @@ export function Train() {
                       <SourceBadge cls={i.scenario.classification} />
                     </div>
                   )}
-                  {i.kind === 'quiz' && <span className="text-sm">{t('nav.math')} · {t(`quiz.${i.ref}`)}</span>}
+                  {i.kind === 'quiz' && <span className="text-sm">{i.ref === 'gto' ? t('nav.gto') : `${t('nav.math')} · ${t(`quiz.${i.ref}`)}`}</span>}
                   {i.kind === 'imported' && <span className="text-sm">{t('nav.hands')} · #{i.hand?.externalHandId} · {t('hands.spot')} {Number(i.ref.split(':')[1]) + 1}</span>}
                   <div className="text-[11px] text-ink-400">
                     {i.mastery != null && <>{t('list.mastery')} {Math.round(i.mastery * 100)}% · </>}

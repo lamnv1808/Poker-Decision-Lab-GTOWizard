@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { type ReconstructedHand, ggParser, parseHandHistoryText, publicState, reconstructHand, reviewSpots, legalActions, initialSrs, reviewSrs, masteryEstimate } from '@pdl/core';
+import { createHash, randomUUID } from 'node:crypto';
+import { type ReconstructedHand, auditPushFold, ggParser, parseHandHistoryText, publicState, reconstructHand, reviewSpots, legalActions, initialSrs, reviewSrs, masteryEstimate } from '@pdl/core';
 import { Router } from 'express';
 import JSZip from 'jszip';
 import multer from 'multer';
@@ -9,9 +9,9 @@ import { prisma } from './db';
 import { HttpError, notFound, parse } from './http';
 import { recordAttempt } from './learning';
 
-const MAX_FILE = 20 * 1024 * 1024;
-const MAX_ZIP_ENTRIES = 500;
-const MAX_UNZIPPED = 100 * 1024 * 1024;
+const MAX_FILE = 60 * 1024 * 1024;
+const MAX_ZIP_ENTRIES = 5000;
+const MAX_UNZIPPED = 200 * 1024 * 1024;
 export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE, files: 1 } });
 
 /** Extract .txt hand-history files from an upload (TXT or ZIP). */
@@ -37,6 +37,12 @@ function serialize(h: ReconstructedHand) {
   return { parsed, positions: h.positions, heroPosition: h.heroPosition, allInSeen: h.allInSeen, potComputed: h.potComputed, tableSize: h.table.players.length };
 }
 
+const chunk = <T,>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+
+/**
+ * Import one upload. Files are processed one at a time (bounded memory); duplicates are detected in
+ * batches and rows are written with createMany, so tens of thousands of hands import in one request.
+ */
 export async function importBuffer(userId: string, filename: string, buf: Buffer) {
   const sha256 = createHash('sha256').update(buf).digest('hex');
   const texts = await extractTexts(filename, buf);
@@ -46,33 +52,55 @@ export async function importBuffer(userId: string, filename: string, buf: Buffer
   let failed = 0;
   const formats = new Set<string>();
   const seenInUpload = new Set<string>();
+  const tournamentIds = new Map<string, string>();
   for (const t of texts) {
     const res = parseHandHistoryText(t.text);
     if (res.format) formats.add(res.format);
-    for (const e of res.errors) {
-      failed++;
-      await prisma.importError.create({ data: { userId, importedFileId: file.id, externalHandId: e.handId, message: `${t.name}: ${e.message}`.slice(0, 1000), lineNo: e.line ?? null, raw: e.raw.slice(0, 20000) } });
+    if (res.errors.length) {
+      failed += res.errors.length;
+      await prisma.importError.createMany({
+        data: res.errors.map((e) => ({ userId, importedFileId: file.id, externalHandId: e.handId, message: `${t.name}: ${e.message}`.slice(0, 1000), lineNo: e.line ?? null, raw: e.raw.slice(0, 20000) })),
+      });
     }
-    for (const h of res.hands) {
-      const key = `${h.parsed.site}:${h.parsed.handId}`;
-      const exists = seenInUpload.has(key) || (await prisma.handHistory.findUnique({ where: { userId_site_externalHandId: { userId, site: h.parsed.site, externalHandId: h.parsed.handId } } }));
-      if (exists) {
-        dup++;
-        continue;
-      }
-      seenInUpload.add(key);
-      const tournament = h.parsed.tournamentId
-        ? await prisma.tournament.upsert({
-            where: { userId_site_externalId: { userId, site: h.parsed.site, externalId: h.parsed.tournamentId } },
-            create: { userId, site: h.parsed.site, externalId: h.parsed.tournamentId, name: h.parsed.tournamentName },
-            update: {},
-          })
-        : null;
-      await prisma.handHistory.create({
-        data: {
+    // duplicates: within this upload and already stored for this user
+    const fresh = res.hands.filter((h) => {
+      const k = `${h.parsed.site}:${h.parsed.handId}`;
+      if (seenInUpload.has(k)) return (dup++, false);
+      seenInUpload.add(k);
+      return true;
+    });
+    const existing = new Set<string>();
+    for (const part of chunk(fresh, 1000)) {
+      const rows = await prisma.handHistory.findMany({ where: { userId, OR: [...new Set(part.map((h) => h.parsed.site))].map((site) => ({ site, externalHandId: { in: part.filter((h) => h.parsed.site === site).map((h) => h.parsed.handId) } })) }, select: { site: true, externalHandId: true } });
+      for (const r of rows) existing.add(`${r.site}:${r.externalHandId}`);
+    }
+    const toInsert = fresh.filter((h) => (existing.has(`${h.parsed.site}:${h.parsed.handId}`) ? (dup++, false) : true));
+    for (const h of toInsert) {
+      const tid = h.parsed.tournamentId;
+      if (!tid || tournamentIds.has(`${h.parsed.site}:${tid}`)) continue;
+      const tr = await prisma.tournament.upsert({
+        where: { userId_site_externalId: { userId, site: h.parsed.site, externalId: tid } },
+        create: { userId, site: h.parsed.site, externalId: tid, name: h.parsed.tournamentName },
+        update: {},
+      });
+      tournamentIds.set(`${h.parsed.site}:${tid}`, tr.id);
+    }
+    for (const part of chunk(toInsert, 500)) {
+      const hands = part.map((h) => {
+        let audit: unknown = null;
+        try {
+          audit = auditPushFold(h);
+        } catch {
+          audit = null;
+        }
+        return { id: randomUUID(), h, audit };
+      });
+      await prisma.handHistory.createMany({
+        data: hands.map(({ id, h, audit }) => ({
+          id,
           userId,
           importedFileId: file.id,
-          tournamentId: tournament?.id ?? null,
+          tournamentId: h.parsed.tournamentId ? (tournamentIds.get(`${h.parsed.site}:${h.parsed.tournamentId}`) ?? null) : null,
           site: h.parsed.site,
           externalHandId: h.parsed.handId,
           playedAt: h.parsed.playedAt ? new Date(`${h.parsed.playedAt}Z`) : null,
@@ -84,10 +112,15 @@ export async function importBuffer(userId: string, filename: string, buf: Buffer
           potComputed: h.potComputed,
           raw: h.parsed.raw,
           parsed: serialize(h) as object,
-          actions: { create: h.parsed.actions.map((a, i) => ({ seq: i, street: a.street, player: a.player, type: a.type, amount: a.amount, allIn: a.allIn, isHero: a.player === h.parsed.heroName })) },
-        },
+          gtoAudit: audit ? (audit as object) : undefined,
+          hasGtoSpot: !!audit,
+        })),
+        skipDuplicates: true,
       });
-      parsedCount++;
+      await prisma.handAction.createMany({
+        data: hands.flatMap(({ id, h }) => h.parsed.actions.map((a, i) => ({ handId: id, seq: i, street: a.street, player: a.player, type: a.type, amount: a.amount, allIn: a.allIn, isHero: a.player === h.parsed.heroName }))),
+      });
+      parsedCount += part.length;
     }
   }
   const status = parsedCount + dup === 0 && failed > 0 ? 'failed' : 'completed';
