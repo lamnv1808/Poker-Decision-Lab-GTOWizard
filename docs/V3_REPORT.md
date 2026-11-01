@@ -20,6 +20,7 @@ Branch `feature/v3` (local; **not pushed, not deployed**). Built on `main@b2d811
 1. `20261101084129_sim_hands`: new `SimHand` table.
 2. `…_rating_model_state`: new `RatingModelState` table.
 3. `…_training_session_config`: nullable `TrainingSession.config`.
+4. `…_sim_hand_secure_deal`: nullable `SimHand.deal`. Cards are shuffled with a CSPRNG and stored server-side, so they can't be derived from the seed or the public config.
 
 Behaviour change: real-hand pot-odds attempts are now recorded as `rated` and count toward **Fundamentals** only (never strategy Elo). Earlier pot-odds attempts are included in the back-fill.
 
