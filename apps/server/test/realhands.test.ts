@@ -186,3 +186,20 @@ describe('Fundamentals and metrics', () => {
     expect(withRaw.realHands.length).toBe(fx.expected.hands);
   });
 });
+
+describe('decision context (leak engine input)', () => {
+  it('import fills a normalized context for every accepted decision; backfill reproduces it exactly', async () => {
+    const { backfillContexts } = await import('../src/realhands/import');
+    const sel = { id: true, position: true, actionContext: true, heroAction: true, stackBucket: true, heroClass: true, spr: true, facingBetPct: true, requiredEq: true, formatGroup: true, contextV: true } as const;
+    const before = await prisma.realDecision.findMany({ where: { userId: owner.id, status: 'accepted' }, select: sel, orderBy: { id: 'asc' } });
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every((d) => d.contextV === 1 && d.position && d.actionContext && d.heroAction)).toBe(true);
+    await prisma.realDecision.updateMany({ where: { userId: owner.id }, data: { contextV: 0, position: null, actionContext: null } });
+    const r = await backfillContexts(owner.id);
+    expect(r.failed).toBe(0);
+    expect(r.decisions).toBe(before.length);
+    const after = await prisma.realDecision.findMany({ where: { userId: owner.id, status: 'accepted' }, select: sel, orderBy: { id: 'asc' } });
+    expect(after).toEqual(before);
+    expect((await backfillContexts(owner.id)).decisions).toBe(0); // idempotent
+  });
+});

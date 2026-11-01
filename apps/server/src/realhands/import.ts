@@ -13,6 +13,9 @@ import {
   auditPushFold,
   auditQuiz,
   contenders,
+  decisionContext,
+  type DecisionContext,
+  CONTEXT_VERSION,
   publicState,
   snapshotForHeroAction,
   solvePushFold,
@@ -207,6 +210,7 @@ export async function importV2(userId: string, dirOrSource: string | V2Source, l
         familyId: d.family_id,
         heroActionNo: Number(d.id.split('-').pop()),
         street: d.street,
+        ...(res.ok && snap && a.rec ? contextColumns(decisionContext(a.rec, snap, a.format)) : {}),
         status: res.ok ? 'accepted' : 'quarantined',
         issues: res.issues as object,
         split,
@@ -238,4 +242,68 @@ export async function importV2(userId: string, dirOrSource: string | V2Source, l
   await flush();
   void publicState;
   return sum;
+}
+
+/** DB columns for a normalized decision context. */
+export function contextColumns(c: DecisionContext) {
+  return {
+    position: c.position,
+    actionContext: c.actionContext,
+    heroAction: c.heroAction,
+    stackBucket: c.stackBucket,
+    heroClass: c.heroClass,
+    spr: c.spr,
+    facingBetPct: c.facingBetPct,
+    requiredEq: c.requiredEquity,
+    formatGroup: c.formatGroup,
+    contextV: CONTEXT_VERSION,
+  };
+}
+
+/**
+ * Compute decision contexts for already-imported accepted decisions that lack the current version.
+ * Idempotent and resumable: rebuilds each hand once from its raw history, updates in batches.
+ */
+export async function backfillContexts(userId: string, log: (m: string) => void = () => {}, batchHands = 300): Promise<{ hands: number; decisions: number; failed: number }> {
+  let hands = 0;
+  let decisions = 0;
+  let failed = 0;
+  let last = '';
+  for (;;) {
+    const page = await prisma.realHand.findMany({
+      where: { userId, status: 'accepted', id: { gt: last }, decisions: { some: { status: 'accepted', contextV: { lt: CONTEXT_VERSION } } } },
+      orderBy: { id: 'asc' },
+      take: batchHands,
+      select: { id: true, raw: true, format: true, decisions: { where: { status: 'accepted', contextV: { lt: CONTEXT_VERSION } }, select: { id: true, heroActionNo: true } } },
+    });
+    if (!page.length) break;
+    const rows: { id: string; c: ReturnType<typeof contextColumns> }[] = [];
+    for (const h of page) {
+      const a = auditHand(h.raw);
+      for (const d of h.decisions) {
+        const snap = a.rec ? snapshotForHeroAction(a.rec, d.heroActionNo) : null;
+        if (!a.rec || !snap) {
+          failed++;
+          continue;
+        }
+        rows.push({ id: d.id, c: contextColumns(decisionContext(a.rec, snap, h.format)) });
+      }
+    }
+    if (rows.length) {
+      // one UPDATE ... FROM (VALUES ...) per page instead of thousands of round trips
+      const values = rows.map((r) => [r.id, r.c.position, r.c.actionContext, r.c.heroAction, r.c.stackBucket, r.c.heroClass, r.c.spr, r.c.facingBetPct, r.c.requiredEq, r.c.formatGroup]);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "RealDecision" d SET "position" = v.position, "actionContext" = v.ac, "heroAction" = v.ha, "stackBucket" = v.sb, "heroClass" = v.hc, "spr" = v.spr, "facingBetPct" = v.fb, "requiredEq" = v.req, "formatGroup" = v.fg, "contextV" = ${CONTEXT_VERSION}
+         FROM jsonb_to_recordset($1::jsonb) AS v(id text, position text, ac text, ha text, sb text, hc text, spr float8, fb float8, req float8, fg text)
+         WHERE d.id = v.id AND d."userId" = $2`,
+        JSON.stringify(values.map((x) => ({ id: x[0], position: x[1], ac: x[2], ha: x[3], sb: x[4], hc: x[5], spr: x[6], fb: x[7], req: x[8], fg: x[9] }))),
+        userId,
+      );
+    }
+    hands += page.length;
+    decisions += rows.length;
+    last = page[page.length - 1]!.id;
+    if (hands % 3000 < batchHands) log(`${hands} hands, ${decisions} decisions`);
+  }
+  return { hands, decisions, failed };
 }

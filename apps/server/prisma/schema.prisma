@@ -502,6 +502,17 @@ model RealDecision {
   observed     Json
   /// Pot-odds benchmark (Fundamentals) when the supplied quiz passed the audit.
   potOdds      Json?
+  /// Normalized decision context (packages/core realhands/context.ts), for leak analysis
+  position      String?
+  actionContext String?
+  heroAction    String?
+  stackBucket   String?
+  heroClass     String?
+  spr           Float?
+  facingBetPct  Float?
+  requiredEq    Float?
+  formatGroup   String?
+  contextV      Int     @default(0)
   playedAt     DateTime?
   createdAt    DateTime @default(now())
 
@@ -509,6 +520,7 @@ model RealDecision {
 
   @@unique([userId, externalId])
   @@index([userId, status, street])
+  @@index([userId, street, actionContext])
   @@index([userId, split])
 }
 
