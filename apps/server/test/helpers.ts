@@ -2,12 +2,14 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { seedContent } from '../src/content';
+import { resetRateLimits } from '../src/auth';
 
 export const app = createApp();
 let seeded: Promise<unknown> | null = null;
 export const ensureSeeded = () => (seeded ??= seedContent());
 
 export async function newUser(name = 'u') {
+  resetRateLimits();
   const agent = request.agent(app);
   const email = `${name}-${randomUUID()}@test.dev`;
   const res = await agent.post('/api/auth/register').send({ email, password: 'correct horse battery', displayName: name });

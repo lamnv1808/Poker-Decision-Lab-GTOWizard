@@ -23,7 +23,7 @@ reviewRouter.get('/queue', async (req, res) => {
   const userId = requireUser(req);
   const q = parse(z.object({ filter: z.enum(['due', 'weak', 'bookmarked', 'missed', 'new', 'mixed']).default('due'), limit: z.coerce.number().int().min(1).max(50).default(20) }), req.query);
   const now = new Date();
-  type Item = { kind: 'scenario' | 'quiz' | 'imported'; ref: string; reason: string; dueAt?: Date | null; mastery?: number | null; lastGrade?: string | null };
+  type Item = { kind: 'scenario' | 'quiz' | 'imported' | 'real' | 'concept'; ref: string; reason: string; dueAt?: Date | null; mastery?: number | null; lastGrade?: string | null };
   const items: Item[] = [];
   const reviewRows = (where: object, orderBy: object) => prisma.reviewItem.findMany({ where: { userId, ...where }, orderBy, take: q.limit });
   if (q.filter === 'due' || q.filter === 'mixed')

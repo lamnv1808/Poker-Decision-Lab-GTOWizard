@@ -265,7 +265,7 @@ runsRouter.post('/:id/act', async (req, res) => {
     evLoss: g.evLoss ?? null,
     unit: g.unit ?? null,
     note: g.note ?? null,
-    ratingEligible: g.ratingEligible && run.mode === 'rated',
+    ratingEligible: g.ratingEligible && run.mode === 'rated' && s.source.classification !== 'MATH_VERIFIED',
     options: optionsReveal,
     model: model ? { unit: model.unit, assumptions: model.assumptions, evStdErr: model.evStdErr, outcomes: model.outcomes.map((o) => ({ key: o.key, ev: o.ev, continueProb: o.continueProb ?? null, detail: o.detail })) } : null,
     facts,
@@ -314,6 +314,8 @@ runsRouter.post('/:id/act', async (req, res) => {
     leakOpportunities: node.leakOpportunities,
     optionLeaks: step.option?.leaks ?? [],
     sourceClass: s.source.classification,
+    // Assumed-range models (MATH_VERIFIED content) are Fundamentals: they never move strategy Elo.
+    track: s.source.classification === 'MATH_VERIFIED' ? 'fundamentals' : 'strategy',
     result: feedback,
   });
   const after = await loadRun(userId, run.id);
@@ -401,6 +403,7 @@ runsRouter.post('/:id/answer', async (req, res) => {
     leakOpportunities: node.leakOpportunities,
     optionLeaks: g.isError ? node.leaksOnError : [],
     sourceClass: s.source.classification,
+    track: s.source.classification === 'MATH_VERIFIED' ? 'fundamentals' : 'strategy',
     result: feedback,
   });
   const after = await loadRun(userId, run.id);

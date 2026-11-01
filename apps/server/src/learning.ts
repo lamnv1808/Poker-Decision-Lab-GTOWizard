@@ -23,9 +23,9 @@ export interface AttemptInput {
   runId?: string | null;
   scenarioVersionId?: string | null;
   decisionNodeId?: string | null;
-  attemptType: 'decision' | 'question' | 'quiz' | 'imported';
+  attemptType: 'decision' | 'question' | 'quiz' | 'imported' | 'replay' | 'potodds';
   itemRef: string;
-  reviewType: 'scenario' | 'quiz' | 'imported';
+  reviewType: 'scenario' | 'quiz' | 'imported' | 'real';
   reviewRef: string;
   mode: 'practice' | 'rated';
   action: unknown;
@@ -48,6 +48,12 @@ export interface AttemptInput {
   leakOpportunities: LeakKey[];
   optionLeaks: LeakKey[];
   sourceClass: SourceClass;
+  /** fundamentals | replay | strategy. Only `strategy` attempts can change Elo. Default strategy. */
+  track?: 'fundamentals' | 'replay' | 'strategy';
+  familyId?: string | null;
+  responseMs?: number | null;
+  reasoning?: string | null;
+  annotationId?: string | null;
   result: Record<string, unknown>;
 }
 
@@ -71,8 +77,12 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
     return await prisma.$transaction(async (tx) => {
       const now = new Date();
       const score = input.grade ? GRADE_SCORE[input.grade] : undefined;
-      const rated = input.mode === 'rated' && input.graded && input.ratingEligible && score !== undefined;
-      const priorExposures = rated ? await tx.decisionAttempt.count({ where: { userId: input.userId, itemRef: input.itemRef, ratingApplied: true } }) : 0;
+      const track = input.track ?? 'strategy';
+      // Arithmetic (fundamentals) and unreviewed replays never move strategy ratings.
+      const rated = track === 'strategy' && input.mode === 'rated' && input.graded && input.ratingEligible && score !== undefined;
+      const priorExposures = rated
+        ? await tx.decisionAttempt.count({ where: { userId: input.userId, ratingApplied: true, ...(input.familyId ? { familyId: input.familyId } : { itemRef: input.itemRef }) } })
+        : 0;
       const keys: RatingKey[] = ['overall', ...input.skills];
       const current = rated ? await tx.rating.findMany({ where: { userId: input.userId, skill: { in: keys } } }) : [];
       const curMap = Object.fromEntries(current.map((r) => [r.skill, { rating: r.rating, rd: r.rd, vol: r.vol }]));
@@ -113,6 +123,11 @@ export async function recordAttempt(input: AttemptInput): Promise<AttemptOutcome
           concepts: input.concepts,
           leakKeys: input.optionLeaks,
           result: input.result as object,
+          track,
+          familyId: input.familyId ?? null,
+          responseMs: input.responseMs ?? null,
+          reasoning: input.reasoning ?? null,
+          annotationId: input.annotationId ?? null,
         },
       });
       const opp = difficultyRating(input.difficulty);

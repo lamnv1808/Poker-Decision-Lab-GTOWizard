@@ -22,7 +22,7 @@ const audit = (tag: string) => {
 describe('real-hand audit fixtures', () => {
   it('every fixture reconstructs, reconciles pots and collected amounts', () => {
     for (const tag of Object.keys(fx)) expect(auditHand(fx[tag]!).ok, tag).toBe(true);
-    expect(Object.keys(fx)).toHaveLength(8);
+    expect(Object.keys(fx)).toHaveLength(9);
   });
 
   it('multiway side pots: Hero is eligible for the main pot but not every side pot', () => {

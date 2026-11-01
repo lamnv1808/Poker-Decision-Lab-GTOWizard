@@ -34,6 +34,9 @@ model User {
   tournaments    Tournament[]
   hands          HandHistory[]
   importErrors   ImportError[]
+  realHands      RealHand[]
+  realDecisions  RealDecision[]
+  annotations    Annotation[] @relation("AnnotationOwner")
 }
 
 model Session {
@@ -224,6 +227,14 @@ model DecisionAttempt {
   concepts             String[]
   leakKeys             String[]
   result               Json
+  /// fundamentals | replay | strategy — scores are never mixed across tracks
+  track                String   @default("strategy")
+  /// Hand family (real hands) for familiarity limits and train/assessment separation
+  familyId             String?
+  responseMs           Int?
+  reasoning            String?
+  /// Annotation version that graded this attempt (scores from different versions are not comparable)
+  annotationId         String?
   createdAt            DateTime @default(now())
 
   ratingHistory    RatingHistory[]
@@ -422,4 +433,105 @@ model ImportError {
   lineNo         Int?
   raw            String
   createdAt      DateTime @default(now())
+}
+
+/// A real hand from the owner's history (Real Hand Source v2 or upload). Private: the raw text,
+/// future streets and showdowns never leave the server.
+model RealHand {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  handId         String
+  tournamentId   String?
+  tournamentName String?
+  format         String
+  playedAt       DateTime?
+  raw            String
+  status         String // accepted | quarantined
+  issues         Json
+  notes          String[]
+  /// training | assessment (by tournament, latest tournaments held out)
+  split          String
+  source         String // v2 | upload
+  createdAt      DateTime @default(now())
+
+  decisions RealDecision[]
+
+  @@unique([userId, handId])
+  @@index([userId, split])
+}
+
+/// A Hero decision point inside a real hand. `observed` is historical behaviour, not an answer.
+model RealDecision {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalId   String
+  realHandId   String
+  realHand     RealHand @relation(fields: [realHandId], references: [id], onDelete: Cascade)
+  familyId     String
+  heroActionNo Int
+  street       String
+  status       String // accepted | quarantined
+  issues       Json
+  split        String
+  format       String
+  stackDepthBB Float
+  potBB        Float
+  toCallBB     Float
+  investedBB   Float
+  playersInPot Int
+  multiway     Boolean
+  facingAllIn  Boolean
+  topics       String[]
+  /// Supplied review tags (e.g. hero_all_in) describe observed actions: review queue only.
+  reviewTags   String[]
+  /// Observed historical action; hidden until the learner submits.
+  observed     Json
+  /// Pot-odds benchmark (Fundamentals) when the supplied quiz passed the audit.
+  potOdds      Json?
+  playedAt     DateTime?
+  createdAt    DateTime @default(now())
+
+  annotations Annotation[]
+
+  @@unique([userId, externalId])
+  @@index([userId, status, street])
+  @@index([userId, split])
+}
+
+/// Versioned evaluation of a real decision. Never edited in place: a change is a new version.
+model Annotation {
+  id            String   @id @default(uuid())
+  decisionId    String
+  decision      RealDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation("AnnotationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  version       Int
+  /// draft | verified | retired
+  status        String   @default("draft")
+  /// calculation | human | solver
+  source        String
+  /// human | ai | system — AI/system output always starts as draft
+  authorKind    String
+  infoAvailable Json
+  assumedRanges Json
+  economics     Json
+  missingInfo   String[]
+  /// [{ action, sizeToBB?, ev?, freq? }] — EV/freq only when genuinely computed
+  evaluated     Json
+  recommendation String
+  explanationVi String
+  explanationEn String?
+  confidence    String // low | medium | high
+  scope         String
+  solverMeta    Json?
+  toleranceBB   Float?
+  verifiedById  String?
+  verifiedAt    DateTime?
+  supersedesId  String?
+  createdAt     DateTime @default(now())
+
+  @@unique([decisionId, version])
+  @@index([userId, status])
 }

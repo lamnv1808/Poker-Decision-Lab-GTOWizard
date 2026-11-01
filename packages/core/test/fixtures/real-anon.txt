@@ -1,5 +1,5 @@
 # fixture: sidePotsMultiway
-Poker Hand #TM9000000002: Tournament #900000000, Speed Racer Bounty $3.20 [10 BB] Hold'em No Limit - Level1(500/1,000(150)) - 2026/01/01 12:00:00
+Poker Hand #TM9000000003: Tournament #900000000, Speed Racer Bounty $3.20 [10 BB] Hold'em No Limit - Level1(500/1,000(150)) - 2026/01/01 12:00:00
 Table '14' 6-max Seat #3 is the button
 Seat 1: Player1 (23,050 in chips)
 Seat 3: Hero (2,700 in chips)
@@ -52,7 +52,7 @@ Seat 5: Player3 (big blind) showed [2s 2d] and won (15,800) with two pair, Kings
 Seat 6: Player4 showed [7c Qc] and lost with a pair of Kings
 
 # fixture: shortAllInNoReopen
-Poker Hand #TM9000000003: Tournament #900000000, Bounty Hunters Sunday Hyper Special $5.40 Hold'em No Limit - Level8(250/500(75)) - 2026/01/01 12:00:00
+Poker Hand #TM9000000004: Tournament #900000000, Bounty Hunters Sunday Hyper Special $5.40 Hold'em No Limit - Level8(250/500(75)) - 2026/01/01 12:00:00
 Table '184' 6-max Seat #1 is the button
 Seat 1: Player1 (1,315 in chips)
 Seat 2: Player2 (15,855 in chips)
@@ -170,7 +170,7 @@ Seat 7: Hero folded before Flop
 Seat 8: Player7 won (6,840)
 
 # fixture: shortBigBlindCall
-Poker Hand #TM9000000008: Tournament #900000000, Speed Racer Bounty $5.40 [10 BB] Hold'em No Limit - Level12(8,000/16,000(2,400)) - 2026/01/01 12:00:00
+Poker Hand #TM9000000009: Tournament #900000000, Speed Racer Bounty $5.40 [10 BB] Hold'em No Limit - Level12(8,000/16,000(2,400)) - 2026/01/01 12:00:00
 Table '31' 6-max Seat #3 is the button
 Seat 1: Player1 (15,573 in chips)
 Seat 2: Hero (121,903 in chips)
@@ -216,7 +216,7 @@ Seat 5: Player3 (small blind) folded before Flop
 Seat 6: Player4 (big blind) showed [3s 3d] and lost with a pair of Threes
 
 # fixture: potOddsAllInForLess
-Poker Hand #TM9000000004: Tournament #900000000, Bounty Hunters Mini Encore $5.40 Hold'em No Limit - Level19(3,000/6,000(900)) - 2026/01/01 12:00:00
+Poker Hand #TM9000000005: Tournament #900000000, Bounty Hunters Mini Encore $5.40 Hold'em No Limit - Level19(3,000/6,000(900)) - 2026/01/01 12:00:00
 Table '185' 8-max Seat #5 is the button
 Seat 1: Player1 (383,110 in chips)
 Seat 2: Player2 (161,768 in chips)
@@ -269,7 +269,7 @@ Seat 7: Player6 (big blind) folded before Flop
 Seat 8: Player7 folded before Flop
 
 # fixture: heroShowsOneCard
-Poker Hand #TM9000000006: Tournament #900000000, Bounty Hunters Sunday Special $10.80 Hold'em No Limit - Level11(350/700(100)) - 2026/01/01 12:00:00
+Poker Hand #TM9000000007: Tournament #900000000, Bounty Hunters Sunday Special $10.80 Hold'em No Limit - Level11(350/700(100)) - 2026/01/01 12:00:00
 Table '116' 8-max Seat #1 is the button
 Seat 1: Hero (28,990 in chips)
 Seat 2: Player1 (33,615 in chips)
@@ -328,7 +328,7 @@ Seat 7: Player6 showed [5s 5d] and lost with a pair of Fives
 Seat 8: Player7 folded before Flop
 
 # fixture: duplicateShowLines
-Poker Hand #TM9000000005: Tournament #900000000, Bounty Hunters Deepstack Turbo $8.88 Hold'em No Limit - Level9(300/600(90)) - 2026/01/01 12:00:00
+Poker Hand #TM9000000006: Tournament #900000000, Bounty Hunters Deepstack Turbo $8.88 Hold'em No Limit - Level9(300/600(90)) - 2026/01/01 12:00:00
 Table '58' 8-max Seat #1 is the button
 Seat 1: Player1 (80,360 in chips)
 Seat 2: Player2 (54,122 in chips)
@@ -404,7 +404,7 @@ Seat 7: Player6 folded before Flop
 Seat 8: Player7 folded on the River
 
 # fixture: allInForfeitFold
-Poker Hand #TM9000000007: Tournament #900000000, Bounty Hunters Deepstack Turbo $5.40 Hold'em No Limit - Level24(5,000/10,000(1,500)) - 2026/01/01 12:00:00
+Poker Hand #TM9000000008: Tournament #900000000, Bounty Hunters Deepstack Turbo $5.40 Hold'em No Limit - Level24(5,000/10,000(1,500)) - 2026/01/01 12:00:00
 Table '58' 8-max Seat #4 is the button
 Seat 1: Player1 (142,462 in chips)
 Seat 2: Player2 (178,961 in chips)
@@ -455,3 +455,64 @@ Seat 5: Player4 (small blind) folded before Flop
 Seat 6: Player5 (big blind) folded before Flop
 Seat 7: Player6 collected (30,912)
 Seat 8: Player7 folded before Flop
+
+# fixture: headsUpPostflopCall
+Poker Hand #TM9000000002: Tournament #900000000, Bounty Hunters Special $10.80 Hold'em No Limit - Level10(250/500(75)) - 2026/01/01 12:00:00
+Table '174' 8-max Seat #8 is the button
+Seat 1: Player1 (11,245 in chips)
+Seat 2: Player2 (4,114 in chips)
+Seat 3: Player3 (28,748 in chips)
+Seat 4: Player4 (22,374 in chips)
+Seat 5: Player5 (27,972 in chips)
+Seat 6: Player6 (7,349 in chips)
+Seat 7: Hero (17,481 in chips)
+Seat 8: Player7 (19,581 in chips)
+Player6: posts the ante 75
+Player1: posts the ante 75
+Player7: posts the ante 75
+Player4: posts the ante 75
+Hero: posts the ante 75
+Player5: posts the ante 75
+Player3: posts the ante 75
+Player2: posts the ante 75
+Player1: posts small blind 250
+Player2: posts big blind 500
+*** HOLE CARDS ***
+Dealt to Player1 
+Dealt to Player2 
+Dealt to Player3 
+Dealt to Player4 
+Dealt to Player5 
+Dealt to Player6 
+Dealt to Hero [4h 4s]
+Dealt to Player7 
+Player3: folds
+Player4: folds
+Player5: folds
+Player6: folds
+Hero: raises 500 to 1,000
+Player7: folds
+Player1: calls 750
+Player2: calls 500
+*** FLOP *** [6d Tc 3d]
+Player1: checks
+Player2: checks
+Hero: checks
+*** TURN *** [6d Tc 3d] [3s]
+Player1: bets 1,800
+Player2: folds
+Hero: folds
+Uncalled bet (1,800) returned to Player1
+*** SHOWDOWN ***
+Player1 collected 3,600 from pot
+*** SUMMARY ***
+Total pot 3,600 | Rake 0 | Jackpot 0 | Bingo 0 | Fortune 0 | Tax 0
+Board [6d Tc 3d 3s]
+Seat 1: Player1 (small blind) won (3,600)
+Seat 2: Player2 (big blind) folded on the Turn
+Seat 3: Player3 folded before Flop
+Seat 4: Player4 folded before Flop
+Seat 5: Player5 folded before Flop
+Seat 6: Player6 folded before Flop
+Seat 7: Hero folded on the Turn
+Seat 8: Player7 (button) folded before Flop

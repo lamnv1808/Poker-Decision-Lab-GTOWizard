@@ -82,26 +82,34 @@ describe('hero training run', () => {
     expect(r3.body.view.feedback).toHaveLength(3);
   });
 
-  it('grades a math-verified decision by EV and updates ratings once', async () => {
+  it('grades an assumed-range model decision by EV as Fundamentals: never moves strategy Elo', async () => {
     const { agent, id } = await newUser('rated');
     const start = await agent.post('/api/runs').send({ scenarioId: 'bb-k9o-call-sb-shove-12bb', mode: 'rated' }).expect(201);
     const clientAttemptId = cid();
     const r = await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId, action: { type: 'call' } }).expect(200);
     const fb = r.body.feedback;
     expect(fb.basis).toBe('modelEv');
-    expect(fb.ratingEligible).toBe(true);
+    expect(fb.ratingEligible).toBe(false);
     expect(fb.facts.requiredEquityPct).toBe(44);
     expect(fb.model.assumptions.length).toBeGreaterThan(0);
-    expect(fb.ratingChanges.map((c: { skill: string }) => c.skill).sort()).toEqual(['math', 'overall', 'preflop', 'shortStack']);
-    const before = await prisma.ratingHistory.count({ where: { userId: id } });
-    // replaying the same clientAttemptId never re-applies the rating
+    expect(fb.ratingChanges).toEqual([]);
+    const att = await prisma.decisionAttempt.findFirstOrThrow({ where: { userId: id } });
+    expect(att.track).toBe('fundamentals');
+    expect(await prisma.rating.count({ where: { userId: id } })).toBe(0);
+    // idempotent retry
     await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId, action: { type: 'call' } }).expect(200);
-    expect(await prisma.ratingHistory.count({ where: { userId: id } })).toBe(before);
-    // second exposure of the same spot is discounted
-    const s2 = await agent.post('/api/runs').send({ scenarioId: 'bb-k9o-call-sb-shove-12bb', mode: 'rated' }).expect(201);
-    await agent.post(`/api/runs/${s2.body.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'call' } }).expect(200);
-    const w = await prisma.decisionAttempt.findMany({ where: { userId: id }, orderBy: { createdAt: 'asc' }, select: { ratingWeight: true } });
-    expect(w.map((x) => x.ratingWeight)).toEqual([1, 0.5]);
+    expect(await prisma.decisionAttempt.count({ where: { userId: id } })).toBe(1);
+  });
+
+  it('solver-backed GTO quiz answers are the ones that move strategy Elo, discounted on repeats', async () => {
+    const { agent, id } = await newUser('gtorated');
+    for (let i = 0; i < 2; i++) {
+      const spot = await agent.get('/api/gto/spot?minStack=8&maxStack=8&role=sbShove').expect(200);
+      await agent.post('/api/gto/answer').send({ token: spot.body.token, action: 'shove', clientAttemptId: cid(), mode: 'rated' }).expect(200);
+    }
+    const w = await prisma.decisionAttempt.findMany({ where: { userId: id }, select: { ratingWeight: true, track: true } });
+    expect(w.every((x) => x.track === 'strategy')).toBe(true);
+    expect(w.every((x) => x.ratingWeight > 0)).toBe(true);
   });
 
   it('practice mode records attempts but never changes ratings', async () => {
@@ -191,8 +199,8 @@ describe('dashboard, progress, leaks, curriculum', () => {
     const start = await agent.post('/api/runs').send({ scenarioId: 'bb-k9o-call-sb-shove-12bb', mode: 'rated' }).expect(201);
     await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }).expect(200);
     const d = await agent.get('/api/dashboard').expect(200);
-    // folding K9o loses ~0.5BB: graded "acceptable" (not an error) yet EV loss is still reported separately
-    expect(d.body.rating.games).toBe(1);
+    // folding K9o loses ~0.5BB: graded "acceptable" (not an error); assumed-range models never rate
+    expect(d.body.rating).toBeNull();
     expect(d.body.accuracyPct).toBe(100);
     expect(d.body.avgEvLossBB).toBeGreaterThan(0.3);
     expect(d.body.topLeaks).toEqual([]); // one hand is never enough evidence

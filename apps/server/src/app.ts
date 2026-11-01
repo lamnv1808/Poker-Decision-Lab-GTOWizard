@@ -9,6 +9,8 @@ import { env, isProd } from './env';
 import { errorHandler } from './http';
 import { gtoRouter } from './gto';
 import { postflopRouter } from './postflop';
+import { realRouter } from './realhands/routes';
+import { exportRouter } from './export';
 import { handsRouter, importsRouter } from './imports';
 import { mathRouter } from './mathlab';
 import { bookmarksRouter, notesRouter, reviewRouter } from './review';
@@ -67,6 +69,8 @@ export function createApp() {
   app.use('/api/notes', notesRouter);
   app.use('/api/imports', importsRouter);
   app.use('/api/hands', handsRouter);
+  app.use('/api/real', realRouter);
+  app.use('/api/export', exportRouter);
   app.use('/api/gto/postflop', postflopRouter);
   app.use('/api/gto', gtoRouter);
   app.use('/api', analyticsRouter);

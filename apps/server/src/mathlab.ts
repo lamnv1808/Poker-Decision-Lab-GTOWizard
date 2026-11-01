@@ -70,6 +70,7 @@ mathRouter.post('/quiz/answer', async (req, res) => {
     leakOpportunities: quiz.kind === 'potOdds' || quiz.kind === 'callEv' ? ['potOdds'] : quiz.kind === 'combos' ? ['comboCounting'] : quiz.kind === 'icm' ? ['icmAdjustments'] : [],
     optionLeaks: isError(grade) ? (quiz.kind === 'potOdds' || quiz.kind === 'callEv' ? ['potOdds'] : quiz.kind === 'combos' ? ['comboCounting'] : quiz.kind === 'icm' ? ['icmAdjustments'] : []) : [],
     sourceClass: 'MATH_VERIFIED',
+    track: 'fundamentals',
     result,
   });
   res.json(outcome.result);
