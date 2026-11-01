@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { prisma } from './db';
 import { env } from './env';
 import { type ImportSummary, bundleSource, importV2 } from './realhands/import';
+import { streamBackup } from './backup';
 
 /**
  * Operator-only endpoints (bulk import of a user's hand-history bundle when the database is not
@@ -103,4 +104,12 @@ adminRouter.get('/users/:id/real-stats', async (req, res) => {
     prisma.$queryRaw<{ status: string; n: bigint }[]>`SELECT "potOdds"->>'status' AS status, COUNT(*) AS n FROM "RealDecision" WHERE "userId" = ${userId} AND "potOdds" IS NOT NULL GROUP BY 1`,
   ]);
   res.json({ hands, decisions, annotations, quizzes: quizzes.map((q) => ({ status: q.status, n: Number(q.n) })) });
+});
+
+/**
+ * Full logical backup (read-only), streamed as gzip NDJSON with a Postgres-computed checksum
+ * manifest. The free database plan has no backups/exports, so this is the safety net.
+ */
+adminRouter.get('/backup', async (_req, res) => {
+  await streamBackup(res);
 });

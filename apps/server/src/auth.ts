@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma } from './db';
-import { isProd } from './env';
+import { isProd, ownerEmails, registrationMode } from './env';
 import { HttpError, parse } from './http';
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, keylen: number, opts: object) => Promise<Buffer>;
@@ -82,19 +82,36 @@ async function profile(userId: string) {
     email: user.email,
     displayName: user.displayName,
     createdAt: user.createdAt,
+    isOwner: ownerEmails.has(user.email),
     preferences: user.preference ?? { language: 'en', defaultMode: 'practice', explanationView: 'quick', strategyView: 'gto', showBB: true },
   };
 }
 
+export const inviteHash = (code: string) => createHash('sha256').update(`pdl-invite:${code.trim().toUpperCase()}`).digest('hex');
+
 export const authRouter = Router();
 
+/** Public: whether sign-up needs an invite (the login page shows the field). */
+authRouter.get('/config', (_req, res) => {
+  res.json({ registration: registrationMode });
+});
+
 authRouter.post('/register', async (req, res) => {
-  const body = parse(z.object({ email: Email, password: Password, displayName: z.string().trim().min(1).max(60), language: z.enum(['en', 'vi']).default('en') }), req.body);
+  const body = parse(z.object({ email: Email, password: Password, displayName: z.string().trim().min(1).max(60), language: z.enum(['en', 'vi']).default('en'), inviteCode: z.string().trim().max(64).optional() }), req.body);
   rateLimit(`reg:${req.ip}`, 20);
   const exists = await prisma.user.findUnique({ where: { email: body.email } });
   if (exists) throw new HttpError(409, 'email_taken', 'An account with this email already exists');
-  const user = await prisma.user.create({
-    data: { email: body.email, passwordHash: await hashPassword(body.password), displayName: body.displayName, preference: { create: { language: body.language } } },
+  const invite = registrationMode === 'invite' && !ownerEmails.has(body.email);
+  if (invite && !body.inviteCode) throw new HttpError(403, 'invite_required', 'This is a private lab: an invite code is required');
+  const passwordHash = await hashPassword(body.password);
+  const user = await prisma.$transaction(async (tx) => {
+    const u = await tx.user.create({ data: { email: body.email, passwordHash, displayName: body.displayName, preference: { create: { language: body.language } } } });
+    if (invite) {
+      // single use: the conditional update only succeeds for an unused, unexpired code
+      const used = await tx.inviteCode.updateMany({ where: { codeHash: inviteHash(body.inviteCode!), usedById: null, expiresAt: { gt: new Date() } }, data: { usedById: u.id, usedAt: new Date() } });
+      if (used.count !== 1) throw new HttpError(403, 'invite_invalid', 'Invite code is invalid, used or expired');
+    }
+    return u;
   });
   await createSession(res, user.id, req.get('user-agent'));
   res.status(201).json(await profile(user.id));

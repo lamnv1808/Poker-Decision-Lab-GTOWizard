@@ -12,6 +12,7 @@ export interface Preferences {
   showBB: boolean;
 }
 export interface Me {
+  isOwner?: boolean;
   id: string;
   email: string;
   displayName: string;

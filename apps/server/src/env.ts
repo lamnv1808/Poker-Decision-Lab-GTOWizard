@@ -6,6 +6,10 @@ const Env = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(8080),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  /** invite = sign-up needs an owner-issued code (private lab); open = anyone. Default: invite in production. */
+  REGISTRATION: z.enum(['invite', 'open']).optional(),
+  /** Comma-separated emails allowed to create invites. */
+  OWNER_EMAILS: z.string().default(''),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -23,3 +27,9 @@ if (env.NODE_ENV === 'production' && env.APP_SECRET === 'dev-secret-change-me') 
   throw new Error('APP_SECRET must be set in production');
 }
 export const isProd = env.NODE_ENV === 'production';
+export let registrationMode: 'invite' | 'open' = env.REGISTRATION ?? (isProd ? 'invite' : 'open');
+/** Tests only: switch registration mode. */
+export function setRegistrationMode(m: 'invite' | 'open') {
+  registrationMode = m;
+}
+export const ownerEmails = new Set(env.OWNER_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean));

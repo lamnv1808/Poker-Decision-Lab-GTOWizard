@@ -40,6 +40,7 @@ model User {
   simHands       SimHand[]
   ratingModel    RatingModelState?
   scenarioHistory ScenarioHistory[]
+  invitesCreated InviteCode[] @relation("InviteCreator")
 }
 
 model Session {
@@ -619,4 +620,20 @@ model ScenarioHistory {
 
   @@unique([userId, contentKey])
   @@index([userId, module, lastPlayedAt])
+}
+
+/// Private lab: in production, signing up requires a single-use invite created by the owner.
+/// Only a hash of the code is stored.
+model InviteCode {
+  id          String    @id @default(uuid())
+  codeHash    String    @unique
+  createdById String
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  note        String?
+  usedById    String?
+  usedAt      DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([createdById])
 }

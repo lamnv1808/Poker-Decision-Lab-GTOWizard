@@ -794,6 +794,16 @@ const en: Dict = {
   "history.kind.sim": "Full hands",
   "fund.noHands": "Pot-odds exercises use your own imported hands, and none are imported yet.",
   "fund.importLink": "Import hand histories",
+  "auth.invite": "Invite code",
+  "auth.inviteHelp": "This is a private lab — ask the owner for an invite.",
+  "invite.title": "Invite friends",
+  "invite.help": "Each code works once and expires after 7 days. Only you can create them.",
+  "invite.note": "Who is it for? (optional)",
+  "invite.create": "Create invite",
+  "invite.once": "Copy it now — it is shown only once.",
+  "invite.status.open": "unused",
+  "invite.status.used": "used",
+  "invite.status.expired": "expired",
 };
 
 const vi: Dict = {
@@ -1586,6 +1596,16 @@ const vi: Dict = {
   "history.kind.sim": "Ván đầy đủ",
   "fund.noHands": "Bài pot odds dùng các ván bạn đã nhập, nhưng bạn chưa nhập ván nào.",
   "fund.importLink": "Nhập lịch sử ván bài",
+  "auth.invite": "Mã mời",
+  "auth.inviteHelp": "Đây là phòng luyện riêng — hãy xin mã mời từ chủ sở hữu.",
+  "invite.title": "Mời bạn bè",
+  "invite.help": "Mỗi mã dùng một lần và hết hạn sau 7 ngày. Chỉ bạn tạo được mã.",
+  "invite.note": "Dành cho ai? (không bắt buộc)",
+  "invite.create": "Tạo mã mời",
+  "invite.once": "Hãy sao chép ngay — mã chỉ hiển thị một lần.",
+  "invite.status.open": "chưa dùng",
+  "invite.status.used": "đã dùng",
+  "invite.status.expired": "hết hạn",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, vi };

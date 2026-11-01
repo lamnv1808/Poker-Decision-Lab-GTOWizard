@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { LangSwitch } from '../components/Layout';
@@ -15,6 +15,12 @@ export function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [invite, setInvite] = useState(() => new URLSearchParams(window.location.search).get('invite') ?? '');
+  const [needsInvite, setNeedsInvite] = useState(false);
+  useEffect(() => {
+    api.get<{ registration: 'invite' | 'open' }>('/auth/config').then((c) => setNeedsInvite(c.registration === 'invite')).catch(() => {});
+    if (new URLSearchParams(window.location.search).get('invite')) setTab('register');
+  }, []);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
@@ -22,7 +28,7 @@ export function AuthPage() {
     setBusy(true);
     setError(null);
     try {
-      const me = tab === 'login' ? await api.post<Me>('/auth/login', { email, password }) : await api.post<Me>('/auth/register', { email, password, displayName: name, language: lang });
+      const me = tab === 'login' ? await api.post<Me>('/auth/login', { email, password }) : await api.post<Me>('/auth/register', { email, password, displayName: name, language: lang, inviteCode: invite.trim() || undefined });
       setMe(me);
       nav('/');
     } catch (err) {
@@ -49,6 +55,13 @@ export function AuthPage() {
             ))}
           </div>
           <form onSubmit={submit} className="space-y-3">
+            {tab === 'register' && needsInvite && (
+              <label className="block text-xs text-ink-300">
+                {t('auth.invite')}
+                <input className={`${input} uppercase tracking-widest`} value={invite} onChange={(e) => setInvite(e.target.value)} maxLength={20} name="invite" data-testid="auth-invite" />
+                <span className="mt-1 block text-[11px] text-ink-500">{t('auth.inviteHelp')}</span>
+              </label>
+            )}
             {tab === 'register' && (
               <label className="block text-xs text-ink-300">
                 {t('auth.name')}
