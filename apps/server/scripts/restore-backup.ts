@@ -16,15 +16,22 @@ if (!file) throw new Error('usage: restore-backup.ts <backup.ndjson.gz> [--verif
 const verifyOnly = flag === '--verify-only';
 
 async function main() {
+  // all-or-nothing: a failed restore leaves the target empty instead of half-filled
+  await prisma.$transaction(async (tx) => load(tx), { timeout: 60 * 60 * 1000, maxWait: 30_000 });
+  await verify();
+}
+
+let header: { tables: string[] } | null = null;
+let manifest: { tables: Record<string, { rows: number; md5: string }>; digest: string } | null = null;
+const counts: Record<string, number> = {};
+
+async function load(tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) {
   const rl = createInterface({ input: createReadStream(file!).pipe(createGunzip()), crlfDelay: Infinity });
-  let header: { tables: string[] } | null = null;
-  let manifest: { tables: Record<string, { rows: number; md5: string }>; digest: string } | null = null;
   let batch: unknown[] = [];
   let batchTable = '';
-  const counts: Record<string, number> = {};
   const flush = async () => {
     if (!batch.length) return;
-    if (!verifyOnly) await prisma.$executeRawUnsafe(`INSERT INTO "${batchTable}" SELECT * FROM json_populate_recordset(null::"${batchTable}", $1::json)`, JSON.stringify(batch));
+    if (!verifyOnly) await tx.$executeRawUnsafe(`INSERT INTO "${batchTable}" SELECT * FROM json_populate_recordset(null::"${batchTable}", $1::json)`, JSON.stringify(batch));
     batch = [];
   };
   for await (const line of rl) {
@@ -34,7 +41,7 @@ async function main() {
       header = o;
       if (!verifyOnly) {
         for (const t of o.tables as string[]) {
-          const n = Number((await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM "${t}"`))[0]!.n);
+          const n = Number((await tx.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM "${t}"`))[0]!.n);
           if (n > 0) throw new Error(`Target table ${t} is not empty (${n} rows) — refusing to restore into a database with data`);
         }
       }
@@ -51,6 +58,10 @@ async function main() {
   }
   await flush();
   if (!header || !manifest) throw new Error('Backup is incomplete (missing header or manifest) — it was cut off');
+}
+
+async function verify() {
+  if (!header || !manifest) throw new Error('Backup is incomplete');
   let bad = 0;
   for (const t of header.tables) {
     const want = manifest.tables[t]!;

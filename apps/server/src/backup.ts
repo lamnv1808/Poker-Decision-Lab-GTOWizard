@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createGzip } from 'node:zlib';
 import type { Response } from 'express';
+import type { Prisma } from '@prisma/client';
 import { prisma } from './db';
 
 /**
@@ -15,7 +16,7 @@ export const BACKUP_VERSION = 1;
 const EXCLUDE = new Set(['_prisma_migrations']); // the target is migrated by `prisma migrate deploy`
 
 /** Tables in foreign-key dependency order (parents before children). */
-export async function tablesInOrder(db = prisma): Promise<string[]> {
+export async function tablesInOrder(db: Db = prisma): Promise<string[]> {
   const tables = (await db.$queryRaw<{ t: string }[]>`SELECT c.relname AS t FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r'`).map((x) => x.t).filter((t) => !EXCLUDE.has(t));
   const fks = await db.$queryRaw<{ child: string; parent: string }[]>`SELECT conrelid::regclass::text AS child, confrelid::regclass::text AS parent FROM pg_constraint WHERE contype = 'f' AND connamespace = 'public'::regnamespace`;
   const strip = (x: string) => x.replace(/^"|"$/g, '');
@@ -37,50 +38,63 @@ export async function tablesInOrder(db = prisma): Promise<string[]> {
 }
 
 /** Row count and an order-independent checksum of a table, computed inside Postgres. */
-export async function tableChecksum(table: string, db = prisma): Promise<{ rows: number; md5: string }> {
+export async function tableChecksum(table: string, db: Db = prisma): Promise<{ rows: number; md5: string }> {
   const r = await db.$queryRawUnsafe<{ n: bigint; h: string | null }[]>(
     `SELECT count(*) AS n, md5(coalesce(string_agg(x.h, '' ORDER BY x.h), '')) AS h FROM (SELECT md5(row_to_json(t)::text) AS h FROM "${table}" t) x`,
   );
   return { rows: Number(r[0]!.n), md5: r[0]!.h ?? '' };
 }
 
-const hasId = async (table: string) =>
-  (await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ${table} AND column_name = 'id'`)[0]!.n > 0n;
+type Db = Prisma.TransactionClient | typeof prisma;
+const hasId = async (table: string, db: Db) =>
+  (await db.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ${table} AND column_name = 'id'`)[0]!.n > 0n;
 
-/** Stream the backup to an HTTP response. Rows are read in id-ordered pages to keep memory flat. */
-export async function streamBackup(res: Response) {
-  const tables = await tablesInOrder();
+/**
+ * Stream the backup to an HTTP response. Everything — every table and every checksum — is read in
+ * ONE read-only REPEATABLE READ transaction, so the backup is a consistent snapshot even while
+ * people keep training (the first production backup proved this is necessary). Rows are read in
+ * id-ordered pages to keep memory flat.
+ */
+export async function streamBackup(res: Response, hooks: { afterTable?: (t: string) => Promise<void> } = {}) {
   res.setHeader('Content-Type', 'application/gzip');
   res.setHeader('Content-Disposition', `attachment; filename="pdl-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.ndjson.gz"`);
   const gz = createGzip({ level: 6 });
   gz.pipe(res);
   const write = (o: unknown) => new Promise<void>((ok) => (gz.write(`${JSON.stringify(o)}\n`) ? ok() : gz.once('drain', ok)));
-  const stream = createHash('sha256');
-  await write({ v: BACKUP_VERSION, kind: 'header', createdAt: new Date().toISOString(), tables });
-  const manifest: Record<string, { rows: number; md5: string }> = {};
-  for (const t of tables) {
-    let written = 0;
-    if (await hasId(t)) {
-      let last = '';
-      for (;;) {
-        const page = await prisma.$queryRawUnsafe<{ id: string; j: unknown }[]>(`SELECT t.id::text AS id, row_to_json(t) AS j FROM "${t}" t WHERE t.id::text > $1 ORDER BY t.id::text LIMIT 1000`, last);
-        if (!page.length) break;
-        for (const p of page) {
-          await write({ t, r: p.j });
-          written++;
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+      const tables = await tablesInOrder(tx);
+      const stream = createHash('sha256');
+      await write({ v: BACKUP_VERSION, kind: 'header', createdAt: new Date().toISOString(), tables, snapshot: 'repeatable-read' });
+      const manifest: Record<string, { rows: number; md5: string }> = {};
+      for (const t of tables) {
+        let written = 0;
+        if (await hasId(t, tx)) {
+          let last = '';
+          for (;;) {
+            const page = await tx.$queryRawUnsafe<{ id: string; j: unknown }[]>(`SELECT t.id::text AS id, row_to_json(t) AS j FROM "${t}" t WHERE t.id::text > $1 ORDER BY t.id::text LIMIT 1000`, last);
+            if (!page.length) break;
+            for (const p of page) {
+              await write({ t, r: p.j });
+              written++;
+            }
+            last = page[page.length - 1]!.id;
+          }
+        } else {
+          const rows = await tx.$queryRawUnsafe<{ j: unknown }[]>(`SELECT row_to_json(t) AS j FROM "${t}" t`);
+          for (const p of rows) await write({ t, r: p.j });
+          written = rows.length;
         }
-        last = page[page.length - 1]!.id;
+        // same snapshot: the checksum describes exactly the rows written above
+        manifest[t] = await tableChecksum(t, tx);
+        if (manifest[t].rows !== written) throw new Error(`Snapshot violated for ${t}: wrote ${written}, counted ${manifest[t].rows}`);
+        stream.update(`${t}:${manifest[t].rows}:${manifest[t].md5};`);
+        await hooks.afterTable?.(t);
       }
-    } else {
-      const rows = await prisma.$queryRawUnsafe<{ j: unknown }[]>(`SELECT row_to_json(t) AS j FROM "${t}" t`);
-      for (const p of rows) await write({ t, r: p.j });
-      written = rows.length;
-    }
-    // checksum computed by Postgres over exactly the rows that exist now
-    manifest[t] = await tableChecksum(t);
-    if (manifest[t].rows !== written) manifest[t] = { ...manifest[t], rows: -1 }; // changed during backup: flag it
-    stream.update(`${t}:${manifest[t].rows}:${manifest[t].md5};`);
-  }
-  await write({ kind: 'manifest', tables: manifest, digest: stream.digest('hex') });
+      await write({ kind: 'manifest', tables: manifest, digest: stream.digest('hex') });
+    },
+    { isolationLevel: 'RepeatableRead', timeout: 60 * 60 * 1000, maxWait: 30_000 },
+  );
   gz.end();
 }
