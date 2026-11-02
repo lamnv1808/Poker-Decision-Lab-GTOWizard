@@ -102,6 +102,11 @@ jobs:
           done | tee counts.txt
           test "$(awk '$1=="User"{print $2}' counts.txt)" -ge 1
           test "$(awk '$1=="RealHand"{print $2}' counts.txt)" -ge 1
+          # release report (read-only, on the copy, before the app starts): schema version and context backfill state
+          {
+            echo "migrations: $(cat migrations.txt) finished, $(psql "$RESTORE_URL" -Atc "SELECT count(*) FROM \"_prisma_migrations\" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL") unfinished/rolled back; newest: $(psql "$RESTORE_URL" -Atc "SELECT string_agg(migration_name, ', ' ORDER BY migration_name DESC) FROM (SELECT migration_name FROM \"_prisma_migrations\" ORDER BY migration_name DESC LIMIT 4) m")"
+            echo "decision contexts (accepted decisions by contextV): $(psql "$RESTORE_URL" -Atc "SELECT string_agg('v' || \"contextV\" || '=' || n, ' ' ORDER BY \"contextV\") FROM (SELECT \"contextV\", count(*) n FROM \"RealDecision\" WHERE status = 'accepted' GROUP BY 1) x" 2>/dev/null || echo n/a)"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v4
         with:
@@ -149,6 +154,25 @@ jobs:
           echo "app on restored copy: register -> HTTP $code, session read -> HTTP $me" | tee -a "$GITHUB_STEP_SUMMARY"
           test "$code" = 201 && test "$me" = 200
           echo "server smoke test on the restored copy: ok" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: App integrity report and test-account deletion dry run (restored copy only, nothing deleted)
+        working-directory: app
+        run: |
+          # the admin token of the throw-away copy is derived from its throw-away APP_SECRET; it is not a production credential
+          tok=$(node -e "console.log(require('crypto').createHmac('sha256','restore-check-only-not-production').update('pdl-admin-v1').digest('hex'))")
+          curl -fs -H "x-admin-token: $tok" localhost:8099/api/admin/integrity > ../app-integrity.json || echo '{}' > ../app-integrity.json
+          python3 -c "import json; r=json.load(open('../app-integrity.json')); print('app integrity report ok:', r.get('ok'), 'failed:', r.get('failed'))" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -f docs/release/test-account-deletion-manifest.json ]; then
+            ids=$(python3 -c "import json; print(json.dumps({'ids':[a['id'] for a in json.load(open('docs/release/test-account-deletion-manifest.json'))['accounts']]}))")
+            curl -s -H "x-admin-token: $tok" -H 'content-type: application/json' -d "$ids" localhost:8099/api/admin/accounts/delete > ../dryrun.json
+            python3 -c "
+          import json; r=json.load(open('../dryrun.json'))
+          assert r.get('dryRun') is True or r.get('deleted') is False, r
+          m=r.get('manifest',{})
+          print('deletion DRY RUN (nothing deleted): accounts', len(m.get('accounts',[])), 'problems', r.get('problems'), 'external refs', m.get('external'))
+          print('rows that would be deleted:', json.dumps(m.get('rows'), sort_keys=True))
+          print('manifest hash:', r.get('hash'))" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Encrypt and write manifest
         env:
