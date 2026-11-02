@@ -22,6 +22,8 @@ import { classIndex, hasPushFoldSolution, solvePushFold } from '../gto/pushfold'
 import { type GtoAction, gradeGtoSpot } from '../gto/quiz';
 import { DEFAULT_THRESHOLDS, type Grade, gradeFromEvLoss } from '../scenario/grading';
 import { COMBOS, PREFLOP_TOP_SHARE, comboClass, comboIndex, comboInts, postflopStrength } from './strength';
+import { type ModelEvaluation, evaluateVsModel } from './evaluate';
+import { type ReasoningAssessment, explainModel } from './coach';
 import { ARCHETYPES, type ActionProbs, type Archetype, ARCHETYPE_PARAMS, type PolicyCtx, policy } from './villain';
 
 /** Villain model version; stored with each hand so it always rebuilds with the model it was dealt with. */
@@ -211,6 +213,8 @@ export interface RunOptions {
   equityCache?: Record<number, CachedEquity>;
   /** Skip Monte Carlo for the decision Hero has not made yet (its equity is never shown before acting). */
   skipPendingEquity?: boolean;
+  /** Feedback already computed for past Hero decisions (by decision index) — skips re-grading. */
+  feedbackCache?: Record<number, HeroFeedback>;
 }
 export interface CachedEquity { equity: number; stdErr: number; samples: number }
 
@@ -240,14 +244,30 @@ export type Assessment = 'solverVerified' | 'mathVerified' | 'reviewedStrategy' 
 export interface HeroFeedback {
   /** What kind of reference stands behind this feedback (shown on every decision). */
   assessment?: Assessment;
+  /**
+   * Evidence tier: solver = an exact solved spot matches; model = exact EV against this table's
+   * opponent model (exploitative, not GTO); limited = no defensible comparison, facts only.
+   */
+  tier?: 'solver' | 'model' | 'limited';
+  /** Tier 2: every legal action / size with its EV against the model. */
+  model?: ModelEvaluation;
+  /** The headline coaching: recommended action, one-line why, sizing comparison (when known). */
+  explain?: { recommended: { en: string; vi: string }; why: { en: string; vi: string }; sizing: { en: string; vi: string } | null };
+  /** Tier 3: what is missing for a defensible comparison. */
+  limitation?: { en: string; vi: string };
+  /** Structured reasoning checks (added by the server when the player ticked reasons). */
+  reasoning?: ReasoningAssessment;
   /** Heuristic coaching for decisions without a validated answer — guidance, never a grade. */
   coaching?: { en: string; vi: string };
   graded: boolean;
   grade?: Grade;
   evLossBB?: number;
   basis: 'solverEv' | 'modelEv' | 'none';
-  /** strategy = solver-verified (may move Elo in rated mode); fundamentals = model-based maths. */
-  track: 'strategy' | 'fundamentals' | null;
+  /**
+   * strategy = solver-verified (may move the Strategy rating in rated mode); fundamentals = model-based
+   * maths of a terminal call (Fundamentals rating); model = Tier 2 model EV (recorded, never rated).
+   */
+  track: 'strategy' | 'fundamentals' | 'model' | null;
   best?: string;
   evByAction?: Record<string, number>;
   note: { en: string; vi: string };
@@ -291,7 +311,7 @@ function strengthOf(state: HandState): (i: number) => number {
   return (i) => t[i]!;
 }
 
-function sizeAggressive(state: HandState, legal: LegalActions, arch: Archetype, shoveOnly: boolean): PlayerAction {
+export function sizeAggressive(state: HandState, legal: LegalActions, arch: Archetype, shoveOnly: boolean): PlayerAction {
   const type = legal.canBet ? 'bet' : 'raise';
   if (!legal.canBet && !legal.canRaise) return { type: 'call' };
   const actor = state.players[state.toAct]!;
@@ -316,7 +336,7 @@ function sizeAggressive(state: HandState, legal: LegalActions, arch: Archetype, 
 const categoryOf = (a: PlayerAction): keyof ActionProbs => (a.type === 'fold' ? 'fold' : a.type === 'check' || a.type === 'call' ? 'passive' : 'aggressive');
 
 /** The model's action probabilities for every combo at Villain's decision (solver, oracle or heuristic). */
-function villainModel(state: HandState, cfg: SimConfig, oracle?: SpotOracle, modelVersion?: string): { probsFor: (i: number) => ActionProbs; source: VillainEvent['source']; node: OracleNode | null; shoveOnly: boolean } {
+export function villainModel(state: HandState, cfg: SimConfig, oracle?: SpotOracle, modelVersion?: string): { probsFor: (i: number) => ActionProbs; source: VillainEvent['source']; node: OracleNode | null; shoveOnly: boolean } {
   const legal = legalActions(state)!;
   const actor = state.players[state.toAct]!;
   const arch = cfg.villains[actor.id]!;
@@ -637,27 +657,58 @@ function oracleGrade(node: OracleNode, info: HeroDecisionInfo, state: HandState,
   };
 }
 
-/** Heuristic coaching for ungraded decisions: guidance from the stated model, clearly not a grade. */
+/**
+ * Tier 3 facts for decisions without a defensible comparison: what is exactly true at the decision
+ * (equity vs the model's current ranges, the price) and what that number leaves out. No recommendation.
+ */
 function coachingFor(info: HeroDecisionInfo, action: PlayerAction): { en: string; vi: string } | undefined {
   const eq = info.modelEquity.equity;
   if (!Number.isFinite(eq)) return undefined;
   const p = (x: number) => `${Math.round(x * 100)}%`;
-  if (info.requiredEquity !== null) {
-    const margin = eq - info.requiredEquity;
-    const verdict = margin > 0.1 ? ['continuing looks profitable', 'tiếp tục có vẻ có lãi'] : margin < -0.1 ? ['folding looks reasonable unless you expect fold equity or implied odds', 'bỏ bài có vẻ hợp lý trừ khi bạn kỳ vọng fold equity hoặc implied odds'] : ['this is close — position, stack depth and Villain type decide it', 'quyết định sát — vị trí, độ sâu stack và kiểu đối thủ sẽ quyết định'];
-    return { en: `Coaching (model, not a grade): ${p(eq)} equity vs ${p(info.requiredEquity)} needed — ${verdict[0]}. You chose ${action.type}.`, vi: `Gợi ý (mô hình, không phải điểm): equity ${p(eq)} so với cần ${p(info.requiredEquity)} — ${verdict[1]}. Bạn chọn ${action.type}.` };
-  }
-  const verdict = eq > 0.65 ? ['betting for value is natural vs this model', 'cược value là tự nhiên trước mô hình này'] : eq < 0.35 ? ['checking or giving up is natural unless a bluff has good fold equity', 'check hoặc bỏ cuộc là tự nhiên trừ khi bluff có fold equity tốt'] : ['a mixed spot — pot control or a small bet are both reasonable', 'spot trung tính — kiểm soát pot hoặc cược nhỏ đều hợp lý'];
-  return { en: `Coaching (model, not a grade): ${p(eq)} equity vs the modelled ranges — ${verdict[0]}. You chose ${action.type}.`, vi: `Gợi ý (mô hình, không phải điểm): equity ${p(eq)} so với range mô hình — ${verdict[1]}. Bạn chọn ${action.type}.` };
+  void action;
+  const left = { en: 'Raw equity ignores the betting still to come (who realises their equity, position, later bets), so it does not rank the actions by itself.', vi: 'Equity thô bỏ qua phần cược còn lại (ai hiện thực hoá được equity, vị trí, các cược sau), nên tự nó không xếp hạng được các hành động.' };
+  if (info.requiredEquity !== null)
+    return { en: `Facts: your equity vs the opponents' modelled ranges is ${p(eq)}; the price requires ${p(info.requiredEquity)} to call. ${left.en}`, vi: `Dữ kiện: equity của bạn so với range mô hình của đối thủ là ${p(eq)}; giá yêu cầu ${p(info.requiredEquity)} để theo. ${left.vi}` };
+  return { en: `Facts: your equity vs the opponents' modelled ranges is ${p(eq)}. ${left.en}`, vi: `Dữ kiện: equity của bạn so với range mô hình của đối thủ là ${p(eq)}. ${left.vi}` };
 }
 
-function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerAction, node: OracleNode | null = null): HeroFeedback {
-  if (node) return oracleGrade(node, info, state, action);
+const solverExplain = (fb: HeroFeedback) =>
+  fb.best ? { recommended: { en: fb.best === 'mixed' || fb.best === 'either' ? 'Either action (mixed strategy)' : fb.best, vi: fb.best === 'mixed' || fb.best === 'either' ? 'Hành động nào cũng được (chiến lược trộn)' : fb.best }, why: fb.note, sizing: null } : undefined;
+
+function gradeHero(info: HeroDecisionInfo, state: HandState, action: PlayerAction, node: OracleNode | null = null, model?: { cfg: SimConfig; ranges: Record<string, Float64Array>; modelVersion?: string }): HeroFeedback {
+  if (node) {
+    const fb = oracleGrade(node, info, state, action);
+    return { ...fb, tier: fb.graded ? 'solver' : 'limited', ...(fb.graded ? { explain: solverExplain(fb) } : { limitation: fb.note }) };
+  }
   const fb = gradeHeroBase(info, state, action);
-  if (fb.basis === 'solverEv') return { ...fb, assessment: 'solverVerified' };
-  if (fb.basis === 'modelEv') return { ...fb, assessment: 'assumedRange' };
+  if (fb.basis === 'solverEv') return { ...fb, assessment: 'solverVerified', tier: 'solver', explain: solverExplain(fb) };
+  // Tier 2: exact EV of every action and size against this table's opponent model
+  const me = model && !info.solver ? evaluateVsModel(state, model.cfg, model.ranges, action, { modelVersion: model.modelVersion }) : null;
+  if (me) {
+    const best = me.options.find((o) => o.key === me.bestKey)!;
+    return {
+      explain: explainModel(me),
+      assessment: 'assumedRange',
+      tier: 'model',
+      model: me,
+      graded: true,
+      grade: me.grade,
+      evLossBB: me.evLossBB,
+      basis: 'modelEv',
+      // model-based grades are recorded and shown, but never move a rating
+      track: 'model',
+      best: best.key,
+      evByAction: Object.fromEntries(me.options.map((o) => [o.key, o.evBB])),
+      note: { en: `Exact EV against this table's ${me.opponent.label.en} model (exploitative, not GTO).`, vi: `EV chính xác trước mô hình ${me.opponent.label.vi} của bàn này (khai thác, không phải GTO).` },
+    };
+  }
+  if (fb.basis === 'modelEv') return { ...fb, assessment: 'assumedRange', tier: 'model' };
   const coaching = coachingFor(info, action);
-  return { ...fb, assessment: coaching ? 'heuristicCoaching' : 'notEvaluated', ...(coaching ? { coaching } : {}) };
+  const many = info.modelEquity.opponents.length > 1;
+  const limitation = many
+    ? { en: 'Assessment limited — several opponents are still in the hand, and later streets would have to be modelled to compare actions.', vi: 'Đánh giá có giới hạn — còn nhiều đối thủ trong ván, và cần mô hình hoá các street sau để so sánh hành động.' }
+    : { en: 'Assessment limited — more betting can follow, so comparing actions would require modelling your later decisions. Only the facts below are verified.', vi: 'Đánh giá có giới hạn — còn có thể cược tiếp, nên so sánh hành động đòi hỏi mô hình hoá các quyết định sau của bạn. Chỉ các dữ kiện dưới đây là đã kiểm chứng.' };
+  return { ...fb, tier: 'limited', limitation, assessment: coaching ? 'heuristicCoaching' : 'notEvaluated', ...(coaching ? { coaching } : {}) };
 }
 
 /**
@@ -710,7 +761,7 @@ export function runSim(seed: number, config: SimConfig, heroActions: readonly Pl
       }
       const action = heroActions[k++]!;
       const next = applyAction(state, action);
-      run.decisions.push({ info, action, feedback: gradeHero(info, state, action, node) });
+      run.decisions.push({ info, action, feedback: opts.feedbackCache?.[idx] ?? gradeHero(info, state, action, node, { cfg: config, ranges, modelVersion: opts.modelVersion }) });
       state = next;
       continue;
     }

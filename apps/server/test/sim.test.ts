@@ -133,6 +133,49 @@ describe('Hero simulator API', () => {
     expect(fam.body.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('Tier 2: heads-up river decisions get an exact model evaluation, recorded but never rated; reasons are checked', async () => {
+    const u = await newUser('simtier');
+    let seen: { fb: { tier: string; track: string; model?: { options: { key: string; evBB: number }[]; bestKey: string }; explain?: { recommended: { en: string } }; reasoning?: { checks: { key: string; verdict: string }[] } }; id: string } | null = null;
+    for (let h = 0; h < 30 && !seen; h++) {
+      let v = (await u.agent.post('/api/sim/hands').send({ tableSize: 2, stackBB: 50, mode: 'rated' }).expect(201)).body as View;
+      for (let i = 0; i < 20 && v.status === 'active' && v.legal && !seen; i++) {
+        const river = v.state.board.length === 5;
+        const action = v.legal.canCheck ? { type: 'check' } : { type: 'call' };
+        const r = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action, ...(river ? { reasons: ['protection', 'potOdds'] } : {}) }).expect(200);
+        if (river && r.body.feedback?.tier === 'model') seen = { fb: r.body.feedback, id: v.id };
+        v = r.body.view;
+      }
+    }
+    expect(seen).not.toBeNull();
+    const fb = seen!.fb;
+    expect(fb.track).toBe('model');
+    expect(fb.model!.options.length).toBeGreaterThanOrEqual(2);
+    expect(fb.model!.options.find((o) => o.key === fb.model!.bestKey)!.evBB).toBe(Math.max(...fb.model!.options.map((o) => o.evBB)));
+    expect(fb.explain!.recommended.en.length).toBeGreaterThan(0);
+    // "protection" on the river is contradicted by the facts of the spot
+    expect(fb.reasoning!.checks.find((c) => c.key === 'protection')!.verdict).toBe('contradicted');
+    const att = await prisma.decisionAttempt.findMany({ where: { userId: u.id, track: 'model' } });
+    expect(att.length).toBeGreaterThanOrEqual(1);
+    expect(att.every((a) => !a.ratingApplied)).toBe(true);
+    // the stored feedback is what a rebuild shows (cached, identical)
+    const again = (await u.agent.get(`/api/sim/hands/${seen!.id}`).expect(200)).body;
+    const dv = again.decisions.find((d: { feedback?: { tier?: string } }) => d.feedback?.tier === 'model');
+    expect(dv.feedback.model.bestKey).toBe(fb.model!.bestKey);
+  });
+
+  it('a finished hand reveals every opponent and labels never-dealt cards as hypothetical', async () => {
+    const u = await newUser('simreveal');
+    const v = (await u.agent.post('/api/sim/hands').send({ tableSize: 6, stackBB: 40 }).expect(201)).body as View;
+    // fold at once: the hand ends early for Hero, the simulator plays on without Hero
+    const r = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: v.legal!.canCheck ? { type: 'check' } : { type: 'fold' } }).expect(200);
+    let view = r.body.view;
+    for (let i = 0; i < 30 && view.status === 'active' && view.legal; i++) view = (await u.agent.post(`/api/sim/hands/${view.id}/act`).send({ clientAttemptId: cid(), action: view.legal.canCheck ? { type: 'check' } : { type: 'fold' } }).expect(200)).body.view;
+    expect(view.review.revealed.opponents).toHaveLength(5);
+    const dealt = view.state.board.length;
+    expect(view.review.revealed.runout.length).toBe(5 - dealt); // hypothetical only for undealt streets
+    expect(new Set([...view.review.revealed.runout, ...view.state.board]).size).toBe(5);
+  });
+
   it('refuses branching or replaying a hand that is still in progress', async () => {
     const u = await newUser('sim7');
     let v: View;

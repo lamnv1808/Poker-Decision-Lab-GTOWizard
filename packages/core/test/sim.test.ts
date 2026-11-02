@@ -142,7 +142,10 @@ describe('full-hand simulator', () => {
         if (d.feedback.graded) {
           terminal++;
           expect(d.feedback.basis).toBe('modelEv');
-          expect(d.feedback.track).toBe('fundamentals');
+          // heads-up terminal calls are now Tier 2 (every action compared, recorded but never rated)
+          expect(d.feedback.tier).toBe('model');
+          expect(['fundamentals', 'model']).toContain(d.feedback.track);
+          if (d.feedback.track === 'model') expect(d.feedback.model!.options.length).toBeGreaterThanOrEqual(2);
           expect(d.info.street === 'river' || d.info.toCallBB > 0).toBe(true);
         } else open++;
       }

@@ -88,8 +88,10 @@ analyticsRouter.get('/progress', async (req, res) => {
   const [history, ratings, attempts] = await Promise.all([
     prisma.ratingHistory.findMany({ where: { userId }, orderBy: { createdAt: 'asc' }, select: { skill: true, ratingAfter: true, rdAfter: true, createdAt: true } }),
     prisma.rating.findMany({ where: { userId } }),
-    prisma.decisionAttempt.findMany({ where: { userId }, select: { graded: true, isError: true, grade: true, evLoss: true, evUnit: true, createdAt: true, street: true, heroPosition: true, effectiveStackBB: true, difficulty: true, concepts: true, attemptType: true, mode: true } }),
+    prisma.decisionAttempt.findMany({ where: { userId }, select: { graded: true, isError: true, grade: true, evLoss: true, evUnit: true, createdAt: true, street: true, heroPosition: true, effectiveStackBB: true, difficulty: true, concepts: true, attemptType: true, mode: true, gradeBasis: true, track: true, confidence: true, optionKey: true } }),
   ]);
+  /** Evidence tier of an attempt: solver-verified, model-based, or limited (no grade). Never mixed. */
+  const tierOf = (a: { graded: boolean; gradeBasis: string | null; track: string }) => (!a.graded ? 'limited' : a.gradeBasis === 'solverEv' ? 'solver' : 'model');
   const breakdown = (m: Map<string, A[]>) => [...m].map(([key, rows]) => ({ key, ...summarize(rows) })).sort((a, b) => a.key.localeCompare(b.key));
   const conceptRows = attempts.flatMap((a) => a.concepts.map((c) => ({ ...a, concept: c })));
   res.json({
@@ -100,6 +102,16 @@ analyticsRouter.get('/progress', async (req, res) => {
     byStackDepth: breakdown(bucket(attempts.filter((a) => a.attemptType === 'decision'), (a) => stackBand(a.effectiveStackBB))),
     byDifficulty: breakdown(bucket(attempts, (a) => String(a.difficulty))),
     byType: breakdown(bucket(attempts, (a) => a.attemptType)),
+    // decision quality by evidence tier, and by the action chosen — tiers are never pooled
+    byTier: breakdown(bucket(attempts, (a) => tierOf(a))),
+    byActionTier: breakdown(bucket(attempts.filter((a) => a.graded && a.optionKey), (a) => `${tierOf(a)}:${['fold', 'check', 'call', 'bet', 'raise'].includes(a.optionKey!) ? a.optionKey : 'other'}`)),
+    // confidence vs correctness, per tier (well calibrated: "sure" answers are right more often)
+    calibration: (['solver', 'model'] as const).flatMap((tier) =>
+      ([3, 2, 1] as const).map((c) => {
+        const xs = attempts.filter((a) => a.graded && tierOf(a) === tier && a.confidence === c);
+        return { tier, confidence: c, n: xs.length, accuracyPct: xs.length ? Math.round((1000 * xs.filter((x) => !x.isError).length) / xs.length) / 10 : null };
+      }),
+    ),
     byConcept: [...bucket(conceptRows, (a) => a.concept)].map(([key, rows]) => ({ key, ...summarize(rows) })).sort((a, b) => (b.avgEvLossBB ?? -1) - (a.avgEvLossBB ?? -1)),
   });
 });

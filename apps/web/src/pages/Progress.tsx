@@ -14,6 +14,9 @@ interface Prog {
   byStackDepth: Row[];
   byDifficulty: Row[];
   byConcept: Row[];
+  byTier?: Row[];
+  byActionTier?: Row[];
+  calibration?: { tier: string; confidence: number; n: number; accuracyPct: number | null }[];
 }
 
 const SERIES = ['#34d399', '#60a5fa', '#f59e0b', '#f472b6', '#a78bfa', '#22d3ee', '#fb7185', '#facc15', '#4ade80', '#c084fc', '#94a3b8'];
@@ -94,6 +97,27 @@ export function ProgressPage() {
         <Panel title={t('progress.byStack')}><AccuracyTable rows={p.byStackDepth} label="BB" /></Panel>
         <Panel title={t('progress.byDifficulty')}><AccuracyTable rows={p.byDifficulty} label={t('filter.difficulty')} /></Panel>
       </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel title={t('progress.byTier')}>
+          <AccuracyTable rows={(p.byTier ?? []).map((r) => ({ ...r, key: t(`tier.${r.key}`) }))} label={t('progress.tier')} />
+          <p className="mt-2 text-[11px] text-ink-500">{t('progress.tierNote')}</p>
+        </Panel>
+        <Panel title={t('progress.byAction')}>
+          <AccuracyTable rows={(p.byActionTier ?? []).map((r) => { const [tier, act] = r.key.split(':'); return { ...r, key: `${t(`tier.${tier}`)} · ${act === 'other' ? '—' : t(`act.${act}`)}` }; })} label={t('fb2.action')} />
+        </Panel>
+      </div>
+      <Panel title={t('progress.calibration')}>
+        <table className="w-full text-sm tabular" data-testid="calibration">
+          <thead className="text-xs text-ink-400"><tr><th className="py-1 text-left">{t('progress.tier')}</th><th className="text-left">{t('action.confidence')}</th><th className="text-right">{t('progress.n')}</th><th className="text-right">{t('dash.accuracy')}</th></tr></thead>
+          <tbody>
+            {(p.calibration ?? []).filter((c) => c.n > 0).map((c) => (
+              <tr key={`${c.tier}${c.confidence}`} className="border-t border-ink-800"><td className="py-1">{t(`tier.${c.tier}`)}</td><td>{t(`confidence.${c.confidence}`)}</td><td className="text-right text-ink-300">{c.n}</td><td className="text-right">{c.accuracyPct === null ? '—' : `${c.accuracyPct}%`}</td></tr>
+            ))}
+          </tbody>
+        </table>
+        {!(p.calibration ?? []).some((c) => c.n > 0) && <Empty>{t('progress.noData')}</Empty>}
+        <p className="mt-2 text-[11px] text-ink-500">{t('progress.calibrationNote')}</p>
+      </Panel>
       <Panel title={t('progress.byConcept')}><AccuracyTable rows={p.byConcept} label={t('progress.concept')} /></Panel>
     </div>
   );

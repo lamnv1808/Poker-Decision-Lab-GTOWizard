@@ -22,6 +22,8 @@ import {
   reviewSrs,
   snapshotForHeroAction,
   pushFoldChoiceVerdict,
+  REASON_KEYS,
+  assessReasoning,
 } from '@pdl/core';
 import { Prisma } from '@prisma/client';
 import { Router } from 'express';
@@ -254,7 +256,8 @@ async function scheduleConcept(userId: string, topics: string[], grade: Grade) {
 }
 
 /**
- * Submit a replay answer: action + sizing + reasoning + confidence are required BEFORE any reveal.
+ * Submit a replay answer: action + sizing BEFORE any reveal. Reasoning (structured reasons and/or a
+ * private note) and confidence are optional; ticked reasons are checked against the spot's facts.
  * Without a verified annotation the answer is recorded but never judged.
  */
 realRouter.post('/decisions/:id/answer', async (req, res) => {
@@ -263,8 +266,9 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
     z.object({
       clientAttemptId: z.string().min(8).max(100),
       action: ActionInput,
-      reasoning: z.string().trim().min(3).max(2000),
-      confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      reasoning: z.string().trim().max(2000).optional(),
+      reasons: z.array(z.enum(REASON_KEYS)).max(6).optional(),
+      confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
       responseMs: z.number().int().min(0).max(3_600_000).optional(),
       mode: z.enum(['practice', 'rated']).default('practice'),
       sessionId: z.string().uuid().optional(),
@@ -323,7 +327,21 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
     const choice = body.action.type === 'fold' ? 'fold' : pfa.role === 'bbCall' ? (body.action.type === 'call' ? 'aggressive' : 'other') : (body.action.type === 'raise' || body.action.type === 'bet') && (body.action.amount ?? 0) >= behind * 0.9 ? 'aggressive' : 'other';
     pushFold = pushFoldChoiceVerdict(pfa, choice, d.formatGroup);
   }
+  // Tier: verified annotation (or exact push/fold solver) when available; otherwise limited evidence with the facts
+  const tier: 'solver' | 'model' | 'limited' = strategy.status === 'verified' && strategy.evaluation === 'ev' ? (ann?.source === 'solver' ? 'solver' : 'model') : pushFold && pushFold.class !== 'outsideModel' && pushFold.class !== 'nearThreshold' ? 'solver' : 'limited';
+  const limitation =
+    tier === 'limited'
+      ? strategy.status === 'verified'
+        ? { en: 'A reviewed annotation exists but it does not evaluate this action with EV, so no grade is given.', vi: 'Có chú giải đã duyệt nhưng không đánh giá hành động này bằng EV, nên không chấm điểm.' }
+        : { en: "Assessment limited — in a real hand the opponents' ranges are unknown, so no action comparison is claimed. The pot-odds facts below are exact.", vi: 'Đánh giá có giới hạn — trong ván thật range đối thủ không biết được, nên không đưa ra so sánh hành động. Dữ kiện pot odds dưới đây là chính xác.' }
+      : null;
+  const reasoningCheck = body.reasons?.length
+    ? assessReasoning(body.reasons, { street: d.street, action: body.action.type, toCallBB: (facts?.toCallBB as number | undefined) ?? 0, requiredEquity: (facts?.requiredEquity as number | null | undefined) ?? null, equityVsRange: null, model: null, solverGraded: tier === 'solver' })
+    : null;
   const result = {
+    tier,
+    limitation,
+    reasoningCheck,
     decisionId: d.id,
     street: d.street,
     yourAction: { ...chosen, toBB: chosen.toBB === null ? null : round(chosen.toBB), addedBB: round(chosen.addedBB) },
@@ -333,8 +351,9 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
     topics: topics.map((t) => ({ key: t, label: TOPIC_LABELS[t] })),
     strategy,
     pushFold,
-    reasoning: body.reasoning,
-    confidence: body.confidence,
+    reasoning: body.reasoning ?? null,
+    reasons: body.reasons ?? [],
+    confidence: body.confidence ?? null,
   };
   const outcome = await recordAttempt({
     userId,

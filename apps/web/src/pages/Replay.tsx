@@ -2,6 +2,8 @@ import type { HandState, LegalActions, PlayerAction } from '@pdl/core/engine';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, newAttemptId, ApiError, mixedSessionId } from '../api';
+import { type FeedbackView, type Tier, TierBadge } from '../components/DecisionFeedback';
+import { type Reason, ReasonPicker } from '../components/ReasonPicker';
 import { ActionBar } from '../components/ActionBar';
 import { CardText } from '../components/Cards';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
@@ -37,6 +39,9 @@ export interface DecisionQuestion {
 
 interface Evaluated { action: string; sizeToBB?: number | string | null; ev?: number | null; freq?: number | null }
 interface ReplayResult {
+  tier?: Tier;
+  limitation?: Localized | null;
+  reasoningCheck?: FeedbackView['reasoning'] | null;
   yourAction: { action: string; toBB: number | null; addedBB: number; allIn: boolean };
   observed: { type: string; amountBB: number; allIn: boolean; note: Localized };
   sameAsObserved: boolean;
@@ -94,6 +99,7 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
   const [q, setQ] = useState<DecisionQuestion | null>(null);
   const [pending, setPending] = useState<PlayerAction | null>(null);
   const [reasoning, setReasoning] = useState('');
+  const [reasons, setReasons] = useState<Reason[]>([]);
   const [confidence, setConfidence] = useState<1 | 2 | 3 | null>(null);
   const [result, setResult] = useState<ReplayResult | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -107,6 +113,7 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
     setOutcome(null);
     setPending(null);
     setReasoning('');
+    setReasons([]);
     setConfidence(null);
     try {
       const filters = { street: street || undefined, topic: topic || undefined, multiway: multiway || undefined };
@@ -124,11 +131,13 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
   }, [next]);
 
   const submit = async () => {
-    if (!q || !pending || !confidence || reasoning.trim().length < 3) return;
+    if (!q || !pending) return;
     setBusy(true);
     try {
-      const r = await api.post<ReplayResult>(`/real/decisions/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), action: pending, reasoning, confidence, responseMs: Date.now() - shownAt.current, mode, sessionId: mixedSessionId() });
+      const r = await api.post<ReplayResult>(`/real/decisions/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), action: pending, reasoning: reasoning.trim() || undefined, reasons: reasons.length ? reasons : undefined, confidence: confidence ?? undefined, responseMs: Date.now() - shownAt.current, mode, sessionId: mixedSessionId() });
       setResult(r);
+      // the rest of the real hand is shown right away (only what the hand history recorded)
+      api.get<Outcome>(`/real/decisions/${q.decisionId}/outcome`).then(setOutcome).catch(() => {});
     } catch (e) {
       setError(e);
     } finally {
@@ -174,7 +183,8 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
           <div className="space-y-3">
             <DecisionHeader q={q} />
             {q.reviewTopic && <div className="text-xs text-sky-300">{t('replay.conceptReview')}: {loc(q.reviewTopic.label, lang)}</div>}
-            <PokerTable state={q.state} heroId={q.heroId} bigBlind={q.bigBlind} showBB={showBB} labels={q.positions} heroCards={q.heroCards} />
+            {outcome && <div className="text-xs text-amber-200" data-testid="final-board-label">{t('replay.finalBoardLabel')}</div>}
+            <PokerTable state={outcome ? { ...q.state, board: outcome.board as typeof q.state.board, players: q.state.players.map((p) => { const sh = outcome.shown.find((x) => x.player === (q.positions?.[p.id] ?? p.id) || x.player === p.id); return sh ? { ...p, cards: sh.cards as typeof p.cards } : p; }) } : q.state} heroId={q.heroId} bigBlind={q.bigBlind} showBB={showBB} labels={q.positions} heroCards={q.heroCards} />
             {!result && q.legal && !pending && <ActionBar state={q.state} legal={q.legal} bigBlind={q.bigBlind} showBB={showBB} onAct={(a) => setPending(a)} showConfidence={false} />}
             {!result && pending && (
               <Panel>
@@ -183,17 +193,14 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
                     <span>{t('replay.yourChoice')}: <b>{pendingLabel}</b></span>
                     <button type="button" className="text-xs text-ink-400 hover:text-ink-100" onClick={() => setPending(null)}>{t('replay.change')}</button>
                   </div>
-                  <label className="block text-xs text-ink-300">
-                    {t('replay.reasoning')}
-                    <textarea value={reasoning} onChange={(e) => setReasoning(e.target.value)} rows={3} maxLength={2000} placeholder={t('replay.reasoningHint')} className="mt-1 w-full rounded-md border border-ink-600 bg-ink-850 px-2 py-1.5 text-sm" data-testid="reasoning" />
-                  </label>
+                  <ReasonPicker value={reasons} onChange={setReasons} note={reasoning} onNote={setReasoning} />
                   <div className="flex flex-wrap items-center gap-2 text-xs text-ink-300">
                     {t('action.confidence')}:
                     {([3, 2, 1] as const).map((c) => (
                       <button key={c} type="button" onClick={() => setConfidence(c)} aria-pressed={confidence === c} className={`rounded-md border px-2.5 py-1 ${confidence === c ? 'border-accent bg-accent/10 text-accent' : 'border-ink-600'}`} data-testid={`confidence-${c}`}>{t(`confidence.${c}`)}</button>
                     ))}
                   </div>
-                  <button type="button" disabled={busy || !confidence || reasoning.trim().length < 3} onClick={() => void submit()} className="w-full rounded-lg bg-felt-500 py-2.5 text-sm font-bold hover:bg-felt-600 disabled:opacity-40" data-testid="replay-submit">{t('replay.submit')}</button>
+                  <button type="button" disabled={busy} onClick={() => void submit()} className="w-full rounded-lg bg-felt-500 py-2.5 text-sm font-bold hover:bg-felt-600 disabled:opacity-40" data-testid="replay-submit">{t('replay.submit')}</button>
                   <p className="text-[11px] text-ink-400">{t('replay.submitNote')}</p>
                 </div>
               </Panel>
@@ -201,7 +208,6 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
             {result && (
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => void next()} className="rounded-lg bg-felt-500 px-5 py-2 text-sm font-bold hover:bg-felt-600" data-testid="replay-next">{t('run.nextTest')} →</button>
-                {!outcome && <button type="button" onClick={async () => setOutcome(await api.get<Outcome>(`/real/decisions/${q.decisionId}/outcome`))} className="rounded-lg border border-ink-600 px-3 py-2 text-sm" data-testid="show-outcome">{t('replay.whatHappened')}</button>}
               </div>
             )}
             {outcome && (
@@ -224,6 +230,17 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
               </div>
             ) : (
               <div className="space-y-3 text-sm" data-testid="replay-result">
+                <div className="flex flex-wrap items-center gap-2">
+                  {result.tier && <TierBadge tier={result.tier} />}
+                  {result.tier === 'limited' && <span className="rounded border border-ink-500 px-2 py-0.5 text-xs text-ink-200" data-testid="assessment-limited">{t('fb2.limited')}</span>}
+                </div>
+                {result.limitation && <p className="text-ink-200" data-testid="fb-limitation">{loc(result.limitation, lang)}</p>}
+                {result.reasoningCheck && result.reasoningCheck.quality !== 'notAssessed' && (
+                  <div className="rounded-md border border-ink-700 p-2 text-xs" data-testid="reasoning-assessment">
+                    <div className="mb-1 font-semibold">{t('fb2.reasoning')}: {t(`fb2.reasoning.${result.reasoningCheck.quality}`)}</div>
+                    <ul className="space-y-0.5">{result.reasoningCheck.checks.map((c) => <li key={c.key}>{c.verdict === 'supported' ? '✓' : c.verdict === 'contradicted' ? '✗' : '·'} <b>{t(`reason.${c.key}`)}</b> — {loc(c.note, lang)}</li>)}</ul>
+                  </div>
+                )}
                 <div className="rounded-lg bg-ink-850 p-2.5">
                   <div className="text-xs uppercase text-ink-400">{t('fb.youChose')}</div>
                   <div className="font-semibold">{describe(result.yourAction, t)}</div>
@@ -251,7 +268,7 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
                   </div>
                 )}
                 {s?.status === 'unreviewed' ? (
-                  <div className="rounded-md border border-amber-500/30 bg-amber-900/10 p-2.5 text-xs text-amber-200" data-testid="unreviewed">{t('replay.noJudgement')}</div>
+                  <div className="text-xs text-ink-400" data-testid="unreviewed">{t('replay.noJudgementShort')}</div>
                 ) : s ? (
                   <div className="space-y-2" data-testid="strategy-eval">
                     <div className="flex flex-wrap items-center gap-2">

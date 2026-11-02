@@ -69,18 +69,26 @@ describe('Real Hand Replay', () => {
     // the engine never offers a raise against an all-in opponent when nobody else can act
     if (q.body.state.players.filter((p: { folded: boolean; allIn: boolean; id: string }) => !p.folded && !p.allIn && p.id !== 'Hero').length === 0) expect(q.body.legal.canRaise).toBe(false);
   });
-  it('requires action, reasoning and confidence before revealing; unreviewed answers are never judged', async () => {
+  it('an answer (reasoning optional) comes before any reveal; unreviewed answers are never judged', async () => {
     const d = await anyDecision();
     const q = await owner.agent.get(`/api/real/decisions/${d.id}/question`).expect(200);
     const action = q.body.legal.canCheck ? { type: 'check' } : { type: 'fold' };
-    expect((await owner.agent.post(`/api/real/decisions/${d.id}/answer`).send({ clientAttemptId: cid(), action })).status).toBe(400);
+    // nothing is revealed before an answer
     expect((await owner.agent.get(`/api/real/decisions/${d.id}/outcome`)).status).toBe(403);
+    // an action alone is a complete answer (no reasoning, no confidence); limited evidence is said so
+    const bare = await owner.agent.post(`/api/real/decisions/${d.id}/answer`).send({ clientAttemptId: cid(), action }).expect(200);
+    expect(['limited', 'solver', 'model']).toContain(bare.body.tier);
+    if (bare.body.tier === 'limited') expect(bare.body.limitation.en).toMatch(/Assessment limited|annotation/);
+    expect(bare.body.reasoningCheck).toBeNull();
+    // ticked reasons are checked: protection on the river / pot odds with nothing to call are contradicted
+    const withReasons = await owner.agent.post(`/api/real/decisions/${d.id}/answer`).send({ clientAttemptId: cid(), action, reasons: ['potOdds', 'position'] }).expect(200);
+    expect(withReasons.body.reasoningCheck.checks.map((c: { key: string }) => c.key)).toEqual(['potOdds', 'position']);
     const r = await owner.agent.post(`/api/real/decisions/${d.id}/answer`).send({ clientAttemptId: cid(), action, reasoning: 'range is too strong', confidence: 2, responseMs: 4200, mode: 'rated' }).expect(200);
     expect(r.body.strategy.status).toBe('unreviewed');
     expect(r.body.observed.label).toBe('historical');
     expect(r.body.ratingChanges).toEqual([]);
     expect(r.body).not.toHaveProperty('grade');
-    const att = await prisma.decisionAttempt.findFirstOrThrow({ where: { userId: owner.id, attemptType: 'replay' }, orderBy: { createdAt: 'desc' } });
+    const att = await prisma.decisionAttempt.findFirstOrThrow({ where: { userId: owner.id, attemptType: 'replay', reasoning: { not: null } }, orderBy: { createdAt: 'desc' } });
     expect(att.track).toBe('replay');
     expect(att.responseMs).toBe(4200);
     expect(att.reasoning).toBe('range is too strong');

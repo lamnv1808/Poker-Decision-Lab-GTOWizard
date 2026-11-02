@@ -5,6 +5,8 @@ import { api, newAttemptId } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { PokerTable } from '../components/PokerTable';
 import { CardText } from '../components/Cards';
+import { DecisionFeedback, type FeedbackView } from '../components/DecisionFeedback';
+import { type Reason, ReasonPicker } from '../components/ReasonPicker';
 import { ErrorNote, GradeBadge, Panel, Spinner, Toggle } from '../components/ui';
 import { fmtNum, loc } from '../format';
 import { useT } from '../i18n';
@@ -13,17 +15,10 @@ import type { Grade, Localized } from '../types';
 
 interface Facts { potBB: number; toCallBB: number; requiredEquity: number | null; spr: number | null; street: string; solverOptions?: { key: string; action: PlayerAction }[] | null }
 type Assessment = 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assumedRange' | 'heuristicCoaching' | 'notEvaluated';
-interface Feedback {
+interface Feedback extends FeedbackView {
   assessment?: Assessment;
-  coaching?: Localized;
-  graded: boolean;
-  grade?: Grade;
-  evLossBB?: number;
   basis: 'solverEv' | 'modelEv' | 'none';
-  track: 'strategy' | 'fundamentals' | null;
-  best?: string;
-  evByAction?: Record<string, number>;
-  note: Localized;
+  track: 'strategy' | 'fundamentals' | 'model' | null;
 }
 interface ModelEq { equity: number; stdErr: number; opponents: { id: string; archetype: string; rangePct: number }[] }
 interface DecisionView { topics?: string[]; legal?: LegalActions; index: number; street: string; action: PlayerAction; confidence: number | null; reasoning: string | null; facts: Facts; feedback?: Feedback; modelEquity?: ModelEq }
@@ -47,12 +42,11 @@ export interface SimView {
   decisions: DecisionView[];
   origin?: { kind: 'random' | 'scenario' | 'solverFlop'; scenarioId: string | null; flop: string | null };
   bookmarked?: boolean;
-  review: null | { timeline: TimelineEntry[]; showdown: { id: string; cards: string[]; category: string | null }[]; netBB: Record<string, number>; heroNetBB: number; gradedCount: number; winners: { id: string; amountBB: number; category: string | null }[]; endedBy: 'fold' | 'showdown'; terminalStreet: string; source: { villains: Localized } };
+  review: null | { timeline: TimelineEntry[]; showdown: { id: string; cards: string[]; category: string | null }[]; netBB: Record<string, number>; heroNetBB: number; gradedCount: number; winners: { id: string; amountBB: number; category: string | null }[]; endedBy: 'fold' | 'showdown'; terminalStreet: string; source: { villains: Localized }; revealed?: { runout: string[]; opponents: { id: string; cards: string[]; folded: boolean }[] } };
 }
 interface Setup { table?: 'random' | 'solverFlop'; tableSize: number; stackBB: number; archetype: string; mode: 'practice' | 'rated'; feedback: 'guided' | 'exam' }
 
 const SETUP_KEY = 'pdl.sim.setup';
-const MATH_KEY = 'pdl.sim.math';
 function loadSetup(mode: 'practice' | 'rated'): Setup {
   try {
     const raw = localStorage.getItem(SETUP_KEY);
@@ -198,28 +192,19 @@ export function AssessmentBadge({ a }: { a: Assessment }) {
 }
 
 function FeedbackCard({ fb, eq }: { fb: Feedback; eq?: ModelEq }) {
-  const { t, lang } = useT();
+  const { t } = useT();
   return (
-    <div className="space-y-1.5 text-sm" data-testid="sim-feedback">
-      <div className="flex flex-wrap items-center gap-2">
-        {fb.assessment && <AssessmentBadge a={fb.assessment} />}
-        {fb.graded ? <GradeBadge grade={fb.grade ?? null} /> : <span className="rounded bg-ink-800 px-2 py-0.5 text-xs text-ink-300">{t('sim.notGraded')}</span>}
-        {fb.evLossBB !== undefined && fb.graded && <span className="text-xs tabular text-ink-300">{t('sim.evLoss')}: {fmtNum(fb.evLossBB, 2)} BB</span>}
-      </div>
-      {fb.evByAction && (
-        <div className="flex flex-wrap gap-2 text-xs tabular">
-          {Object.entries(fb.evByAction).map(([a, ev]) => (
-            <span key={a} className={`rounded border px-1.5 ${fb.best === a ? 'border-emerald-500 text-emerald-300' : 'border-ink-700 text-ink-300'}`}>{a}: {ev >= 0 ? '+' : ''}{fmtNum(ev, 2)} BB</span>
-          ))}
-        </div>
-      )}
-      <p className="text-xs text-ink-200">{loc(fb.note, lang)}</p>
-      {fb.coaching && <p className="rounded border border-sky-500/30 bg-sky-500/5 px-2 py-1 text-xs text-sky-200" data-testid="sim-coaching">{loc(fb.coaching, lang)}</p>}
-      {eq && Number.isFinite(eq.equity) && (
-        <p className="text-[11px] text-ink-400">
-          {t('sim.modelEquity')}: {pct(eq.equity)} ({eq.opponents.map((o) => `${o.id} ${t(`arch.${o.archetype}`)} ~${o.rangePct}%`).join(', ')})
-        </p>
-      )}
+    <div data-testid="sim-feedback">
+      <DecisionFeedback
+        fb={fb}
+        extra={
+          eq && Number.isFinite(eq.equity) ? (
+            <p className="text-[11px] text-ink-400">
+              {t('sim.modelEquity')}: {pct(eq.equity)} ({eq.opponents.map((o) => `${o.id} ${t(`arch.${o.archetype}`)} ~${o.rangePct}%`).join(', ')})
+            </p>
+          ) : null
+        }
+      />
     </div>
   );
 }
@@ -235,13 +220,12 @@ export function HeroSimPage() {
   const [reasoning, setReasoning] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [math, setMath] = useState(() => {
-    try {
-      return localStorage.getItem(MATH_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [reasons, setReasons] = useState<Reason[]>([]);
+  const lastRef = useRef<HTMLDivElement>(null);
+  // the feedback is the first thing to see after acting (on phones it would otherwise sit below the fold)
+  useEffect(() => {
+    if (last) lastRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [last]);
   const shownAt = useRef(Date.now());
   const start = useStartSim();
   const load = useCallback(async () => {
@@ -258,16 +242,6 @@ export function HeroSimPage() {
     setLast(null);
     void load();
   }, [load]);
-  const toggleMath = () => {
-    setMath((m) => {
-      try {
-        localStorage.setItem(MATH_KEY, m ? '0' : '1');
-      } catch {
-        /* ignore */
-      }
-      return !m;
-    });
-  };
   const act = async (action: PlayerAction, confidence?: 1 | 2 | 3) => {
     if (!v) return;
     setBusy(true);
@@ -278,11 +252,13 @@ export function HeroSimPage() {
         action,
         confidence,
         reasoning: reasoning.trim() || undefined,
+        reasons: reasons.length ? reasons : undefined,
         responseMs: Date.now() - shownAt.current,
       });
       setV(r.view);
       setLast(r.feedback ? { fb: r.feedback, eq: r.feedback.modelEquity } : null);
       setReasoning('');
+      setReasons([]);
       shownAt.current = Date.now();
     } catch (e) {
       setError(e);
@@ -295,8 +271,9 @@ export function HeroSimPage() {
   const bb = v.bigBlind;
   const labels = Object.fromEntries(v.state.players.map((p) => [p.id, p.id]));
   const meta = Object.fromEntries(Object.entries(v.config.villains).map(([k, x]) => [k, { pos: k, tendencies: x.label }]));
-  // At the end, reveal only the hands that reached showdown.
-  const shown = v.review ? new Map(v.review.showdown.map((s) => [s.id, s.cards])) : null;
+  // After the hand, every opponent's dealt cards are shown on the table (the simulator keeps them);
+  // only the actual board is on the table — never-dealt cards appear separately, labelled hypothetical.
+  const shown = v.review ? new Map((v.review.revealed?.opponents ?? v.review.showdown).map((s) => [s.id, s.cards])) : null;
   const tableState: HandState = shown ? { ...v.state, players: v.state.players.map((p) => (shown.has(p.id) ? { ...p, cards: shown.get(p.id) as HandState['players'][number]['cards'] } : p)) } : v.state;
   const hero = v.state.players.find((p) => p.id === v.config.heroPos)!;
   const nextSetup: Setup = { ...loadSetup(v.mode), mode: v.mode, feedback: v.feedback };
@@ -318,16 +295,15 @@ export function HeroSimPage() {
           </div>
         </div>
         <div className="space-y-3">
+          {last && (
+            <div ref={lastRef} className="scroll-mt-16">
+              <Panel title={t('sim.lastDecision')}>
+                <FeedbackCard fb={last.fb} eq={last.eq} />
+              </Panel>
+            </div>
+          )}
           {v.current && v.legal && (
-            <Panel title={t('sim.yourMove')} actions={<button type="button" onClick={toggleMath} className="text-xs text-accent" data-testid="sim-math-toggle">{math ? t('sim.hideMath') : t('sim.showMath')}</button>}>
-              {math && (
-                <div className="mb-3 space-y-1 rounded-lg bg-ink-850 p-2 text-xs tabular" data-testid="sim-math">
-                  <div>{t('sim.requiredEq')}: <b>{pct(v.current.requiredEquity)}</b> <span className="text-ink-400">= {t('sim.call')} / {t('sim.winnablePot')}</span></div>
-                  {v.current.spr !== null && <div>SPR: <b>{fmtNum(v.current.spr, 2)}</b></div>}
-                  <div className="text-ink-400">{t('sim.mathNote')}</div>
-                </div>
-              )}
-              <textarea value={reasoning} onChange={(e) => setReasoning(e.target.value)} maxLength={1000} rows={2} placeholder={t('sim.reasoning')} className="mb-2 w-full rounded-md border border-ink-600 bg-ink-850 px-2 py-1.5 text-sm" data-testid="sim-reasoning" />
+            <Panel title={t('sim.yourMove')}>
               {v.current.solverOptions && (
                 <div className="mb-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs" data-testid="solver-options">
                   <div className="mb-1 text-emerald-200">{t('sim.solverSpot')}</div>
@@ -341,11 +317,7 @@ export function HeroSimPage() {
                 </div>
               )}
               <ActionBar state={v.state} legal={v.legal} bigBlind={bb} showBB={showBB} disabled={busy} onAct={(a, c) => void act(a, c)} />
-            </Panel>
-          )}
-          {last && (
-            <Panel title={t('sim.lastDecision')}>
-              <FeedbackCard fb={last.fb} eq={last.eq} />
+              <ReasonPicker value={reasons} onChange={setReasons} note={reasoning} onNote={setReasoning} />
             </Panel>
           )}
           {!v.review && v.feedback === 'exam' && v.decisions.length > 0 && <p className="text-xs text-ink-400">{t('sim.examHidden')}</p>}
@@ -363,7 +335,7 @@ export function HeroSimPage() {
                   </div>
                 ))}
               </div>
-              <HiddenInfo id={v.id} />
+              <RevealedInfo v={v} />
               <p className="mt-2 text-[11px] text-ink-400">{loc(v.review.source.villains, lang)}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {mixed ? (
@@ -517,26 +489,26 @@ function VillainWhyRow({ w, onBranch }: { w: VillainWhy; onBranch: (c: 'fold' | 
   );
 }
 
-/** Optional, after the hand: simulator-only hidden cards and the hypothetical runout (labelled). */
-function HiddenInfo({ id }: { id: string }) {
-  const { t, lang } = useT();
-  const [h, setH] = useState<null | { runout: string[]; opponents: { id: string; cards: string[]; folded: boolean }[]; label: Localized }>(null);
-  const [show, setShow] = useState<{ runout: boolean; cards: boolean }>({ runout: false, cards: false });
-  const get = async (k: 'runout' | 'cards') => {
-    if (!h) setH(await api.get(`/sim/hands/${id}/hidden`));
-    setShow((x) => ({ ...x, [k]: true }));
-  };
+/** After the hand: what was revealed, and (if the hand ended early) the hypothetical runout, labelled. */
+function RevealedInfo({ v }: { v: SimView }) {
+  const { t } = useT();
+  const r = v.review?.revealed;
+  if (!r) return null;
   return (
-    <div className="mt-3 space-y-2 text-xs" data-testid="sim-hidden">
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => void get('runout')} className="rounded border border-ink-600 px-2 py-1" data-testid="reveal-runout">{t('sim.revealRunout')}</button>
-        <button type="button" onClick={() => void get('cards')} className="rounded border border-ink-600 px-2 py-1" data-testid="reveal-cards">{t('sim.revealCards')}</button>
+    <div className="mt-3 space-y-1.5 text-xs" data-testid="sim-revealed">
+      <div className="text-ink-300">
+        {t('sim.revealedCards')}:{' '}
+        {r.opponents.map((o) => (
+          <span key={o.id} className="mr-2 inline-block">
+            {o.id} <CardText cards={o.cards.join('')} />
+            {o.folded ? ` (${t('table.folded')})` : ''}
+          </span>
+        ))}
       </div>
-      {h && (show.runout || show.cards) && (
-        <div className="rounded border border-dashed border-amber-400/50 bg-amber-500/5 p-2" data-testid="sim-hidden-panel">
-          <p className="mb-1 text-[11px] text-amber-200">{loc(h.label, lang)}</p>
-          {show.runout && <div>{t('sim.hypotheticalRunout')}: {h.runout.length ? <CardText cards={h.runout.join('')} /> : t('sim.noRunout')}</div>}
-          {show.cards && <div className="space-y-0.5">{h.opponents.map((o) => <div key={o.id}>{o.id}: <CardText cards={o.cards.join('')} />{o.folded ? ` (${t('table.folded')})` : ''}</div>)}</div>}
+      {r.runout.length > 0 && (
+        <div className="rounded border border-dashed border-amber-400/50 bg-amber-500/5 p-2" data-testid="sim-hypothetical-runout">
+          {t('sim.hypotheticalRunout')}: <CardText cards={r.runout.join('')} />
+          <div className="text-[11px] text-amber-200">{t('sim.hypotheticalNote')}</div>
         </div>
       )}
     </div>

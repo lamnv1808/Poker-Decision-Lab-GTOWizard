@@ -61,8 +61,9 @@ export function PokerTable({ state, heroId, bigBlind, showBB, labels = {}, meta 
         const angle = Math.PI / 2 + (k * 2 * Math.PI) / n;
         const x = 50 + (n >= 7 ? 40 : 44) * Math.cos(angle);
         const y = 50 + 40 * Math.sin(angle);
-        const bx = 50 + 27 * Math.cos(angle);
-        const by = 50 + 24 * Math.sin(angle);
+        // bets sit between the seat and the board; kept closer to the centre so narrow phones never hide them under a seat
+        const bx = 50 + 18 * Math.cos(angle);
+        const by = 50 + 19 * Math.sin(angle);
         const isHero = p.id === heroId;
         const m = meta[p.id];
         const cards = isHero ? (heroCards ?? p.cards) : p.cards;
@@ -102,14 +103,15 @@ export function PokerTable({ state, heroId, bigBlind, showBB, labels = {}, meta 
                 {p.folded && <div className="text-[10px] uppercase text-ink-400">{t('table.folded')}</div>}
               </div>
               {i === btnIdx && (
-                <div className="absolute -right-3 top-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-ink-900 shadow" aria-label="dealer button">
+                // on the inner side of the seat, so it never leaves a narrow screen
+                <div className={`absolute top-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-ink-900 shadow ${x > 55 ? '-left-3' : '-right-3'}`} aria-label="dealer button">
                   D
                 </div>
               )}
             </div>
             {p.streetCommitted > 0 && (
               <div
-                className="absolute z-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-gold tabular sm:text-xs"
+                className="absolute z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] min-[380px]:px-2 min-[380px]:text-[10px] font-semibold text-gold tabular sm:text-xs"
                 style={{ left: `${bx}%`, top: `${by}%` }}
                 data-testid={`bet-${label}`}
               >

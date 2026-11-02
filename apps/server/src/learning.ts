@@ -53,7 +53,8 @@ export interface AttemptInput {
   optionLeaks: LeakKey[];
   sourceClass: SourceClass;
   /** fundamentals | replay | strategy. Only `strategy` attempts can change Elo. Default strategy. */
-  track?: 'fundamentals' | 'replay' | 'strategy';
+  /** model = Tier 2 model-based grade: recorded and shown, never rated. */
+  track?: 'fundamentals' | 'replay' | 'strategy' | 'model';
   familyId?: string | null;
   responseMs?: number | null;
   reasoning?: string | null;

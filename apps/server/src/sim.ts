@@ -4,6 +4,7 @@ import {
   ARCHETYPE_LABELS,
   GRADING_METHOD_VERSION,
   type HeroDecisionInfo,
+  type HeroFeedback,
   IllegalActionError,
   type PlayerAction,
   SIM_BB,
@@ -28,6 +29,9 @@ import {
   randomSimConfig,
   runSim,
   simReview,
+  REASON_KEYS,
+  type ReasonKey,
+  assessReasoning,
 } from '@pdl/core';
 import type { Prisma, SimHand } from '@prisma/client';
 import { mixedSessionFor } from './mixed';
@@ -53,6 +57,7 @@ interface Step {
   action: PlayerAction;
   confidence?: 1 | 2 | 3;
   reasoning?: string;
+  reasons?: ReasonKey[];
   responseMs?: number;
   clientAttemptId: string;
   attemptId?: string;
@@ -80,6 +85,8 @@ const build = (h: SimHand, s: Step[] = steps(h)) => {
     modelVersion: h.modelVersion,
     // performance: reuse each decision's model equity (deterministic) and skip the pending one
     equityCache: Object.fromEntries(s.flatMap((x, i) => ((x as Step & { eq?: CachedEquity }).eq ? [[i, (x as Step & { eq?: CachedEquity }).eq!]] : []))),
+    // feedback (incl. the Tier 2 model evaluation) is computed once when the decision is made
+    feedbackCache: Object.fromEntries(s.flatMap((x, i) => ((x as Step & { fb?: HeroFeedback }).fb ? [[i, (x as Step & { fb?: HeroFeedback }).fb!]] : []))),
     skipPendingEquity: true,
   });
 };
@@ -144,6 +151,9 @@ export function simView(h: SimHand, run: SimRun = build(h)) {
           endedBy: review.endedBy,
           terminalStreet: review.terminalStreet,
           gradedCount: review.decisions.filter((d) => d.feedback?.graded).length,
+          // after the hand: every opponent's dealt cards (the simulator keeps them) and, if the hand
+          // ended before the river, the cards that were never dealt — labelled hypothetical
+          revealed: simHiddenInfo(run),
           source: {
             villains: { en: 'Villains follow heuristic archetype models (not GTO). Solver frequencies are used only where a solved spot exactly matches the hand (heads-up push/fold, and the postflop library\'s flop decisions).', vi: 'Đối thủ theo mô hình tính cách heuristic (không phải GTO). Tần suất solver chỉ dùng khi spot đã giải khớp chính xác (push/fold đối đầu, và quyết định flop trong thư viện postflop).' },
           },
@@ -239,6 +249,8 @@ const Act = z.object({
   action: z.object({ type: z.enum(['fold', 'check', 'call', 'bet', 'raise']), amount: z.number().int().positive().optional() }),
   confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   reasoning: z.string().max(1000).optional(),
+  /** Optional structured reasons (checked against the spot's facts); free text is a private note. */
+  reasons: z.array(z.enum(REASON_KEYS)).max(6).optional(),
   responseMs: z.number().int().min(0).max(3_600_000).optional(),
 });
 
@@ -251,7 +263,7 @@ simRouter.post('/hands/:id/act', async (req, res) => {
   if (h.status !== 'active') throw new HttpError(409, 'not_active', 'This hand is finished');
   const before = build(h, st);
   if (!before.awaitingHero) throw new HttpError(409, 'not_awaiting', 'Hero is not to act');
-  const step: Step = { action: body.action as PlayerAction, confidence: body.confidence, reasoning: body.reasoning?.trim() || undefined, responseMs: body.responseMs, clientAttemptId: body.clientAttemptId };
+  const step: Step = { action: body.action as PlayerAction, confidence: body.confidence, reasoning: body.reasoning?.trim() || undefined, reasons: body.reasons, responseMs: body.responseMs, clientAttemptId: body.clientAttemptId };
   let run: SimRun;
   try {
     run = build(h, [...st, step]);
@@ -260,9 +272,24 @@ simRouter.post('/hands/:id/act', async (req, res) => {
     throw e;
   }
   const d = run.decisions[st.length]!;
-  const fb = d.feedback!;
+  let fb = d.feedback!;
+  if (body.reasons?.length) {
+    fb = {
+      ...fb,
+      reasoning: assessReasoning(body.reasons, {
+        street: d.info.street,
+        action: body.action.type,
+        toCallBB: d.info.toCallBB,
+        requiredEquity: d.info.requiredEquity,
+        equityVsRange: fb.model ? fb.model.facts.equityVsRange : d.info.modelEquity.equity,
+        model: fb.model ?? null,
+        solverGraded: fb.tier === 'solver',
+      }),
+    };
+    d.feedback = fb;
+  }
   // progress metadata (practice progress counts decisions whether or not they are graded)
-  Object.assign(step, { street: d.info.street, graded: fb.graded, grade: fb.grade ?? null, basis: fb.basis, at: new Date().toISOString(), eq: { equity: d.info.modelEquity.equity, stdErr: d.info.modelEquity.stdErr, samples: d.info.modelEquity.samples } });
+  Object.assign(step, { street: d.info.street, graded: fb.graded, grade: fb.grade ?? null, basis: fb.basis, tier: fb.tier ?? null, at: new Date().toISOString(), eq: { equity: d.info.modelEquity.equity, stdErr: d.info.modelEquity.stdErr, samples: d.info.modelEquity.samples }, fb });
   const complete = run.state.complete;
   // Claim the step first (optimistic concurrency): of two simultaneous requests only one may record.
   const claimed = await prisma.simHand.updateMany({
@@ -293,6 +320,14 @@ simRouter.post('/hands/:id/act', async (req, res) => {
         const leak: LeakKey = pf.role === 'sbShove' ? (body.action.type === 'fold' ? 'stackDepthAdjustments' : 'excessivePreflopAllIns') : 'potOdds';
         return { leakOpportunities: opp, optionLeaks: isError(fb.grade!) ? [leak] : [] };
       }
+      if (fb.tier === 'model' && fb.model) {
+        // Tier 2 (river / all-in vs the opponent model): a bluff-catch or a bet-vs-check choice
+        const m = fb.model;
+        if (facingBet) return { leakOpportunities: ['riverBluffCatching'], optionLeaks: isError(fb.grade!) ? ['riverBluffCatching'] : [] };
+        const bestKind = m.options.find((o) => o.key === m.bestKey)!.kind;
+        const leak: LeakKey = body.action.type === 'check' ? 'missedThinValue' : bestKind === 'check' ? 'overbluffing' : 'bluffSizing';
+        return { leakOpportunities: ['missedThinValue', 'overbluffing', 'bluffSizing'], optionLeaks: isError(fb.grade!) ? [leak] : [] };
+      }
       if (fl && !facingBet) {
         const leak: LeakKey = body.action.type === 'check' ? 'underbluffing' : 'overbluffing';
         return { leakOpportunities: ['underbluffing', 'overbluffing'], optionLeaks: isError(fb.grade!) ? [leak] : [] };
@@ -318,18 +353,19 @@ simRouter.post('/hands/:id/act', async (req, res) => {
       gradeBasis: fb.basis,
       evLoss: fb.evLossBB,
       evUnit: 'bb',
-      ratingEligible: true,
+      // Tier 2 model grades are never rated (track 'model')
+      ratingEligible: fb.track !== 'model',
       isError: isError(fb.grade!),
       confidence: body.confidence,
-      gradingMethodVersion: `${GRADING_METHOD_VERSION}+${SIM_MODEL_VERSION}`,
+      gradingMethodVersion: `${GRADING_METHOD_VERSION}+${SIM_MODEL_VERSION}${fb.model ? `+${fb.model.version}` : ''}`,
       street,
       heroPosition: cfgH.heroPos,
       effectiveStackBB: pf?.stackBB ?? (fl ? 32 : undefined),
       difficulty: pf ? (Math.abs(pf.evAggressiveBB) < 0.3 ? 4 : Math.abs(pf.evAggressiveBB) < 1 ? 3 : 2) : 3,
       skills: (pf ? ['preflop', 'shortStack'] : fl ? ['flop', 'rangeReading'] : [street, 'math']) as SkillKey[],
-      concepts: pf ? ['push-fold', 'full-hand'] : fl ? ['solver-flop', 'full-hand'] : ['pot-odds', 'full-hand'],
+      concepts: pf ? ['push-fold', 'full-hand'] : fl ? ['solver-flop', 'full-hand'] : fb.track === 'model' ? ['model-ev', 'full-hand', ...(fb.model?.scope === 'riverHeadsUp' ? ['river'] : ['all-in'])] : ['pot-odds', 'full-hand'],
       ...leaks,
-      sourceClass: solver ? 'SOLVER_VERIFIED' : 'MATH_VERIFIED',
+      sourceClass: solver ? 'SOLVER_VERIFIED' : fb.tier === 'model' && fb.track === 'model' ? 'EXPERIMENTAL' : 'MATH_VERIFIED',
       track: fb.track,
       responseMs: body.responseMs,
       reasoning: step.reasoning,

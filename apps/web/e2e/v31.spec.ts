@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { register, waitForContent } from './helpers';
 
-/** V3.1: a scenario continues as a full hand; finished hands offer reveal + Villain reasoning + branch. */
+/** V3.1: a scenario continues as a full hand; finished hands reveal automatically + Villain reasoning + branch. */
 test('scenario continues to a full hand; review reveals runout and explains Villain', async ({ page }) => {
   await register(page, 'V31');
   await waitForContent(page);
@@ -23,8 +23,7 @@ test('scenario continues to a full hand; review reveals runout and explains Vill
     await page.waitForTimeout(200);
   }
   await expect(page.getByTestId('sim-winners')).toBeVisible();
-  await page.getByTestId('reveal-cards').click();
-  await expect(page.getByTestId('sim-hidden-panel')).toContainText('Simulator-only');
+  await expect(page.getByTestId('sim-revealed')).toContainText('Revealed after the hand');
   const why = page.getByTestId('villain-why').first();
   if (await why.isVisible()) {
     await why.click();

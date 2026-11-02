@@ -10,20 +10,21 @@ test('real hand replay, fundamentals pot odds, annotation and reviewed strategy'
   const dir = execSync('npx tsx scripts/build-v2-fixture.ts', { cwd: '../server', env }).toString().trim();
   execSync(`npx tsx scripts/import-v2.ts ${email} ${dir}`, { cwd: '../server', env });
 
-  // Replay: action -> reasoning + confidence -> reveal (historical, unreviewed)
+  // Replay: action -> (optional reasons) -> submit -> the real outcome is shown automatically
   await page.goto('/replay');
   await expect(page.getByTestId('poker-table')).toBeVisible();
   const html = await page.content();
   expect(html).not.toMatch(/hero_all_in|actual_action/);
   await page.getByTestId('action-bar').locator('button:not([disabled])').filter({ hasText: /^(Fold|Check)$/ }).first().click();
-  await expect(page.getByTestId('replay-submit')).toBeDisabled();
-  await page.getByTestId('reasoning').fill('Villain range is strong here');
-  await page.getByTestId('confidence-2').click();
+  await expect(page.getByTestId('replay-submit')).toBeEnabled(); // reasoning is optional
+  await page.getByTestId('reason-open').click();
+  await page.getByTestId('reason-protection').click();
   await page.getByTestId('replay-submit').click();
   await expect(page.getByTestId('observed')).toContainText('historical');
   await expect(page.getByTestId('unreviewed')).toBeVisible();
-  await page.getByTestId('show-outcome').click();
-  await expect(page.getByTestId('outcome')).toBeVisible();
+  await expect(page.getByTestId('assessment-limited')).toBeVisible();
+  await expect(page.getByTestId('outcome')).toBeVisible(); // revealed automatically, nothing invented
+  await expect(page.getByTestId('final-board-label')).toBeVisible();
 
   // Fundamentals: pot odds from real hands
   await page.goto('/fundamentals');
@@ -51,7 +52,6 @@ test('real hand replay, fundamentals pot odds, annotation and reviewed strategy'
   await page.goto('/strategy');
   await expect(page.getByTestId('poker-table')).toBeVisible();
   await page.getByTestId('action-bar').getByRole('button', { name: 'Fold' }).click();
-  await page.getByTestId('reasoning').fill('Testing the verified grade');
   await page.getByTestId('confidence-3').click();
   await page.getByTestId('replay-submit').click();
   await expect(page.getByTestId('strategy-eval')).toBeVisible();
