@@ -108,15 +108,18 @@ function shares(heroCards: readonly Card[], board: readonly Card[], live: number
   if (board.length === 5) runouts.push([]);
   else if (board.length === 4) for (const c of rest) runouts.push([c]);
   else for (let x = 0; x < rest.length; x++) for (let y = x + 1; y < rest.length; y++) runouts.push([rest[x]!, rest[y]!]);
+  // Hero's hand value per runout does not depend on Villain's cards: compute it once
+  const fulls = runouts.map((ro) => [...b, ...ro]);
+  const heroRank = fulls.map((f) => evaluateInts([...h, ...f]));
   for (const i of live) {
     const [a, c] = comboInts(i);
     let s = 0;
     let n = 0;
-    for (const ro of runouts) {
+    for (let k = 0; k < runouts.length; k++) {
+      const ro = runouts[k]!;
       if (ro.includes(a) || ro.includes(c)) continue;
-      const full = [...b, ...ro];
-      const hs = evaluateInts([...h, ...full]);
-      const vs = evaluateInts([a, c, ...full]);
+      const hs = heroRank[k]!;
+      const vs = evaluateInts([a, c, ...fulls[k]!]);
       s += hs > vs ? 1 : hs === vs ? 0.5 : 0;
       n++;
     }

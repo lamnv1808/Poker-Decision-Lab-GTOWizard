@@ -17,6 +17,32 @@ only for a one-off backup (set `BACKUP_ENDPOINT=on`, deploy, take the backup, re
 Backups contain password hashes and private hand histories: keep them only in private, access-controlled
 storage, encrypted; never commit them to Git.
 
+## Controls (owner requirements A1/A2)
+
+| Requirement | How it is met | Status |
+|---|---|---|
+| Weekly automatic encrypted backup | GitHub Actions schedule, `pg_dump` → GPG AES-256 | ready; needs the private repo + secrets |
+| Off-platform storage | private workflow artifact (GitHub) and, optionally, private S3-compatible bucket | ready |
+| Retention | artifacts 35 days (≥ 4 weekly points); bucket lifecycle rule recommended 8 weeks | configurable |
+| Integrity verification | SHA-256 of the plaintext, decrypt round-trip check, full `pg_restore --exit-on-error` (all keys/constraints), app integrity report | every run |
+| Restore drill | every weekly run restores into an isolated Postgres 18 and smoke-tests the server (exceeds monthly); plus the owner's own monthly drill below | every run |
+| Success/failure monitoring | job summary with counts; failure opens an issue + GitHub e-mail | every run |
+| Recovery independent of Render and of Claude | passphrase in the owner's password manager and GitHub secrets; dumps in GitHub/bucket; restore needs only `gpg` + `pg_restore` | by design |
+| No secrets in Git, logs or chat | secrets only in GitHub Actions secrets; the workflow never echoes them; dumps never committed | by design |
+
+The backup taken from a temporary Claude sandbox on 2026-11-02 was encrypted with a key that existed only in
+that sandbox. It is **not** a recoverable backup: the key and the encrypted file were deleted on purpose. The
+owner's recoverable copies are the weekly job's artifacts once it runs, and the 2026-11-01 file delivered
+earlier (unencrypted — keep it in private storage or delete it once weekly backups exist).
+
+### Owner's monthly restore drill (no Claude involved)
+
+1. Actions → latest green *weekly-backup* run → download the artifact.
+2. `gpg -d pdl-*.dump.gpg > pdl.dump` (passphrase from your password manager); compare `sha256sum pdl.dump` with the `.sha256` file.
+3. Restore into a throw-away database (local Postgres 18, or a free Neon branch once available) with the
+   commands in "Restore" below, then run the integrity report: it must print `"ok": true`.
+4. Delete the decrypted file and the throw-away database.
+
 ## One-time setup of the weekly job (owner)
 
 The application repository is public, and artifacts of a public repository can be downloaded by any
@@ -28,8 +54,11 @@ GitHub user, so the job must live in a private repository (it refuses to run oth
    - `BACKUP_PASSPHRASE` — a long random passphrase (≥ 20 characters). Store it in your password manager too:
      without it no backup can be decrypted.
 3. Copy `ops/backup/weekly-backup.yml` to `.github/workflows/weekly-backup.yml` in that repository.
-4. Actions → *weekly-backup* → **Run workflow** once; check the run is green and the summary shows the
-   counts and `integrity ok: True`.
+4. Optional, recommended: create a private bucket (Cloudflare R2 or Backblaze B2 have free tiers), an
+   access key limited to that bucket, a lifecycle rule deleting objects after 8 weeks, and add the
+   `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` secrets.
+5. Actions → *weekly-backup* → **Run workflow** once; check the run is green and the summary shows the
+   counts and `integrity ok: True`. Then tell Claude the run is green (no links to files or secrets needed).
 
 Failure alerting: a failed run opens an issue in that repository and GitHub e-mails you about the failed
 workflow. GitHub disables scheduled workflows after 60 days without repository activity — if the issue

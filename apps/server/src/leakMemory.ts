@@ -196,7 +196,20 @@ export async function leakCandidates(userId: string): Promise<{ candidates: Cand
 }
 
 /** Re-run detection and fold it into the user's memory. Idempotent for unchanged data. */
-export async function refreshLeakMemory(userId: string) {
+/**
+ * One refresh per user at a time (concurrent page loads would otherwise race to create the same
+ * memory rows): callers that arrive while one runs share its result.
+ */
+const inFlight = new Map<string, Promise<{ created: number; updated: number; decisions: number }>>();
+export function refreshLeakMemory(userId: string) {
+  const running = inFlight.get(userId);
+  if (running) return running;
+  const p = doRefresh(userId).finally(() => inFlight.delete(userId));
+  inFlight.set(userId, p);
+  return p;
+}
+
+async function doRefresh(userId: string) {
   const { candidates, decisions } = await leakCandidates(userId);
   const existing = new Map((await prisma.leakMemory.findMany({ where: { userId } })).map((m) => [m.leakKey, m]));
   const now = new Date();
@@ -235,7 +248,8 @@ export async function refreshLeakMemory(userId: string) {
     };
     let id: string;
     if (!m) {
-      id = (await prisma.leakMemory.create({ data: { userId, leakKey: c.leakKey, ...data } })).id;
+      // upsert: safe even if another server process created the row meanwhile
+      id = (await prisma.leakMemory.upsert({ where: { userId_leakKey: { userId, leakKey: c.leakKey } }, create: { userId, leakKey: c.leakKey, ...data }, update: data })).id;
       created++;
     } else {
       // re-detected on a larger sample, or detected again after it had been resolved
@@ -254,6 +268,7 @@ export async function refreshLeakMemory(userId: string) {
 
 /** Refresh if never done, the data changed size, or the last refresh is older than a day. */
 export async function ensureFreshMemory(userId: string) {
+  if (inFlight.has(userId)) return void (await inFlight.get(userId));
   // while decisions are still being (re)analysed after an update, keep the last memory as it is
   if (await prisma.realDecision.count({ where: { userId, status: 'accepted', contextV: { lt: CONTEXT_VERSION } }, take: 1 })) return;
   const st = await prisma.leakMemoryState.findUnique({ where: { userId } });

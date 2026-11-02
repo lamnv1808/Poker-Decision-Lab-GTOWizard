@@ -171,3 +171,19 @@ describe('improvement 7/30/60 (D5)', () => {
     expect(e.training.periods.every((p: { errors: { verdict: string } }) => p.errors.verdict === 'insufficient')).toBe(true);
   });
 });
+
+describe('leak memory under concurrent requests', () => {
+  it('simultaneous first loads of Today and My Leaks never fail or duplicate memories', async () => {
+    const u = await newUser('memRace');
+    await importV2(u.id, buildV2Fixture().dir);
+    await clone(u.id, 100, `jsonb_build_object('id', gen_random_uuid()::text, 'externalId', 'race-' || g, 'street', 'preflop', 'position', 'UTG', 'actionContext', 'unopened', 'stackBucket', '25-40', 'heroAction', CASE WHEN g <= 60 THEN 'raise' ELSE 'fold' END, 'formatGroup', 'regular', 'multiway', false, 'pfAudit', null, 'contextV', 3, 'status', 'accepted', 'playedAt', to_jsonb(timestamp '2026-10-01' + g * interval '1 hour'))`);
+    // five refreshes at once (as when several pages load together) — none may fail
+    const { refreshLeakMemory } = await import('../src/leakMemory');
+    await Promise.all(Array.from({ length: 5 }, () => refreshLeakMemory(u.id)));
+    const rs = await Promise.all([u.agent.get('/api/memory'), u.agent.get('/api/daily/plan?minutes=10')]);
+    expect(rs.map((r) => r.status)).toEqual([200, 200]);
+    const rows = await prisma.leakMemory.groupBy({ by: ['leakKey'], where: { userId: u.id }, _count: true });
+    expect(rows.every((r) => r._count === 1)).toBe(true);
+    expect(rows.some((r) => r.leakKey === 'pattern:rfi:UTG')).toBe(true);
+  });
+});
