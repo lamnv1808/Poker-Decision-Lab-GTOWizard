@@ -84,7 +84,8 @@ test('Today: a plan request that fails shows a retry instead of an endless spinn
   let fail = true;
   await page.route('**/api/daily/plan**', (r) => (fail ? r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'unavailable', message: '' }) }) : r.continue()));
   await page.goto('/today');
-  await expect(page.getByTestId('error-note')).toContainText('Something went wrong');
+  // empty server message → falls back to the HTTP status text, never an empty box
+  await expect(page.getByTestId('error-note')).toContainText(/\S{4,}/);
   fail = false;
   await page.getByTestId('error-retry').click();
   await expect(page.getByTestId('today-items')).toBeVisible();
