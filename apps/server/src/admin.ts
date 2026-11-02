@@ -128,6 +128,24 @@ adminRouter.get('/integrity', async (_req, res) => {
  * account other users' data refers to. Runs in one transaction.
  */
 const TEST_DOMAIN = '@test.dev';
+
+/**
+ * Canonical JSON (manifest hash algorithm "pdl-manifest-v2"): object keys sorted by code point at every
+ * level, arrays kept in order, no whitespace, UTF-8. The hash is SHA-256 of that text, so it no longer
+ * depends on the order in which Postgres happens to list foreign keys (which differs between a database
+ * built by `prisma migrate deploy` and one restored with `pg_restore`).
+ */
+export function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).filter((k) => o[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+export const MANIFEST_HASH_ALGORITHM = 'pdl-manifest-v2 (sha256 of canonical JSON: keys sorted, accounts sorted by id)';
+export const manifestHash = (manifest: object) => createHash('sha256').update(canonicalJson(manifest)).digest('hex');
+
 async function deletionManifest(ids: string[]) {
   const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, createdAt: true } });
   const problems: string[] = [];
@@ -141,7 +159,8 @@ async function deletionManifest(ids: string[]) {
   const fks = await prisma.$queryRaw<{ tbl: string; col: string }[]>`
     SELECT c.conrelid::regclass::text AS tbl, a.attname AS col FROM pg_constraint c
     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
-    WHERE c.contype = 'f' AND c.confrelid = '"User"'::regclass`;
+    WHERE c.contype = 'f' AND c.confrelid = '"User"'::regclass
+    ORDER BY 1, 2`;
   const rows: Record<string, number> = {};
   const external: Record<string, number> = {};
   for (const f of fks) {
@@ -156,7 +175,7 @@ async function deletionManifest(ids: string[]) {
   }
   if (Object.keys(external).length) problems.push(`referenced by other users' data: ${JSON.stringify(external)}`);
   const manifest = { accounts: users.map((u) => ({ id: u.id, email: u.email, createdAt: u.createdAt.toISOString() })).sort((a, b) => a.id.localeCompare(b.id)), rows, external };
-  return { manifest, hash: createHash('sha256').update(JSON.stringify(manifest)).digest('hex'), problems };
+  return { manifest, hash: manifestHash(manifest), hashAlgorithm: MANIFEST_HASH_ALGORITHM, problems };
 }
 
 adminRouter.post('/accounts/delete', async (req, res) => {
