@@ -163,16 +163,17 @@ export const realRouter = Router();
 
 realRouter.get('/coverage', async (req, res) => {
   const userId = requireUser(req);
-  const [hands, decisions, quizzes, ann, bySplit] = await Promise.all([
+  // all eight aggregates are independent: run them concurrently (previously the last three ran one after another)
+  const [hands, decisions, quizzes, ann, bySplit, reasons, handReasons, quizReasons] = await Promise.all([
     prisma.realHand.groupBy({ by: ['status'], where: { userId }, _count: true }),
     prisma.realDecision.groupBy({ by: ['status', 'street'], where: { userId }, _count: true }),
     prisma.$queryRaw<{ status: string; n: bigint }[]>`SELECT "potOdds"->>'status' AS status, count(*) AS n FROM "RealDecision" WHERE "userId" = ${userId} AND "potOdds" IS NOT NULL GROUP BY 1`,
     prisma.annotation.groupBy({ by: ['status', 'source'], where: { userId }, _count: true }),
     prisma.realDecision.groupBy({ by: ['split'], where: { userId, status: 'accepted' }, _count: true }),
+    prisma.$queryRaw<{ code: string; n: bigint }[]>`SELECT i->>'code' AS code, count(*) AS n FROM "RealDecision", jsonb_array_elements(issues) i WHERE "userId" = ${userId} AND status = 'quarantined' GROUP BY 1 ORDER BY 2 DESC`,
+    prisma.$queryRaw<{ code: string; n: bigint }[]>`SELECT i->>'code' AS code, count(*) AS n FROM "RealHand", jsonb_array_elements(issues) i WHERE "userId" = ${userId} AND status = 'quarantined' GROUP BY 1 ORDER BY 2 DESC`,
+    prisma.$queryRaw<{ code: string; n: bigint }[]>`SELECT i->>'code' AS code, count(*) AS n FROM "RealDecision", jsonb_array_elements("potOdds"->'issues') i WHERE "userId" = ${userId} AND "potOdds"->>'status' = 'quarantined' GROUP BY 1 ORDER BY 2 DESC`,
   ]);
-  const reasons = await prisma.$queryRaw<{ code: string; n: bigint }[]>`SELECT i->>'code' AS code, count(*) AS n FROM "RealDecision", jsonb_array_elements(issues) i WHERE "userId" = ${userId} AND status = 'quarantined' GROUP BY 1 ORDER BY 2 DESC`;
-  const handReasons = await prisma.$queryRaw<{ code: string; n: bigint }[]>`SELECT i->>'code' AS code, count(*) AS n FROM "RealHand", jsonb_array_elements(issues) i WHERE "userId" = ${userId} AND status = 'quarantined' GROUP BY 1 ORDER BY 2 DESC`;
-  const quizReasons = await prisma.$queryRaw<{ code: string; n: bigint }[]>`SELECT i->>'code' AS code, count(*) AS n FROM "RealDecision", jsonb_array_elements("potOdds"->'issues') i WHERE "userId" = ${userId} AND "potOdds"->>'status' = 'quarantined' GROUP BY 1 ORDER BY 2 DESC`;
   const n = (x: bigint) => Number(x);
   res.json({
     hands: Object.fromEntries(hands.map((h) => [h.status, h._count])),

@@ -74,7 +74,10 @@ describe('Mixed Training V3.1: all modules, mixes, history-aware', () => {
     const u = await newUser('mix5');
     const s = (await u.agent.post('/api/mixed/sessions').send({ durationMin: 30, mix: 'heroFocus', mode: 'practice' }).expect(201)).body;
     const types: string[] = [];
-    for (let i = 0; i < 12; i++) {
+    // The picker is seeded per session (random id), so a fixed 12 draws missed 'scenario' ~3% of the time
+    // (measured 1/30). Draw at least 12 and keep going (max 40) until a scenario has been served: same
+    // assertions, failure probability below 1e-6 instead of ~3%.
+    for (let i = 0; i < 40 && (i < 12 || !types.includes('scenario')); i++) {
       const n = (await u.agent.post(`/api/mixed/sessions/${s.id}/next`).expect(200)).body;
       types.push(n.type);
       if (n.type === 'scenario') {
