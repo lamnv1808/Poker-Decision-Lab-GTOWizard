@@ -95,6 +95,7 @@ test('mobile (iPhone portrait): Next hand is on screen without scrolling, safe, 
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
   // the inline copy is desktop-only, so the phone shows exactly one Next hand button
   await expect(page.getByTestId('sim-next')).toBeHidden();
+  await page.waitForTimeout(1000); // let the smooth scroll to the summary settle
   await page.screenshot({ path: 'test-results/mobile-next-hand.png' });
   // opening and closing the detailed analysis neither advances nor resets the hand
   await page.getByTestId('qf-details-toggle').click();
