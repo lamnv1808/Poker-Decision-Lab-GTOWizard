@@ -55,13 +55,18 @@ export function MixedSetup() {
   const [mode, setMode] = useState<'practice' | 'rated'>(defaultMode);
   const [mix, setMix] = useState<Mix>('balanced');
   const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
   const next = useMixedNext();
   const start = async () => {
+    if (busy) return; // one session per tap
+    setBusy(true);
+    setError(null);
     try {
       const s = await api.post<{ id: string }>('/mixed/sessions', { durationMin: Number(duration), difficulty, focus, mode, mix });
       await next(s.id);
     } catch (e) {
       setError(e);
+      setBusy(false);
     }
   };
   return (
@@ -94,8 +99,8 @@ export function MixedSetup() {
           </div>
         </fieldset>
         <p className="mt-2 text-xs text-ink-400">{t('mixed.rules')}</p>
-        <ErrorNote error={error} />
-        <button type="button" onClick={() => void start()} className="mt-3 rounded-lg bg-felt-500 px-5 py-2 font-bold" data-testid="mixed-start">{t('mixed.start')}</button>
+        <ErrorNote error={error} onRetry={() => void start()} />
+        <button type="button" disabled={busy} aria-busy={busy || undefined} onClick={() => void start()} className="mt-3 min-h-11 rounded-lg bg-felt-500 px-5 py-2 font-bold disabled:opacity-60" data-testid="mixed-start">{busy ? t('common.loading') : t('mixed.start')}</button>
       </Panel>
     </div>
   );
@@ -138,12 +143,24 @@ export function MixedBar() {
 export function MixedRunner() {
   const { id } = useParams();
   const next = useMixedNext();
+  const { t } = useT();
   const [error, setError] = useState<unknown>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    setError(null);
     if (id) void next(id).catch(setError);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-  return error ? <ErrorNote error={error} /> : <Spinner />;
+  }, [id, attempt]);
+  if (!error) return <Spinner label={t('mixed.loadingNext')} />;
+  return (
+    <div className="space-y-2">
+      <ErrorNote error={error} onRetry={() => setAttempt((x) => x + 1)} />
+      <div className="flex gap-3 text-sm">
+        <Link to={`/mixed/${id}/summary`} className="text-accent">{t('mixed.finish')}</Link>
+        <Link to="/mixed" className="text-ink-300">{t('mixed.again')}</Link>
+      </div>
+    </div>
+  );
 }
 
 export function MixedSummary() {
@@ -154,8 +171,8 @@ export function MixedSummary() {
   useEffect(() => {
     api.get<Summary>(`/mixed/sessions/${id}/summary`).then(setS).catch(setError);
   }, [id]);
-  if (error) return <ErrorNote error={error} />;
-  if (!s) return <Spinner />;
+  if (error) return <ErrorNote error={error} onRetry={() => { setError(null); api.get<Summary>(`/mixed/sessions/${id}/summary`).then(setS).catch(setError); }} />;
+  if (!s) return <Spinner label={t('common.loading')} />;
   const d = (x: number | null) => (x === null ? '—' : `${x >= 0 ? '+' : ''}${x}`);
   return (
     <div className="space-y-4" data-testid="mixed-summary">

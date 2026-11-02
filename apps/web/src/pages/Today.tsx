@@ -42,13 +42,20 @@ export function TodayPage() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const next = useMixedNext();
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    let live = true;
     setPlan(null);
     setError(null);
-    api.get<Plan>(`/daily/plan?minutes=${minutes}`).then(setPlan).catch(setError);
-  }, [minutes]);
+    api.get<Plan>(`/daily/plan?minutes=${minutes}`).then((p) => live && setPlan(p)).catch((e) => live && setError(e));
+    return () => {
+      live = false; // a slower earlier request must not overwrite the current duration's plan
+    };
+  }, [minutes, attempt]);
   const start = async () => {
+    if (busy) return;
     setBusy(true);
+    setError(null);
     try {
       const s = await api.post<{ id: string }>('/daily/start', { minutes: Number(minutes), mode });
       await next(s.id);
@@ -69,11 +76,12 @@ export function TodayPage() {
           <Toggle label={t('mixed.duration')} value={minutes} onChange={setMinutes} options={(['5', '10', '20'] as const).map((m) => ({ value: m, label: `${m} min` }))} />
           <Toggle label={t('mode.label')} value={mode} onChange={setMode} options={[{ value: 'practice', label: t('mode.practice') }, { value: 'rated', label: t('mode.rated') }]} />
           <span className="flex-1" />
-          <button type="button" disabled={!plan || busy || !plan.items.length} onClick={() => void start()} className="rounded-lg bg-felt-500 px-5 py-2 font-bold disabled:opacity-50" data-testid="today-start">{t('today.start')}</button>
+          <button type="button" disabled={!plan || busy || !plan.items.length} aria-busy={busy || undefined} onClick={() => void start()} className="min-h-11 rounded-lg bg-felt-500 px-5 py-2 font-bold disabled:opacity-50" data-testid="today-start">{busy ? t('common.loading') : t('today.start')}</button>
         </div>
-        <ErrorNote error={error} />
+        <ErrorNote error={error} onRetry={plan ? () => void start() : () => setAttempt((x) => x + 1)} />
       </Panel>
-      {!plan && !error && <Spinner />}
+      {!plan && !error && <Spinner label={t('today.loadingPlan')} />}
+      {plan && plan.items.length === 0 && <Empty>{t('today.empty')}</Empty>}
       {plan && plan.pendingContext > 0 && <p className="rounded-md border border-gold/40 bg-gold/5 px-3 py-2 text-sm text-gold" data-testid="analysis-pending">{t('mem.pending', { n: plan.pendingContext.toLocaleString() })}</p>}
       {plan && (
         <>

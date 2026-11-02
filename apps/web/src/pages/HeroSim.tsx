@@ -5,7 +5,9 @@ import { api, newAttemptId } from '../api';
 import { ActionBar } from '../components/ActionBar';
 import { PokerTable } from '../components/PokerTable';
 import { CardText } from '../components/Cards';
-import { DecisionFeedback, type FeedbackView } from '../components/DecisionFeedback';
+import { ActionComparison, DecisionFeedback, type FeedbackView, ReasoningChecks, TierBadge } from '../components/DecisionFeedback';
+import { type Cta, DetailSection, NextBar, QuickFeedback, useSingleFlight } from '../components/QuickFeedback';
+import { toQuickFeedback } from '../feedbackPresentation';
 import { type Reason, ReasonPicker } from '../components/ReasonPicker';
 import { ErrorNote, GradeBadge, Panel, Spinner, Toggle } from '../components/ui';
 import { fmtNum, loc } from '../format';
@@ -222,10 +224,18 @@ export function HeroSimPage() {
   const [error, setError] = useState<unknown>(null);
   const [reasons, setReasons] = useState<Reason[]>([]);
   const lastRef = useRef<HTMLDivElement>(null);
+  const moveRef = useRef<HTMLDivElement>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
+  const feedbackStyle = useApp((s) => s.me?.preferences.explanationView ?? 'quick');
+  const updatePrefs = useApp((s) => s.updatePrefs);
+  // Detailed style opens the analysis automatically; opening/closing it never touches the hand
+  const [detailOpen, setDetailOpen] = useState(feedbackStyle === 'deep');
+  useEffect(() => setDetailOpen(feedbackStyle === 'deep'), [last, feedbackStyle]);
   // the feedback is the first thing to see after acting (on phones it would otherwise sit below the fold)
+  const handOver = !!v?.review;
   useEffect(() => {
-    if (last) lastRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [last]);
+    if (last || handOver) lastRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [last, handOver]);
   const shownAt = useRef(Date.now());
   const start = useStartSim();
   const load = useCallback(async () => {
@@ -242,6 +252,29 @@ export function HeroSimPage() {
     setLast(null);
     void load();
   }, [load]);
+  // Next hand / next item: one handler for the inline and the sticky button, never run twice at once
+  const advance = useCallback(async () => {
+    if (!v?.review) return; // a hand that is not over is never left through this button
+    setError(null);
+    try {
+      if (mixed) nav(`/mixed/${mixed}`);
+      else await start({ ...loadSetup(v.mode), mode: v.mode, feedback: v.feedback });
+    } catch (e) {
+      setError(e);
+    }
+  }, [v, mixed, nav, start]);
+  const next = useSingleFlight(advance);
+  const replay = useSingleFlight(
+    useCallback(async () => {
+      if (!v) return;
+      try {
+        const r = await api.post<SimView>(`/sim/hands/${v.id}/replay`);
+        nav(`/play/${r.id}`);
+      } catch (e) {
+        setError(e);
+      }
+    }, [v, nav]),
+  );
   const act = async (action: PlayerAction, confidence?: 1 | 2 | 3) => {
     if (!v) return;
     setBusy(true);
@@ -267,7 +300,7 @@ export function HeroSimPage() {
       setBusy(false);
     }
   };
-  if (!v) return error ? <ErrorNote error={error} /> : <Spinner />;
+  if (!v) return error ? <ErrorNote error={error} onRetry={() => void load()} /> : <Spinner label={t('common.loadingHand')} />;
   const bb = v.bigBlind;
   const labels = Object.fromEntries(v.state.players.map((p) => [p.id, p.id]));
   const meta = Object.fromEntries(Object.entries(v.config.villains).map(([k, x]) => [k, { pos: k, tendencies: x.label }]));
@@ -276,12 +309,25 @@ export function HeroSimPage() {
   const shown = v.review ? new Map((v.review.revealed?.opponents ?? v.review.showdown).map((s) => [s.id, s.cards])) : null;
   const tableState: HandState = shown ? { ...v.state, players: v.state.players.map((p) => (shown.has(p.id) ? { ...p, cards: shown.get(p.id) as HandState['players'][number]['cards'] } : p)) } : v.state;
   const hero = v.state.players.find((p) => p.id === v.config.heroPos)!;
-  const nextSetup: Setup = { ...loadSetup(v.mode), mode: v.mode, feedback: v.feedback };
+  const lastDecision = v.decisions[v.decisions.length - 1];
+  const handComplete = !!v.review;
+  const quick = last ? toQuickFeedback(last.fb, { selectedAction: lastDecision ? actionLabel(lastDecision.action, bb, t) : '', lang, handComplete, inSession: !!mixed, fullHand: true, facts: lastDecision?.facts, hasModelEquity: !!last.eq && Number.isFinite(last.eq.equity) }) : null;
+  const nextCta: Cta | null = handComplete ? { label: t(mixed ? 'qf.next.nextScenario' : 'qf.next.nextHand'), onClick: () => void next.run(), busy: next.busy, testId: mixed ? 'mixed-next' : 'sim-next' } : null;
+  const toMove: Cta | null = !handComplete && v.current ? { label: t('qf.next.nextDecision'), onClick: () => { moveRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); moveRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus({ preventScroll: true }); }, testId: 'qf-next-decision' } : null;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-bold">{t('sim.title')}</h1>
-        <Progress v={v} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Progress v={v} />
+          <label className="flex items-center gap-1 text-xs text-ink-400">
+            {t('qf.style')}
+            <select value={feedbackStyle} onChange={(e) => void updatePrefs({ explanationView: e.target.value as 'quick' | 'deep' }).catch(setError)} className="rounded border border-ink-600 bg-ink-850 px-1.5 py-1 text-xs text-ink-100" data-testid="qf-style">
+              <option value="quick">{t('qf.style.quick')}</option>
+              <option value="deep">{t('qf.style.deep')}</option>
+            </select>
+          </label>
+        </div>
       </div>
       <ErrorNote error={error} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -295,14 +341,36 @@ export function HeroSimPage() {
           </div>
         </div>
         <div className="space-y-3">
-          {last && (
+          {v.review && (
             <div ref={lastRef} className="scroll-mt-16">
+              <Panel title={t('sim.result')}>
+                <HandSummary v={v} />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {nextCta && <button type="button" onClick={nextCta.onClick} disabled={nextCta.busy} aria-busy={nextCta.busy || undefined} className="hidden min-h-11 rounded-lg bg-felt-500 px-5 py-2 text-sm font-bold hover:bg-felt-600 disabled:opacity-60 lg:inline-block" data-testid={nextCta.testId}>{nextCta.label}</button>}
+                  <button type="button" onClick={() => void replay.run()} disabled={replay.busy} className="min-h-11 rounded-lg border border-ink-600 px-3 py-2 text-sm" data-testid="sim-replay">{t('sim.replay')}</button>
+                  <button type="button" onClick={() => reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="min-h-11 rounded-lg border border-ink-600 px-3 py-2 text-sm" data-testid="sim-view-review">{t('qf.viewReview')}</button>
+                  <button type="button" onClick={() => void api.post(`/sim/hands/${v.id}/bookmark`, { on: !v.bookmarked }).then(() => setV({ ...v, bookmarked: !v.bookmarked })).catch(setError)} className={`min-h-11 rounded-lg border px-3 py-2 text-sm ${v.bookmarked ? 'border-gold text-gold' : 'border-ink-600'}`} data-testid="sim-bookmark">★ {t(v.bookmarked ? 'sim.bookmarked' : 'sim.bookmark')}</button>
+                </div>
+              </Panel>
+            </div>
+          )}
+          {last && quick && lastDecision && (
+            <div ref={v.review ? undefined : lastRef} className="scroll-mt-16">
               <Panel title={t('sim.lastDecision')}>
-                <FeedbackCard fb={last.fb} eq={last.eq} />
+                <div data-testid="sim-feedback">
+                  <QuickFeedback
+                    m={quick}
+                    primary={toMove ?? undefined}
+                    open={detailOpen}
+                    onToggle={() => setDetailOpen((x) => !x)}
+                    details={<SimAnalysis v={v} d={lastDecision} fb={last.fb} eq={last.eq} onReview={handComplete ? () => reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined} />}
+                  />
+                </div>
               </Panel>
             </div>
           )}
           {v.current && v.legal && (
+            <div ref={moveRef} className="scroll-mt-16">
             <Panel title={t('sim.yourMove')}>
               {v.current.solverOptions && (
                 <div className="mb-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs" data-testid="solver-options">
@@ -319,38 +387,21 @@ export function HeroSimPage() {
               <ActionBar state={v.state} legal={v.legal} bigBlind={bb} showBB={showBB} disabled={busy} onAct={(a, c) => void act(a, c)} />
               <ReasonPicker value={reasons} onChange={setReasons} note={reasoning} onNote={setReasoning} />
             </Panel>
+            </div>
           )}
           {!v.review && v.feedback === 'exam' && v.decisions.length > 0 && <p className="text-xs text-ink-400">{t('sim.examHidden')}</p>}
-          {v.review && (
-            <Panel title={t('sim.result')}>
-              <div className={`text-2xl font-bold tabular ${v.review.heroNetBB >= 0 ? 'text-emerald-300' : 'text-red-300'}`} data-testid="sim-net">
-                {v.review.heroNetBB >= 0 ? '+' : ''}{fmtNum(v.review.heroNetBB, 1)} BB
-              </div>
-              <div className="mt-2 space-y-0.5 text-sm" data-testid="sim-winners">
-                <div className="text-xs text-ink-400">{v.review.endedBy === 'showdown' ? t('sim.endedShowdown', { street: t(`street.${v.review.terminalStreet}`) }) : t('sim.endedFold', { street: t(`street.${v.review.terminalStreet}`) })}</div>
-                {v.review.winners.map((w) => (
-                  <div key={w.id}>
-                    <b className={w.id === v.config.heroPos ? 'text-accent' : ''}>{w.id}</b> {t('sim.wins', { n: fmtNum(w.amountBB, 1) })}
-                    {w.category && <span className="text-ink-300"> · {t(`hand.${w.category}`)}</span>}
-                  </div>
-                ))}
-              </div>
-              <RevealedInfo v={v} />
-              <p className="mt-2 text-[11px] text-ink-400">{loc(v.review.source.villains, lang)}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {mixed ? (
-                  <button type="button" onClick={() => nav(`/mixed/${mixed}`)} className="rounded-lg bg-felt-500 px-4 py-1.5 text-sm font-bold" data-testid="mixed-next">{t('mixed.next')}</button>
-                ) : (
-                  <button type="button" onClick={() => void start(nextSetup).catch(setError)} className="rounded-lg bg-felt-500 px-4 py-1.5 text-sm font-bold" data-testid="sim-next">{t('sim.nextNewHand')}</button>
-                )}
-                <button type="button" onClick={() => void api.post<SimView>(`/sim/hands/${v.id}/replay`).then((r) => nav(`/play/${r.id}`)).catch(setError)} className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm" data-testid="sim-replay">{t('sim.replay')}</button>
-                <button type="button" onClick={() => void api.post(`/sim/hands/${v.id}/bookmark`, { on: !v.bookmarked }).then(() => setV({ ...v, bookmarked: !v.bookmarked })).catch(setError)} className={`rounded-lg border px-3 py-1.5 text-sm ${v.bookmarked ? 'border-gold text-gold' : 'border-ink-600'}`} data-testid="sim-bookmark">★ {t(v.bookmarked ? 'sim.bookmarked' : 'sim.bookmark')}</button>
-              </div>
-            </Panel>
-          )}
         </div>
       </div>
-      {v.review && <Review v={v} onError={setError} />}
+      {v.review && (
+        <div ref={reviewRef} className="scroll-mt-16 space-y-3">
+          <Panel title={t('qf.showdown')}>
+            <RevealedInfo v={v} />
+            <p className="mt-2 text-[11px] text-ink-400">{loc(v.review.source.villains, lang)}</p>
+          </Panel>
+          <Review v={v} onError={setError} />
+        </div>
+      )}
+      {nextCta && <NextBar cta={nextCta} />}
     </div>
   );
 }
@@ -512,5 +563,114 @@ function RevealedInfo({ v }: { v: SimView }) {
         </div>
       )}
     </div>
+  );
+}
+
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
+/** "Raise to 6 BB", "Call", ... — what Hero did, in Hero's units. */
+export function actionLabel(a: PlayerAction, bb: number, t: TFn): string {
+  if (a.type === 'bet' || a.type === 'raise') return `${t(a.type === 'bet' ? 'act.bet' : 'act.raiseTo')} ${fmtNum((a.amount ?? 0) / bb, 1)} BB`;
+  return t(`act.${a.type}`);
+}
+
+/** End-of-hand summary: result, how it ended, and decision quality — kept apart from the result. */
+function HandSummary({ v }: { v: SimView }) {
+  const { t } = useT();
+  const r = v.review!;
+  const counts = new Map<string, number>();
+  let limited = 0;
+  for (const d of v.decisions) {
+    if (!d.feedback) continue;
+    if (d.feedback.graded && d.feedback.grade) {
+      const q = toQuickFeedback(d.feedback, { selectedAction: '', lang: 'en', handComplete: true }).qualityLabel;
+      counts.set(q, (counts.get(q) ?? 0) + 1);
+    } else limited++;
+  }
+  const order = ['excellent', 'good', 'inaccuracy', 'mistake', 'blunder'];
+  return (
+    <div className="space-y-2" data-testid="sim-summary">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <div className={`text-2xl font-bold tabular ${r.heroNetBB >= 0 ? 'text-emerald-300' : 'text-red-300'}`} data-testid="sim-net">
+          {r.heroNetBB >= 0 ? '+' : ''}{fmtNum(r.heroNetBB, 1)} BB
+        </div>
+        <div className="text-xs text-ink-400">{r.endedBy === 'showdown' ? t('sim.endedShowdown', { street: t(`street.${r.terminalStreet}`) }) : t('sim.endedFold', { street: t(`street.${r.terminalStreet}`) })}</div>
+      </div>
+      <div className="space-y-0.5 text-sm" data-testid="sim-winners">
+        {r.winners.map((w) => (
+          <div key={w.id}>
+            <b className={w.id === v.config.heroPos ? 'text-accent' : ''}>{w.id}</b> {t('sim.wins', { n: fmtNum(w.amountBB, 1) })}
+            {w.category && <span className="text-ink-300"> · {t(`hand.${w.category}`)}</span>}
+          </div>
+        ))}
+      </div>
+      {v.decisions.length > 0 && (
+        <div className="text-sm" data-testid="sim-quality-summary">
+          <span className="text-ink-400">{t('qf.decisions', { n: v.decisions.length })}: </span>
+          {order.filter((q) => counts.get(q)).map((q) => <span key={q} className="mr-2">{t(`qf.quality.${q}`)} ×{counts.get(q)}</span>)}
+          {limited > 0 && <span className="mr-2 text-ink-300">{t('qf.quality.limited')} ×{limited}</span>}
+          {v.feedback === 'exam' && counts.size === 0 && limited === 0 && <span className="text-ink-300">{t('qf.seeReview')}</span>}
+        </div>
+      )}
+      <p className="text-[11px] text-ink-500">{t('qf.resultNote')}</p>
+    </div>
+  );
+}
+
+/**
+ * Detailed analysis of one decision, in a fixed order. Each block appears only when the engine
+ * produced its data; nothing here is computed in the browser.
+ */
+function SimAnalysis({ v, d, fb, eq, onReview }: { v: SimView; d: DecisionView; fb: Feedback; eq?: ModelEq; onReview?: () => void }) {
+  const { t, lang } = useT();
+  const f = d.facts;
+  const hasEq = !!eq && Number.isFinite(eq.equity);
+  const hasComparison = !!fb.model?.options.length || (!!fb.evByAction && Object.keys(fb.evByAction).length > 0);
+  const tier = fb.tier ?? (fb.graded ? 'solver' : 'limited');
+  return (
+    <>
+      <DetailSection n={1} title={t('qf.sec.why')} testId="qf-sec-why">
+        {fb.explain?.why && fb.graded && <p>{loc(fb.explain.why, lang)}</p>}
+        {fb.explain?.sizing && <p className="text-ink-300">{t('fb2.yourSizing')}: {loc(fb.explain.sizing, lang)}</p>}
+        {fb.limitation && <p>{loc(fb.limitation, lang)}</p>}
+        {fb.coaching && <p className="rounded border border-sky-500/30 bg-sky-500/5 px-2 py-1 text-sky-200" data-testid="sim-coaching">{loc(fb.coaching, lang)}</p>}
+        {fb.reasoning && fb.reasoning.quality !== 'notAssessed' && <ReasoningChecks reasoning={fb.reasoning} />}
+      </DetailSection>
+      <DetailSection n={2} title={t('qf.sec.ranges')} testId="qf-sec-ranges">
+        {fb.model && <p>{t('qf.villainModel')}: {loc(fb.model.opponent.label, lang)}</p>}
+        {hasEq && eq!.opponents.length > 0 && <p>{eq!.opponents.map((o) => `${o.id} ${t(`arch.${o.archetype}`)} ~${o.rangePct}%`).join(' · ')}</p>}
+      </DetailSection>
+      <DetailSection n={3} title={t('qf.sec.context')} testId="qf-sec-context">
+        <p className="tabular">
+          {v.config.heroPos} · {t(`street.${f.street}`)} · {t('qf.decisionN', { n: d.index + 1 })} · {t('sim.startStack')} {v.config.stacksBB[v.config.heroPos]} BB · {t('table.pot')} {fmtNum(f.potBB, 1)} BB · {t('sim.toCall')} {fmtNum(f.toCallBB, 1)} BB{f.spr !== null && f.spr !== undefined ? ` · SPR ${fmtNum(f.spr, 1)}` : ''}
+        </p>
+      </DetailSection>
+      <DetailSection n={4} title={t('qf.sec.odds')} testId="qf-sec-odds">
+        {f.requiredEquity !== null && f.requiredEquity !== undefined && <p className="tabular">{t('qf.requiredEq')}: {pct(f.requiredEquity)}</p>}
+        {fb.model && <p className="tabular">{t('qf.equityVsRange')}: {pct(fb.model.facts.equityVsRange)}</p>}
+        {!fb.model && hasEq && <p className="tabular">{t('sim.modelEquity')}: {pct(eq!.equity)} (±{pct(eq!.stdErr)})</p>}
+      </DetailSection>
+      {hasComparison && (
+        <DetailSection n={5} title={t('qf.sec.comparison')} testId="qf-sec-comparison">
+          <ActionComparison fb={fb} />
+        </DetailSection>
+      )}
+      <DetailSection n={6} title={t('qf.sec.evidence')} testId="qf-sec-evidence">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <TierBadge tier={tier} />
+          {fb.assessment && <AssessmentBadge a={fb.assessment} />}
+        </div>
+        <p className="text-ink-300">{loc(fb.note, lang)}</p>
+        {fb.model && fb.model.assumptions.length > 0 && (
+          <ul className="list-disc space-y-0.5 pl-4 text-ink-400" data-testid="fb-assumptions">
+            {fb.model.assumptions.map((a, i) => <li key={i}>{loc(a, lang)}</li>)}
+          </ul>
+        )}
+      </DetailSection>
+      {onReview && (
+        <DetailSection n={7} title={t('qf.sec.review')} testId="qf-sec-review">
+          <button type="button" onClick={onReview} className="text-accent underline-offset-2 hover:underline">{t('qf.viewReview')} ↓</button>
+        </DetailSection>
+      )}
+    </>
   );
 }

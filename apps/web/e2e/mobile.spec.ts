@@ -49,7 +49,7 @@ test('mobile: a full simulated hand at 320 and 375 px — feedback first, no cli
       const cc = bar.locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ });
       const target = (await cc.count()) ? cc.first() : bar.locator('button:not([disabled])').filter({ hasText: /^Fold/ }).first();
       await Promise.all([page.waitForResponse((r) => r.url().includes('/act') && r.request().method() === 'POST'), target.click()]);
-      await expect(page.getByTestId('decision-feedback').first()).toBeVisible();
+      await expect(page.getByTestId('quick-feedback').first()).toBeVisible();
     }
     await expect(page.getByTestId('sim-net')).toBeVisible();
     await expect(page.getByTestId('sim-revealed')).toBeVisible();
@@ -58,4 +58,64 @@ test('mobile: a full simulated hand at 320 and 375 px — feedback first, no cli
   await page.getByTestId('lang-vi').click();
   await expect(page.getByText('Lộ bài sau ván')).toBeVisible();
   await page.getByTestId('lang-en').click();
+});
+
+/** Plays the current hand to the end with check/call (fold when nothing else), never leaving early. */
+async function playToEnd(page: import('@playwright/test').Page) {
+  for (let k = 0; k < 25 && !(await page.getByTestId('sim-net').isVisible()); k++) {
+    const bar = page.getByTestId('action-bar');
+    if (!(await bar.isVisible())) {
+      await page.waitForTimeout(200);
+      continue;
+    }
+    // while the hand is running there is never a Next-hand button
+    expect(await page.getByTestId('sim-next-sticky').count()).toBe(0);
+    const cc = bar.locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ });
+    const target = (await cc.count()) ? cc.first() : bar.locator('button:not([disabled])').filter({ hasText: /^Fold/ }).first();
+    await Promise.all([page.waitForResponse((r) => r.url().includes('/act') && r.request().method() === 'POST'), target.click()]);
+    await expect(page.getByTestId('quick-feedback').first()).toBeVisible();
+  }
+  await expect(page.getByTestId('sim-net')).toBeVisible();
+}
+
+test('mobile (iPhone portrait): Next hand is on screen without scrolling, safe, single and genuinely new', async ({ page }) => {
+  await register(page, 'MobileNext');
+  await waitForContent(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/play');
+  await page.getByTestId('sim-deal').click();
+  await expect(page.getByTestId('poker-table')).toBeVisible();
+  const first = new URL(page.url()).pathname;
+  await playToEnd(page);
+  const sticky = page.getByTestId('sim-next-sticky');
+  await expect(sticky).toBeInViewport();
+  const box = (await sticky.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(box.y + box.height).toBeLessThanOrEqual(844);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  // the inline copy is desktop-only, so the phone shows exactly one Next hand button
+  await expect(page.getByTestId('sim-next')).toBeHidden();
+  await page.screenshot({ path: 'test-results/mobile-next-hand.png' });
+  // opening and closing the detailed analysis neither advances nor resets the hand
+  await page.getByTestId('qf-details-toggle').click();
+  await expect(page.getByTestId('qf-details')).toBeVisible();
+  await expect(sticky).toBeInViewport();
+  await page.screenshot({ path: 'test-results/mobile-details-open.png' });
+  await page.getByTestId('qf-details-toggle').click();
+  expect(new URL(page.url()).pathname).toBe(first);
+  await expect(page.getByTestId('sim-net')).toBeVisible();
+  // a double tap deals exactly one new hand
+  let deals = 0;
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/sim/hands') deals++;
+  });
+  await sticky.dblclick();
+  await expect(page).not.toHaveURL(new RegExp(`${first}$`));
+  await expect(page.getByTestId('action-bar')).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(deals).toBe(1);
+  // the previous hand is kept, complete, in history
+  const old = await page.request.get(`/api/sim/hands/${first.split('/').pop()}`);
+  expect(old.status()).toBe(200);
+  expect((await old.json()).status).toBe('complete');
 });

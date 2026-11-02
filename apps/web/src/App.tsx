@@ -2,6 +2,7 @@ import { HeroSimPage, HeroSimSetup } from './pages/HeroSim';
 import { MixedRunner, MixedSetup, MixedSummary } from './pages/Mixed';
 import { TodayPage } from './pages/Today';
 import { useEffect } from 'react';
+import { Fresh } from './components/Fresh';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
@@ -51,19 +52,19 @@ export function App() {
         <Route path="villain" element={<Launcher kind="villain" />} />
         <Route path="hero/browse" element={<ScenarioList mode="hero" />} />
         <Route path="villain/browse" element={<ScenarioList mode="villain" />} />
-        <Route path="run/:id" element={<RunPage />} />
+        <Route path="run/:id" element={<Fresh><RunPage /></Fresh>} />
         <Route path="play" element={<HeroSimSetup />} />
         <Route path="today" element={<TodayPage />} />
         <Route path="mixed" element={<MixedSetup />} />
-        <Route path="mixed/:id" element={<MixedRunner />} />
+        <Route path="mixed/:id" element={<Fresh><MixedRunner /></Fresh>} />
         <Route path="mixed/:id/summary" element={<MixedSummary />} />
-        <Route path="play/:id" element={<HeroSimPage />} />
-        <Route path="math" element={<MathLab />} />
-        <Route path="fundamentals" element={<FundamentalsPage />} />
-        <Route path="replay" element={<ReplayPage kind="replay" />} />
+        <Route path="play/:id" element={<Fresh><HeroSimPage /></Fresh>} />
+        <Route path="math" element={<Fresh><MathLab /></Fresh>} />
+        <Route path="fundamentals" element={<Fresh><FundamentalsPage /></Fresh>} />
+        <Route path="replay" element={<Fresh><ReplayPage kind="replay" /></Fresh>} />
         <Route path="strategy" element={<ReplayPage kind="strategy" />} />
         <Route path="annotate" element={<AnnotatePage />} />
-        <Route path="gto" element={<GtoQuiz />} />
+        <Route path="gto" element={<Fresh><GtoQuiz /></Fresh>} />
         <Route path="gto/audit" element={<GtoAudit />} />
         <Route path="hands" element={<HandsPage />} />
         <Route path="hands/:id" element={<HandDetailPage />} />

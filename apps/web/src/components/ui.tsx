@@ -90,13 +90,34 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="rounded-lg border border-dashed border-ink-700 p-6 text-center text-sm text-ink-400">{children}</div>;
 }
 
-export function Spinner() {
-  return <div className="h-5 w-5 animate-spin rounded-full border-2 border-ink-600 border-t-accent" role="status" aria-label="loading" />;
+export function Spinner({ label }: { label?: string } = {}) {
+  const { t } = useT();
+  return (
+    <div className="flex items-center gap-2 text-sm text-ink-400" role="status" aria-live="polite">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-ink-600 border-t-accent" aria-hidden />
+      <span className={label ? '' : 'sr-only'}>{label ?? t('common.loading')}</span>
+    </div>
+  );
 }
 
-export function ErrorNote({ error }: { error: unknown }) {
+/** Human message for any thrown value; never empty. Connection problems are localised. */
+export function errorMessage(error: unknown, t: (k: string) => string): string {
+  const code = (error as { code?: unknown })?.code;
+  if (code === 'timeout') return t('common.err.timeout');
+  if (code === 'network') return t('common.err.network');
+  const msg = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return msg.trim() || t('common.err.generic');
+}
+
+export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  const { t } = useT();
   if (!error) return null;
-  return <div className="rounded-md border border-red-500/40 bg-red-900/20 px-3 py-2 text-sm text-red-200">{error instanceof Error ? error.message : String(error)}</div>;
+  return (
+    <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/40 bg-red-900/20 px-3 py-2 text-sm text-red-200" data-testid="error-note">
+      <span className="flex-1">{errorMessage(error, t)}</span>
+      {onRetry && <button type="button" onClick={onRetry} className="min-h-9 rounded-md border border-red-300/50 px-3 py-1 text-xs font-semibold text-red-100 hover:bg-red-900/40" data-testid="error-retry">{t('common.retry')}</button>}
+    </div>
+  );
 }
 
 /** NEW / IN PROGRESS / PLAYED / MASTERED / REVIEW DUE — per-user, server-side status. */

@@ -29,7 +29,7 @@ test('play a full hand as Hero, review it and replay the deal', async ({ page })
     }
     await bar.locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ }).first().click();
     // feedback leads with a grade or an explicit "assessment limited", never a bare "not graded"
-    await expect(page.getByTestId('decision-feedback').first()).toBeVisible();
+    await expect(page.getByTestId('quick-feedback').first()).toBeVisible();
     await page.waitForTimeout(150);
   }
   await expect(page.getByTestId('sim-net')).toBeVisible();
