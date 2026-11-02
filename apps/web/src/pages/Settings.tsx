@@ -46,7 +46,8 @@ export function SettingsPage() {
       <Panel title={t('settings.training')}>
         {row(t('settings.language'), <Toggle label={t('settings.language')} value={p.language} onChange={(v) => void setLang(v)} options={[{ value: 'en', label: 'English' }, { value: 'vi', label: 'Tiếng Việt' }]} />)}
         {row(t('settings.defaultMode'), <Toggle label={t('settings.defaultMode')} value={p.defaultMode} onChange={(v) => void save({ defaultMode: v })} options={[{ value: 'practice', label: t('mode.practice') }, { value: 'rated', label: t('mode.rated') }]} />, t('mode.help'))}
-        {row(t('settings.explanation'), <Toggle label={t('settings.explanation')} value={p.explanationView} onChange={(v) => void save({ explanationView: v })} options={[{ value: 'quick', label: t('fb.quick') }, { value: 'deep', label: t('fb.deep') }]} />)}
+        {row(t('settings.explanation'), <Toggle label={t('settings.explanation')} value={p.explanationView} onChange={(v) => void save({ explanationView: v })} options={[{ value: 'quick', label: t('qf.style.quick') }, { value: 'deep', label: t('qf.style.deep') }]} />)}
+        <p className="text-[11px] text-ink-500" data-testid="settings-feedback-help">{t('settings.feedbackStyleHelp')}</p>
         {row(t('settings.strategy'), <Toggle label={t('settings.strategy')} value={p.strategyView} onChange={(v) => void save({ strategyView: v })} options={[{ value: 'gto', label: t('fb.gto') }, { value: 'exploit', label: t('fb.exploit') }]} />)}
         {row(t('settings.units'), <Toggle label={t('settings.units')} value={p.showBB ? 'bb' : 'chips'} onChange={(v) => void save({ showBB: v === 'bb' })} options={[{ value: 'bb', label: 'BB' }, { value: 'chips', label: t('settings.chips') }]} />)}
       </Panel>

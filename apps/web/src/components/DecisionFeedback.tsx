@@ -60,14 +60,83 @@ export function TierBadge({ tier }: { tier: Tier }) {
   return <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${TIER_CLS[tier]}`} title={t(`tier.${tier}.help`)} data-testid={`tier-${tier}`}>{t(`tier.${tier}`)}</span>;
 }
 
-export function DecisionFeedback({ fb, extra }: { fb: FeedbackView; extra?: React.ReactNode }) {
+/** Hero's reasoning checklist, judged against the computed facts (only when assessed). */
+export function ReasoningChecks({ reasoning }: { reasoning: FeedbackView['reasoning'] }) {
   const { t, lang } = useT();
-  const [open, setOpen] = useState(false);
-  const tier: Tier = fb.tier ?? (fb.graded ? 'solver' : 'limited');
+  if (!reasoning || reasoning.quality === 'notAssessed') return null;
+  return (
+    <div className="rounded-md border border-ink-700 p-2 text-xs" data-testid="reasoning-assessment">
+      <div className="mb-1 font-semibold">
+        {t('fb2.reasoning')}: <span className={reasoning.quality === 'sound' ? 'text-emerald-300' : reasoning.quality === 'flawed' ? 'text-red-300' : 'text-amber-300'}>{t(`fb2.reasoning.${reasoning.quality}`)}</span>
+      </div>
+      <ul className="space-y-0.5">
+        {reasoning.checks.map((c) => (
+          <li key={c.key}>
+            <span className={VERDICT_CLS[c.verdict]}>{c.verdict === 'supported' ? '✓' : c.verdict === 'contradicted' ? '✗' : '·'}</span> <b>{t(`reason.${c.key}`)}</b> — {loc(c.note, lang)}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1 text-[10px] text-ink-500">{t('fb2.reasoningNote')}</p>
+    </div>
+  );
+}
+
+/** Action-by-action EV comparison: the engine's model table, or the per-action EVs it reported. Nothing when neither exists. */
+export function ActionComparison({ fb }: { fb: FeedbackView }) {
+  const { t } = useT();
   const optName = (o: OptionView) =>
     o.kind === 'fold' ? t('act.fold') : o.kind === 'check' ? t('act.check') : o.kind === 'call' ? t('act.call') : o.kind === 'allin' ? `${t('table.allIn')} ${fmtNum(o.toBB, 1)} BB` : `${t(o.kind === 'bet' ? 'act.bet' : 'act.raiseTo')} ${fmtNum(o.toBB, 1)} BB${o.sizePctPot !== undefined ? ` (${o.sizePctPot}%)` : ''}`;
   const ev = (x: number) => `${x >= 0 ? '+' : ''}${fmtNum(x, 2)} BB`;
   const pct = (x?: number) => (x === undefined ? '—' : `${Math.round(x * 100)}%`);
+  if (fb.model) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[300px] tabular" data-testid="action-comparison">
+          <thead className="text-ink-400">
+            <tr>
+              <th className="text-left font-normal">{t('fb2.action')}</th>
+              <th className="text-right font-normal">EV</th>
+              <th className="text-right font-normal">{t('fb2.reaction')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fb.model.options.map((o) => (
+              <tr key={o.key} className={`border-t border-ink-800 ${o.key === fb.model!.bestKey ? 'text-emerald-300' : ''}`}>
+                <td className="py-1">
+                  {optName(o)}
+                  {o.isChosen && <span className="ml-1 rounded bg-ink-700 px-1 text-[10px] text-ink-100">{t('fb2.you')}</span>}
+                  {fb.model!.goodKeys.includes(o.key) && o.key !== fb.model!.bestKey && <span className="ml-1 text-[10px] text-emerald-400">≈</span>}
+                </td>
+                <td className="text-right">{ev(o.evBB)}</td>
+                <td className="text-right text-ink-400">
+                  {o.reaction ? `${t('fb2.folds')} ${pct(o.reaction.fold)} · ${t('fb2.calls')} ${pct(o.reaction.call)} · ${t('fb2.raises')} ${pct(o.reaction.raise)}` : o.villainBets !== undefined ? `${t('fb2.betsAfterCheck')} ${pct(o.villainBets)}` : o.kind === 'call' ? `${t('fb2.youWin')} ${pct(o.equityWhenCalled)}` : ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-1 text-ink-400">
+          {t('fb2.modelFacts', { eq: pct(fb.model.facts.equityVsRange), req: fb.model.facts.requiredEquity === null ? '—' : pct(fb.model.facts.requiredEquity), tol: fmtNum(fb.model.toleranceBB, 2) })}
+        </p>
+      </div>
+    );
+  }
+  if (fb.evByAction && Object.keys(fb.evByAction).length) {
+    return (
+      <div className="flex flex-wrap gap-2 tabular" data-testid="action-comparison">
+        {Object.entries(fb.evByAction).map(([a, x]) => (
+          <span key={a} className={`rounded border px-1.5 ${fb.best === a ? 'border-emerald-500 text-emerald-300' : 'border-ink-700 text-ink-300'}`}>{a}: {ev(x)}</span>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+export function DecisionFeedback({ fb, extra }: { fb: FeedbackView; extra?: React.ReactNode }) {
+  const { t, lang } = useT();
+  const [open, setOpen] = useState(false);
+  const tier: Tier = fb.tier ?? (fb.graded ? 'solver' : 'limited');
   return (
     <div className="space-y-2 text-sm" data-testid="decision-feedback">
       {/* headline */}
@@ -92,64 +161,13 @@ export function DecisionFeedback({ fb, extra }: { fb: FeedbackView; extra?: Reac
           {fb.coaching && <p className="rounded border border-sky-500/30 bg-sky-500/5 px-2 py-1 text-xs text-sky-200" data-testid="sim-coaching">{loc(fb.coaching, lang)}</p>}
         </div>
       )}
-      {fb.reasoning && fb.reasoning.quality !== 'notAssessed' && (
-        <div className="rounded-md border border-ink-700 p-2 text-xs" data-testid="reasoning-assessment">
-          <div className="mb-1 font-semibold">
-            {t('fb2.reasoning')}: <span className={fb.reasoning.quality === 'sound' ? 'text-emerald-300' : fb.reasoning.quality === 'flawed' ? 'text-red-300' : 'text-amber-300'}>{t(`fb2.reasoning.${fb.reasoning.quality}`)}</span>
-          </div>
-          <ul className="space-y-0.5">
-            {fb.reasoning.checks.map((c) => (
-              <li key={c.key}>
-                <span className={VERDICT_CLS[c.verdict]}>{c.verdict === 'supported' ? '✓' : c.verdict === 'contradicted' ? '✗' : '·'}</span> <b>{t(`reason.${c.key}`)}</b> — {loc(c.note, lang)}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-1 text-[10px] text-ink-500">{t('fb2.reasoningNote')}</p>
-        </div>
-      )}
+      <ReasoningChecks reasoning={fb.reasoning} />
       <button type="button" onClick={() => setOpen((x) => !x)} className="text-xs text-accent" data-testid="fb-details-toggle">
         {open ? '▾' : '▸'} {t('fb2.details')}
       </button>
       {open && (
         <div className="space-y-2 text-xs" data-testid="fb-details">
-          {fb.model && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[320px] tabular" data-testid="action-comparison">
-                <thead className="text-ink-400">
-                  <tr>
-                    <th className="text-left font-normal">{t('fb2.action')}</th>
-                    <th className="text-right font-normal">EV</th>
-                    <th className="text-right font-normal">{t('fb2.reaction')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fb.model.options.map((o) => (
-                    <tr key={o.key} className={`border-t border-ink-800 ${o.key === fb.model!.bestKey ? 'text-emerald-300' : ''}`}>
-                      <td className="py-1">
-                        {optName(o)}
-                        {o.isChosen && <span className="ml-1 rounded bg-ink-700 px-1 text-[10px] text-ink-100">{t('fb2.you')}</span>}
-                        {fb.model!.goodKeys.includes(o.key) && o.key !== fb.model!.bestKey && <span className="ml-1 text-[10px] text-emerald-400">≈</span>}
-                      </td>
-                      <td className="text-right">{ev(o.evBB)}</td>
-                      <td className="text-right text-ink-400">
-                        {o.reaction ? `${t('fb2.folds')} ${pct(o.reaction.fold)} · ${t('fb2.calls')} ${pct(o.reaction.call)} · ${t('fb2.raises')} ${pct(o.reaction.raise)}` : o.villainBets !== undefined ? `${t('fb2.betsAfterCheck')} ${pct(o.villainBets)}` : o.kind === 'call' ? `${t('fb2.youWin')} ${pct(o.equityWhenCalled)}` : ''}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="mt-1 text-ink-400">
-                {t('fb2.modelFacts', { eq: pct(fb.model.facts.equityVsRange), req: fb.model.facts.requiredEquity === null ? '—' : pct(fb.model.facts.requiredEquity), tol: fmtNum(fb.model.toleranceBB, 2) })}
-              </p>
-            </div>
-          )}
-          {!fb.model && fb.evByAction && (
-            <div className="flex flex-wrap gap-2 tabular">
-              {Object.entries(fb.evByAction).map(([a, x]) => (
-                <span key={a} className={`rounded border px-1.5 ${fb.best === a ? 'border-emerald-500 text-emerald-300' : 'border-ink-700 text-ink-300'}`}>{a}: {ev(x)}</span>
-              ))}
-            </div>
-          )}
+          <ActionComparison fb={fb} />
           <p className="text-ink-300">{loc(fb.note, lang)}</p>
           {fb.model && (
             <ul className="list-disc space-y-0.5 pl-4 text-ink-400" data-testid="fb-assumptions">

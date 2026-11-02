@@ -29,5 +29,5 @@ test('scenario continues to a full hand; review reveals runout and explains Vill
     await why.click();
     await expect(page.getByTestId('villain-branch').first()).toBeVisible();
   }
-  await expect(page.getByTestId('sim-next')).toContainText('Next new hand');
+  await expect(page.getByTestId('sim-next')).toContainText('Next hand');
 });
