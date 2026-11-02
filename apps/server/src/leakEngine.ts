@@ -7,9 +7,10 @@ import { prisma } from './db';
 export async function loadDecisionRows(userId: string): Promise<DecisionRow[]> {
   const rows = await prisma.realDecision.findMany({
     where: { userId, status: 'accepted', contextV: { gte: 1 } },
-    select: { id: true, playedAt: true, street: true, position: true, actionContext: true, heroAction: true, stackBucket: true, formatGroup: true, facingBetPct: true, requiredEq: true, multiway: true, pfAudit: true },
+    select: { id: true, playedAt: true, street: true, position: true, actionContext: true, heroAction: true, stackBucket: true, formatGroup: true, facingBetPct: true, requiredEq: true, multiway: true, pfAudit: true, realHandId: true, realHand: { select: { tournamentId: true } } },
   });
-  return rows.map((r) => ({ ...r, playedAt: r.playedAt?.toISOString() ?? null, pfAudit: (r.pfAudit as DecisionRow['pfAudit']) ?? null }));
+  // cluster = tournament: decisions in the same tournament are not independent observations
+  return rows.map(({ realHand, realHandId, ...r }) => ({ ...r, playedAt: r.playedAt?.toISOString() ?? null, pfAudit: (r.pfAudit as DecisionRow['pfAudit']) ?? null, cluster: realHand.tournamentId ?? `hand:${realHandId}` }));
 }
 
 export async function realLeakReport(userId: string) {

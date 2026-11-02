@@ -1,14 +1,22 @@
 import { wilson } from '../leaks/engine';
 
 /**
- * Period comparison (Phase 1 D5). A change is only called better/worse when a two-proportion test
- * (z-test; Fisher's exact test for rare events) says it is unlikely to be noise (two-sided p < 0.10, matching the 90% intervals used elsewhere);
- * otherwise "no clear change". Small samples are "insufficient" — never a trend.
+ * Period comparison (Phase 1 D5). A change is only called "supported" when a two-proportion test
+ * (cluster-robust z-test; Fisher's exact test for rare events) gives two-sided p < 0.10 — and, when
+ * several comparisons are made together, the Benjamini–Hochberg adjusted p is < 0.10 too.
+ * Otherwise "no clear change". Small samples are "insufficient" — never a trend.
  */
 export const PERIOD_DAYS = [7, 30, 60] as const;
 export const MIN_PERIOD_SAMPLE = 20;
 
-export type ChangeVerdict = 'better' | 'worse' | 'noClearChange' | 'insufficient';
+/**
+ * better/worse: a statistically supported change in an ERROR rate (lower is better).
+ * towardBand/awayFromBand: a statistically supported change in a FREQUENCY relative to a heuristic
+ *   reference band — a behavioural change and at most a potential concern, never a verified error.
+ */
+export type ChangeVerdict = 'better' | 'worse' | 'towardBand' | 'awayFromBand' | 'noClearChange' | 'insufficient';
+/** Fewer independent units (tournaments, days) than this in either period → insufficient. */
+export const MIN_CLUSTERS = 8;
 
 /** Standard normal CDF (Abramowitz–Stegun 7.1.26, |error| < 1.5e-7). */
 export function normCdf(z: number): number {
@@ -40,38 +48,98 @@ export function fisherExact(k1: number, n1: number, k2: number, n2: number): num
 }
 
 export interface RateChange {
-  current: { k: number; n: number; rate: number | null; ci: [number, number] | null };
-  previous: { k: number; n: number; rate: number | null; ci: [number, number] | null };
+  current: { k: number; n: number; rate: number | null; ci: [number, number] | null; clusters?: number };
+  previous: { k: number; n: number; rate: number | null; ci: [number, number] | null; clusters?: number };
   diff: number | null;
+  /** Two-sided p-value of the period difference. */
   p: number | null;
+  /** Benjamini–Hochberg adjusted p (false-discovery rate) when several comparisons were made together. */
+  q?: number | null;
+  /** Variance inflation from clustering (1 = independent decisions). */
+  designEffect?: number | null;
+  method: 'z' | 'z-cluster' | 'fisher' | 'none';
   verdict: ChangeVerdict;
+}
+
+type Side = { k: number; n: number; clusters?: { k: number; n: number }[] };
+
+/** Cluster-robust variance of a pooled proportion (ratio estimator, small-sample corrected). */
+function clusterVar(s: Side, p: number): number {
+  const cl = s.clusters!;
+  const m = cl.length;
+  if (m < 2 || s.n === 0) return Infinity;
+  const ss = cl.reduce((a, c) => a + (c.k - p * c.n) ** 2, 0);
+  return (m / (m - 1)) * (ss / (s.n * s.n));
 }
 
 /**
  * Compare a rate between the current and the previous period. `lowerIsBetter` for error rates;
- * for a frequency judged against a band, pass `target` (the band) and "better" means closer to it.
+ * for a frequency judged against a heuristic band pass `target`: the verdict is then only
+ * towardBand / awayFromBand. When `clusters` are given (e.g. per tournament: decisions in one
+ * tournament are not independent) the test uses cluster-robust standard errors.
  */
-export function compareRates(cur: { k: number; n: number }, prev: { k: number; n: number }, opts: { lowerIsBetter?: boolean; target?: [number, number] } = {}): RateChange {
-  const side = (x: { k: number; n: number }) => ({ ...x, rate: x.n ? x.k / x.n : null, ci: x.n ? wilson(x.k, x.n) : null });
+export function compareRates(cur: Side, prev: Side, opts: { lowerIsBetter?: boolean; target?: [number, number] } = {}): RateChange {
+  const side = (x: Side) => ({ k: x.k, n: x.n, rate: x.n ? x.k / x.n : null, ci: x.n ? wilson(x.k, x.n) : null, ...(x.clusters ? { clusters: x.clusters.length } : {}) });
   const c = side(cur);
   const p = side(prev);
-  if (cur.n < MIN_PERIOD_SAMPLE || prev.n < MIN_PERIOD_SAMPLE) return { current: c, previous: p, diff: c.rate !== null && p.rate !== null ? c.rate - p.rate : null, p: null, verdict: 'insufficient' };
+  const diffRaw = c.rate !== null && p.rate !== null ? Math.round((c.rate - p.rate) * 10000) / 10000 : null;
+  const tooFewClusters = !!cur.clusters && !!prev.clusters && (cur.clusters.length < MIN_CLUSTERS || prev.clusters.length < MIN_CLUSTERS);
+  if (cur.n < MIN_PERIOD_SAMPLE || prev.n < MIN_PERIOD_SAMPLE || tooFewClusters) return { current: c, previous: p, diff: diffRaw, p: null, method: 'none', verdict: 'insufficient' };
   const pooled = (cur.k + prev.k) / (cur.n + prev.n);
-  const se = Math.sqrt(pooled * (1 - pooled) * (1 / cur.n + 1 / prev.n));
+  const binVar = pooled * (1 - pooled) * (1 / cur.n + 1 / prev.n);
   const diff = c.rate! - p.rate!;
   // rare events (expected count < 5 in any cell): the normal approximation is unreliable → exact test
   const minExpected = Math.min(cur.n, prev.n) * Math.min(pooled, 1 - pooled);
-  const pv = minExpected < 5 ? fisherExact(cur.k, cur.n, prev.k, prev.n) : se > 0 ? 2 * (1 - normCdf(Math.abs(diff) / se)) : 1;
-  let verdict: ChangeVerdict = 'noClearChange';
-  if (pv < 0.1) {
-    if (opts.target) {
-      const dist = (r: number) => (r < opts.target![0] ? opts.target![0] - r : r > opts.target![1] ? r - opts.target![1] : 0);
-      const d0 = dist(p.rate!);
-      const d1 = dist(c.rate!);
-      verdict = d1 < d0 ? 'better' : d1 > d0 ? 'worse' : 'noClearChange';
-    } else verdict = (opts.lowerIsBetter ?? true) ? (diff < 0 ? 'better' : 'worse') : diff > 0 ? 'better' : 'worse';
+  let pv: number;
+  let method: RateChange['method'];
+  let designEffect: number | null = null;
+  if (minExpected < 5) {
+    pv = fisherExact(cur.k, cur.n, prev.k, prev.n);
+    method = 'fisher';
+  } else if (cur.clusters && prev.clusters) {
+    const v = clusterVar(cur, c.rate!) + clusterVar(prev, p.rate!);
+    // never claim more precision than the independent-decision test
+    const vv = Math.max(v, binVar);
+    designEffect = binVar > 0 ? Math.round((vv / binVar) * 100) / 100 : null;
+    pv = vv > 0 ? 2 * (1 - normCdf(Math.abs(diff) / Math.sqrt(vv))) : 1;
+    method = 'z-cluster';
+  } else {
+    pv = binVar > 0 ? 2 * (1 - normCdf(Math.abs(diff) / Math.sqrt(binVar))) : 1;
+    method = 'z';
   }
-  return { current: c, previous: p, diff: Math.round(diff * 10000) / 10000, p: Math.round(pv * 10000) / 10000, verdict };
+  const out: RateChange = { current: c, previous: p, diff: Math.round(diff * 10000) / 10000, p: Math.round(pv * 10000) / 10000, designEffect, method, verdict: 'noClearChange' };
+  out.verdict = verdictFor(out, opts, pv);
+  return out;
+}
+
+function verdictFor(r: RateChange, opts: { lowerIsBetter?: boolean; target?: [number, number] }, pv: number): ChangeVerdict {
+  if (pv >= 0.1) return 'noClearChange';
+  const cur = r.current.rate!;
+  const prev = r.previous.rate!;
+  if (opts.target) {
+    const dist = (x: number) => (x < opts.target![0] ? opts.target![0] - x : x > opts.target![1] ? x - opts.target![1] : 0);
+    const d0 = dist(prev);
+    const d1 = dist(cur);
+    return d1 < d0 ? 'towardBand' : d1 > d0 ? 'awayFromBand' : 'noClearChange';
+  }
+  return (opts.lowerIsBetter ?? true) === cur < prev ? 'better' : 'worse';
+}
+
+/**
+ * Benjamini–Hochberg: when many comparisons are made together (every pattern in a period), keep a
+ * "supported" verdict only if its FDR-adjusted p is below `alpha`. Mutates and returns the list.
+ */
+export function adjustForMultipleComparisons<T extends RateChange>(xs: T[], alpha = 0.1): T[] {
+  const tested = xs.filter((x) => x.p !== null).sort((a, b) => a.p! - b.p!);
+  const m = tested.length;
+  let prevQ = 1;
+  for (let i = m - 1; i >= 0; i--) {
+    const q = Math.min(prevQ, (tested[i]!.p! * m) / (i + 1));
+    prevQ = q;
+    tested[i]!.q = Math.round(q * 10000) / 10000;
+    if (q >= alpha && tested[i]!.verdict !== 'insufficient') tested[i]!.verdict = 'noClearChange';
+  }
+  return xs;
 }
 
 /** [from, to) ISO windows: the last `days` before `anchor`, and the equal window before that. */

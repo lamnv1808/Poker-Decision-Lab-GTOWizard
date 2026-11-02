@@ -681,6 +681,10 @@ model LeakMemory {
   bandLo            Float?
   bandHi            Float?
   evLossBB          Float?
+  /// conservative sum: each mistake's smallest loss over its grid cell (solver leaks)
+  evLossMinBB       Float?
+  /// same-direction spots not counted: near threshold or inconclusive (bounty)
+  notVerified       Int            @default(0)
   recentN           Int            @default(0)
   recentRate        Float?
   recentVerdict     String?

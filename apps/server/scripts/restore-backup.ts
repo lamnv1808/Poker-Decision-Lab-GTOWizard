@@ -21,7 +21,7 @@ async function main() {
   await verify();
 }
 
-let header: { tables: string[] } | null = null;
+let header: { tables: string[]; migrations?: string[] } | null = null;
 let manifest: { tables: Record<string, { rows: number; md5: string }>; digest: string } | null = null;
 const counts: Record<string, number> = {};
 
@@ -39,6 +39,14 @@ async function load(tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
     const o = JSON.parse(line);
     if (o.kind === 'header') {
       header = o;
+      if (!verifyOnly && o.migrations) {
+        // the target schema must be exactly the backup's schema version (run `prisma migrate deploy`
+        // at the commit that produced the backup, restore, then migrate forward)
+        const have = (await tx.$queryRawUnsafe<{ m: string }[]>(`SELECT migration_name AS m FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name`)).map((x) => x.m);
+        const want = o.migrations as string[];
+        if (have.join() !== want.join()) throw new Error(`Schema version mismatch: backup has ${want.length} migrations (last ${want[want.length - 1]}), target has ${have.length} (last ${have[have.length - 1]})`);
+        console.log(`schema version OK: ${want.length} migrations, last ${want[want.length - 1]}`);
+      }
       if (!verifyOnly) {
         for (const t of o.tables as string[]) {
           const n = Number((await tx.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM "${t}"`))[0]!.n);

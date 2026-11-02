@@ -264,7 +264,7 @@ export function contextColumns(c: DecisionContext) {
  * Compute decision contexts for already-imported accepted decisions that lack the current version.
  * Idempotent and resumable: rebuilds each hand once from its raw history, updates in batches.
  */
-export async function backfillContexts(userId: string, log: (m: string) => void = () => {}, batchHands = 300): Promise<{ hands: number; decisions: number; failed: number }> {
+export async function backfillContexts(userId: string, log: (m: string) => void = () => {}, batchHands = 300, pauseMs = 0): Promise<{ hands: number; decisions: number; failed: number }> {
   let hands = 0;
   let decisions = 0;
   let failed = 0;
@@ -303,6 +303,7 @@ export async function backfillContexts(userId: string, log: (m: string) => void 
     hands += page.length;
     decisions += rows.length;
     last = page[page.length - 1]!.id;
+    if (pauseMs) await new Promise((r) => setTimeout(r, pauseMs));
     if (hands % 3000 < batchHands) log(`${hands} hands, ${decisions} decisions`);
   }
   return { hands, decisions, failed };
@@ -312,5 +313,20 @@ export async function backfillContexts(userId: string, log: (m: string) => void 
 export function pfAuditFor(rec: ReconstructedHand, actionIndex: number) {
   const pf = auditPushFold(rec);
   if (!pf || pf.actionIndex !== actionIndex) return null;
-  return { role: pf.role, stackBB: pf.stackBB, deadBB: pf.deadBB, exactStackBB: pf.exactStackBB, heroClass: pf.heroClass, heroAction: pf.heroAction, grade: pf.grade, evLossBB: pf.evLossBB, bestAction: pf.bestAction, frequency: pf.frequency, evAggressive: pf.evAggressive };
+  return { role: pf.role, stackBB: pf.stackBB, deadBB: pf.deadBB, exactStackBB: pf.exactStackBB, heroClass: pf.heroClass, heroAction: pf.heroAction, grade: pf.grade, evLossBB: pf.evLossBB, bestAction: pf.bestAction, frequency: pf.frequency, evAggressive: pf.evAggressive, robust: pf.robust, evLossRangeBB: pf.evLossRangeBB, exactDeadBB: pf.exactDeadBB };
+}
+
+/**
+ * Bring every user's decision contexts to CONTEXT_VERSION in the background (after a deploy that
+ * bumps the version). Idempotent and resumable: an interrupted run continues where rows are still
+ * old. Paced so the small production instance keeps serving requests meanwhile.
+ */
+export async function backfillAllContexts(log: (m: string) => void = console.log) {
+  const users = await prisma.realDecision.groupBy({ by: ['userId'], where: { status: 'accepted', contextV: { lt: CONTEXT_VERSION } }, _count: true });
+  for (const u of users) {
+    log(`context backfill v${CONTEXT_VERSION}: user ${u.userId.slice(0, 8)}… ${u._count} decisions`);
+    const t = Date.now();
+    const r = await backfillContexts(u.userId, log, 200, 250);
+    log(`context backfill done: ${r.decisions} decisions, ${r.failed} failed, ${Math.round((Date.now() - t) / 1000)} s`);
+  }
 }

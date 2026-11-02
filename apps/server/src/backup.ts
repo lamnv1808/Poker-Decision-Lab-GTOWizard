@@ -66,7 +66,9 @@ export async function streamBackup(res: Response, hooks: { afterTable?: (t: stri
       await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
       const tables = await tablesInOrder(tx);
       const stream = createHash('sha256');
-      await write({ v: BACKUP_VERSION, kind: 'header', createdAt: new Date().toISOString(), tables, snapshot: 'repeatable-read' });
+      // schema version: the applied migrations; a restore target must have exactly these
+      const migrations = (await tx.$queryRawUnsafe<{ m: string }[]>(`SELECT migration_name AS m FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name`)).map((x) => x.m);
+      await write({ v: BACKUP_VERSION, kind: 'header', createdAt: new Date().toISOString(), tables, migrations, snapshot: 'repeatable-read' });
       const manifest: Record<string, { rows: number; md5: string }> = {};
       for (const t of tables) {
         let written = 0;

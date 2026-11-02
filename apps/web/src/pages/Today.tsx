@@ -8,7 +8,7 @@ import { useApp } from '../store';
 import type { Localized } from '../types';
 import { useMixedNext } from './Mixed';
 
-interface Priority { severity: number; confidence: number; recurrence: number; learning: number; score: number }
+interface Priority { severity: number; evidence: number; confidence: number; recurrence: number; learning: number; score: number }
 interface PlanItem { type: string; reason: 'leak' | 'review' | 'new'; leakKey?: string; params?: { decisionId?: string; role?: string; range?: string } }
 interface Plan {
   minutes: 5 | 10 | 20;
@@ -18,6 +18,7 @@ interface Plan {
   reviews: number;
   fresh: number;
   refreshedAt: string | null;
+  pendingContext: number;
 }
 
 export const EVIDENCE_STYLE: Record<string, string> = {
@@ -73,6 +74,7 @@ export function TodayPage() {
         <ErrorNote error={error} />
       </Panel>
       {!plan && !error && <Spinner />}
+      {plan && plan.pendingContext > 0 && <p className="rounded-md border border-gold/40 bg-gold/5 px-3 py-2 text-sm text-gold" data-testid="analysis-pending">{t('mem.pending', { n: plan.pendingContext.toLocaleString() })}</p>}
       {plan && (
         <>
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
@@ -95,6 +97,7 @@ export function TodayPage() {
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] tabular text-ink-400" title={t('today.priorityHelp')}>
                       <span>{t('today.p.severity')} {f.priority.severity.toFixed(2)}</span>
+                      <span>× {t('today.p.evidence')} {f.priority.evidence.toFixed(2)}</span>
                       <span>× {t('today.p.confidence')} {f.priority.confidence.toFixed(2)}</span>
                       <span>× {t('today.p.recurrence')} {f.priority.recurrence.toFixed(2)}</span>
                       <span>× {t('today.p.learning')} {f.priority.learning.toFixed(2)}</span>

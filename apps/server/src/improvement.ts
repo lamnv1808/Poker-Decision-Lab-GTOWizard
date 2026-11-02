@@ -1,4 +1,4 @@
-import { PATTERNS, PERIOD_DAYS, type DecisionRow, analyzePatterns, classifySolver, compareRates, periodWindows } from '@pdl/core';
+import { PATTERNS, PERIOD_DAYS, type DecisionRow, adjustForMultipleComparisons, analyzePatterns, classifySolver, compareRates, periodWindows } from '@pdl/core';
 import { Router } from 'express';
 import { requireUser } from './auth';
 import { prisma } from './db';
@@ -10,9 +10,24 @@ import { patternLeakKey } from './leakMemory';
  *  - realPlay: decision quality in the user's own tournaments, windowed by when the hands were
  *    PLAYED and anchored at the latest imported hand (imports arrive in batches);
  *  - training: what the user practised in the app, windowed by attempt time, anchored now.
- * Each metric compares the window with the equal window before it; "better"/"worse" only when the
- * difference passes a two-proportion test (p < 0.10), otherwise "no clear change".
+ * Each metric compares the window with the equal window before it. Decisions are clustered by
+ * tournament (cluster-robust test); the pattern comparisons of one period are corrected together
+ * for multiple comparisons (Benjamini–Hochberg) and are labelled exploratory. Pattern changes are
+ * reported as toward/away from a heuristic band — a behavioural change, not a verified error.
  */
+/** k/n overall and per cluster, for rows passing `hit` among `rows`. */
+function clustered(rows: DecisionRow[], hit: (d: DecisionRow) => boolean) {
+  const by = new Map<string, { k: number; n: number }>();
+  for (const d of rows) {
+    const key = d.cluster ?? d.id;
+    const c = by.get(key) ?? { k: 0, n: 0 };
+    c.n++;
+    if (hit(d)) c.k++;
+    by.set(key, c);
+  }
+  const clusters = [...by.values()];
+  return { k: clusters.reduce((a, c) => a + c.k, 0), n: rows.length, clusters };
+}
 const inWin = (at: string | null, w: { from: string; to: string }) => !!at && at >= w.from && at < w.to;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 
@@ -29,7 +44,7 @@ function realPlay(rows: DecisionRow[], memory: { leakKey: string; label: unknown
     const solverSide = (xs: DecisionRow[]) => {
       const graded = xs.filter((d) => classifySolver(d) !== 'outsideModel');
       const verified = graded.filter((d) => classifySolver(d) === 'verified');
-      return { k: verified.length, n: graded.length, evLossBB: r3(verified.reduce((s, d) => s + (d.pfAudit?.evLossBB ?? 0), 0)) };
+      return { ...clustered(graded, (d) => classifySolver(d) === 'verified'), evLossBB: r3(verified.reduce((s, d) => s + (d.pfAudit?.evLossBB ?? 0), 0)) };
     };
     const sc = solverSide(cur);
     const sp = solverSide(prev);
@@ -37,17 +52,23 @@ function realPlay(rows: DecisionRow[], memory: { leakKey: string; label: unknown
       const defKey = m.leakKey.slice('pattern:'.length);
       const def = PATTERNS.find((p) => defKey === p.key || defKey.startsWith(`${p.key}:`));
       if (!def) return null;
-      const slice = (xs: DecisionRow[]) => analyzePatterns(xs, [def]).find((r) => patternLeakKey(r) === m.leakKey) ?? { n: 0, hits: 0 };
-      const a = slice(cur);
-      const b = slice(prev);
-      return { leakKey: m.leakKey, label: m.label, band: def.band, ...compareRates({ k: a.hits, n: a.n }, { k: b.hits, n: b.n }, def.band ? { target: def.band } : {}) };
-    });
+      const slice = defKey === def.key ? null : defKey.slice(def.key.length + 1);
+      // the opportunities of this pattern (and slice) in a window, clustered by tournament
+      const opp = (xs: DecisionRow[]) => {
+        const one = (d: DecisionRow) => analyzePatterns([d], [def]).some((r) => r.n === 1 && patternLeakKey(r) === m.leakKey);
+        return xs.filter((d) => def.filter(d) && (slice === null || one(d)));
+      };
+      const a = opp(cur);
+      const b = opp(prev);
+      return { leakKey: m.leakKey, label: m.label, band: def.band, exploratory: true, ...compareRates(clustered(a, def.hit), clustered(b, def.hit), def.band ? { target: def.band } : {}) };
+    }).filter((x): x is NonNullable<typeof x> => !!x);
+    adjustForMultipleComparisons(patterns);
     return {
       days,
       window: w,
       decisions: { current: cur.length, previous: prev.length },
-      solver: { ...compareRates({ k: sc.k, n: sc.n }, { k: sp.k, n: sp.n }, { lowerIsBetter: true }), evLossBB: { current: sc.evLossBB, previous: sp.evLossBB } },
-      patterns: patterns.filter((x): x is NonNullable<typeof x> => !!x),
+      solver: { ...compareRates(sc, sp, { lowerIsBetter: true }), evLossBB: { current: sc.evLossBB, previous: sp.evLossBB } },
+      patterns,
     };
   });
   return { anchor: anchor.toISOString(), periods };
@@ -67,7 +88,16 @@ async function training(userId: string, now: Date) {
       const xs = atts.filter((a) => inWin(a.createdAt.toISOString(), win));
       const graded = xs.filter((a) => a.graded);
       const ev = graded.filter((a) => a.evUnit === 'bb' && a.evLoss !== null);
-      return { attempts: xs.length, graded: graded.length, errors: graded.filter((a) => a.isError).length, avgEvLossBB: ev.length ? r3(ev.reduce((s, a) => s + a.evLoss!, 0) / ev.length) : null };
+      // training attempts cluster by day (one sitting is not independent answers)
+      const byDay = new Map<string, { k: number; n: number }>();
+      for (const a of graded) {
+        const d = a.createdAt.toISOString().slice(0, 10);
+        const c = byDay.get(d) ?? { k: 0, n: 0 };
+        c.n++;
+        if (a.isError) c.k++;
+        byDay.set(d, c);
+      }
+      return { attempts: xs.length, graded: graded.length, errors: graded.filter((a) => a.isError).length, days: [...byDay.values()], avgEvLossBB: ev.length ? r3(ev.reduce((s, a) => s + a.evLoss!, 0) / ev.length) : null };
     };
     const c = side(w.current);
     const p = side(w.previous);
@@ -84,7 +114,7 @@ async function training(userId: string, now: Date) {
       window: w,
       attempts: { current: c.attempts, previous: p.attempts },
       // error rate of graded attempts, lower is better
-      errors: compareRates({ k: c.errors, n: c.graded }, { k: p.errors, n: p.graded }, { lowerIsBetter: true }),
+      errors: compareRates({ k: c.errors, n: c.graded, clusters: c.days }, { k: p.errors, n: p.graded, clusters: p.days }, { lowerIsBetter: true }),
       avgEvLossBB: { current: c.avgEvLossBB, previous: p.avgEvLossBB },
       ratingDelta: { strategy: ratingDelta('overall'), fundamentals: ratingDelta('fundamentals') },
       dailySessions: daily,

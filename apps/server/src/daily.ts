@@ -44,6 +44,7 @@ export async function dailyPlan(userId: string, minutes: DailyMinutes, now = new
   return {
     ...plan,
     refreshedAt: mem.refreshedAt,
+    pendingContext: mem.pendingContext,
     // every leak with its priority breakdown, so the order is explainable
     ranking: leaks.map((l) => ({ leakKey: l.leakKey, label: l.label, evidence: l.evidence, status: l.status, priority: leakPriority(l, now) })).sort((a, b) => b.priority.score - a.priority.score),
   };

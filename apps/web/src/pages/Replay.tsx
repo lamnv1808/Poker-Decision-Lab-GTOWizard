@@ -42,7 +42,7 @@ interface ReplayResult {
   sameAsObserved: boolean;
   facts: Record<string, number | null> | null;
   topics: { key: string; label: Localized }[];
-  pushFold?: { class: 'correct' | 'minor' | 'verified' | 'inconclusiveBounty' | 'outsideModel'; role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string; grade: Grade | null; evLossBB: number | null; bestAction: string | null; frequency: number | null } | null;
+  pushFold?: { class: 'correct' | 'minor' | 'verified' | 'inconclusiveBounty' | 'nearThreshold' | 'outsideModel'; role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string; grade: Grade | null; evLossBB: number | null; bestAction: string | null; frequency: number | null } | null;
   strategy: {
     status: 'unreviewed' | 'verified';
     evaluation?: 'ev' | 'qualitative' | 'not_evaluated';

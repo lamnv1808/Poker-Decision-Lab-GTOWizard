@@ -21,10 +21,34 @@ describe('period comparison', () => {
     // a large rare-event difference still registers
     expect(compareRates({ k: 0, n: 300 }, { k: 12, n: 300 }, { lowerIsBetter: true }).verdict).toBe('better');
   });
-  it('with a target band, better means closer to the band', () => {
-    // UTG opens 30% → 20% (band 10–24%) is better even though the rate fell
-    expect(compareRates({ k: 200, n: 1000 }, { k: 300, n: 1000 }, { target: [0.1, 0.24] }).verdict).toBe('better');
-    expect(compareRates({ k: 50, n: 1000 }, { k: 150, n: 1000 }, { target: [0.1, 0.24] }).verdict).toBe('worse');
+  it('with a heuristic band, a frequency change is only toward/away from the band — never better/worse', () => {
+    expect(compareRates({ k: 200, n: 1000 }, { k: 300, n: 1000 }, { target: [0.1, 0.24] }).verdict).toBe('towardBand');
+    expect(compareRates({ k: 50, n: 1000 }, { k: 150, n: 1000 }, { target: [0.1, 0.24] }).verdict).toBe('awayFromBand');
+  });
+  it('clustered decisions (one tournament = one unit) widen the test', () => {
+    // 1000 decisions per period in 20 tournaments; rates move 30% → 34%. Independent test: p ≈ 0.06.
+    const mk = (rates: number[]) => rates.map((r) => ({ k: Math.round(r * 50), n: 50 }));
+    const flat = (cl: { k: number; n: number }[]) => ({ k: cl.reduce((a, c) => a + c.k, 0), n: cl.reduce((a, c) => a + c.n, 0), clusters: cl });
+    // strongly heterogeneous tournaments (some very loose, some very tight)
+    const prev = flat(mk([0.1, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5]));
+    const cur = flat(mk([0.14, 0.54, 0.14, 0.54, 0.14, 0.54, 0.14, 0.54, 0.14, 0.54, 0.14, 0.54, 0.14, 0.54, 0.14, 0.54, 0.14, 0.54, 0.14, 0.54]));
+    const plain = compareRates({ k: cur.k, n: cur.n }, { k: prev.k, n: prev.n }, { lowerIsBetter: true });
+    const cl = compareRates(cur, prev, { lowerIsBetter: true });
+    expect(plain.method).toBe('z');
+    expect(cl.method).toBe('z-cluster');
+    expect(cl.designEffect!).toBeGreaterThan(1);
+    expect(cl.p!).toBeGreaterThan(plain.p!);
+    // too few independent units → insufficient
+    expect(compareRates(flat(mk([0.2, 0.3, 0.4])), flat(mk([0.2, 0.3, 0.4])), {}).verdict).toBe('insufficient');
+  });
+  it('Benjamini–Hochberg keeps only comparisons that survive the false-discovery correction', async () => {
+    const { adjustForMultipleComparisons } = await import('../src/plan');
+    const mk = (p: number): import('../src/plan').RateChange => ({ current: { k: 0, n: 0, rate: 0, ci: null }, previous: { k: 0, n: 0, rate: 0, ci: null }, diff: 0, p, method: 'z', verdict: 'worse' });
+    const xs = [mk(0.001), mk(0.04), mk(0.08), mk(0.5)];
+    adjustForMultipleComparisons(xs, 0.1);
+    // q = p·m/rank with monotonicity: 0.004, 0.08, 0.1067, 0.5
+    expect(xs.map((x) => x.q)).toEqual([0.004, 0.08, 0.1067, 0.5]);
+    expect(xs.map((x) => x.verdict)).toEqual(['worse', 'worse', 'noClearChange', 'noClearChange']);
   });
   it('windows are consecutive and equal', () => {
     const w = periodWindows(new Date('2026-10-31T00:00:00Z'), 30);

@@ -195,3 +195,25 @@ export function equityVsRandom(cls: string): number {
 export function hasPushFoldSolution(stackBB: number, deadBB: number): boolean {
   return !!precomputed?.solutions[`${stackBB}|${deadBB}`] || cache.has(`${stackBB}|${deadBB}|1500`);
 }
+
+/** All-in equity of class `a` against class `b` (card removal averaged), from the precomputed table. */
+export function classEquity(a: string, b: string): number {
+  return EQ[classIndex(a) * N + classIndex(b)]!;
+}
+
+/** SB chip EV of shoving `cls` (relative to folding) against an arbitrary BB calling strategy by class. */
+export function shoveEvVs(cls: string, callByClass: Record<string, number>, stackBB: number, deadBB: number): number {
+  const call = CLASSES.map((c) => callByClass[c] ?? 0);
+  return sbShoveEv(classIndex(cls), call, stackBB, deadBB);
+}
+
+/** BB chip EV of calling with `cls` (relative to folding) against an arbitrary SB shoving strategy by class. */
+export function callEvVs(cls: string, pushByClass: Record<string, number>, stackBB: number, deadBB: number): number | null {
+  const push = CLASSES.map((c) => pushByClass[c] ?? 0);
+  return bbCallEv(classIndex(cls), push, stackBB, deadBB);
+}
+
+/** Precomputed solution grid keys (stack|dead), for property tests. */
+export function precomputedPushFoldKeys(): string[] {
+  return Object.keys(precomputed?.solutions ?? {});
+}

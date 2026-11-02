@@ -30,6 +30,13 @@ export interface PushFoldAudit {
   evAggressive: number;
   bestAction: string;
   actionIndex: number;
+  /**
+   * The verdict at every corner of the solved grid cell that contains the exact stack/dead money
+   * (stack ±0.5BB grid, neighbouring ante levels). `robust` = the observed action is a mistake at
+   * every corner, i.e. the rounding cannot have produced it. Outside the grid → not robust.
+   */
+  robust: boolean;
+  evLossRangeBB: [number, number] | null;
 }
 
 const roundTo = (x: number, step: number) => Math.round(x / step) * step;
@@ -81,6 +88,7 @@ export function auditPushFold(h: ReconstructedHand): PushFoldAudit | null {
   const spot = { seed: 0, role, stackBB, anteFormat: 'none' as const, deadBB, heroCards: [cards[0]!, cards[1]!] as [typeof cards[0], typeof cards[1]], heroClass };
   const probe = gradeGtoSpot(spot, 'fold', sol);
   const g = heroAction === 'other' ? null : gradeGtoSpot(spot, heroAction, sol);
+  const rb = heroAction === 'other' ? null : robustness(role, exactStack, exactDead, heroClass, heroAction);
   return {
     role,
     stackBB,
@@ -96,7 +104,34 @@ export function auditPushFold(h: ReconstructedHand): PushFoldAudit | null {
     evAggressive: Math.round(probe.evAggressive * 1000) / 1000,
     bestAction: probe.bestAction,
     actionIndex: h.parsed.actions.indexOf(a),
+    robust: rb?.robust ?? false,
+    evLossRangeBB: rb?.range ?? null,
   };
+}
+
+/** Grid cell corners around an exact value (or null when the value is outside the grid). */
+function bracket(x: number, levels: number[]): number[] | null {
+  if (x < levels[0]! - 1e-9 || x > levels[levels.length - 1]! + 1e-9) return null;
+  const lo = [...levels].reverse().find((l) => l <= x + 1e-9)!;
+  const hi = levels.find((l) => l >= x - 1e-9)!;
+  return lo === hi ? [lo] : [lo, hi];
+}
+const STACK_GRID = Array.from({ length: (AUDIT_MAX_STACK - 2) * 2 + 1 }, (_, i) => 2 + i / 2);
+
+export function robustness(role: GtoRole, exactStack: number, exactDead: number, heroClass: string, action: GtoAction) {
+  const ss = bracket(exactStack, STACK_GRID);
+  const ds = bracket(exactDead, AUDIT_DEAD_LEVELS);
+  if (!ss || !ds) return { robust: false, range: null as [number, number] | null, corners: 0 };
+  const losses: number[] = [];
+  let allMistake = true;
+  for (const S of ss)
+    for (const D of ds) {
+      const g = gradeGtoSpot({ seed: 0, role, stackBB: S, anteFormat: 'none', deadBB: D, heroCards: [] as unknown as GtoSpot['heroCards'], heroClass } as GtoSpot, action, solvePushFold({ stackBB: S, deadBB: D }));
+      losses.push(g.evLossBB);
+      if (!(g.grade === 'mistake' || g.grade === 'major')) allMistake = false;
+    }
+  const r3 = (x: number) => Math.round(x * 1000) / 1000;
+  return { robust: allMistake, range: [r3(Math.min(...losses)), r3(Math.max(...losses))] as [number, number], corners: losses.length };
 }
 
 /**
@@ -106,7 +141,7 @@ export function auditPushFold(h: ReconstructedHand): PushFoldAudit | null {
  * adds EV to shoving/calling), while folding a chip-EV shove/call stays a verified loss.
  */
 export function pushFoldChoiceVerdict(
-  audit: { role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string },
+  audit: { role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string; exactStackBB?: number; exactDeadBB?: number },
   choice: 'fold' | 'aggressive' | 'other',
   formatGroup: 'PKO' | 'regular' | string | null,
 ) {
@@ -117,6 +152,8 @@ export function pushFoldChoiceVerdict(
   const g = gradeGtoSpot(spot as GtoSpot, choice === 'fold' ? 'fold' : aggressive, solvePushFold({ stackBB: audit.stackBB, deadBB: audit.deadBB }));
   const mistake = g.grade === 'mistake' || g.grade === 'major';
   // 'minor': a small chip-EV loss that the quiz does not count as a mistake (acceptable/marginal)
-  const cls = !mistake ? (g.grade === 'excellent' || g.grade === 'good' ? 'correct' : 'minor') : choice === 'aggressive' && formatGroup === 'PKO' ? 'inconclusiveBounty' : 'verified';
-  return { ...base, class: cls as 'correct' | 'minor' | 'verified' | 'inconclusiveBounty', grade: g.grade, evLossBB: Math.round(g.evLossBB * 1000) / 1000, bestAction: g.bestAction, frequency: g.frequency };
+  // a mistake is only verified if the stack/ante rounding cannot have produced it
+  const robust = mistake && audit.exactStackBB !== undefined && audit.exactDeadBB !== undefined ? robustness(audit.role, audit.exactStackBB, audit.exactDeadBB, audit.heroClass, choice === 'fold' ? 'fold' : aggressive).robust : false;
+  const cls = !mistake ? (g.grade === 'excellent' || g.grade === 'good' ? 'correct' : 'minor') : choice === 'aggressive' && formatGroup === 'PKO' ? 'inconclusiveBounty' : robust ? 'verified' : 'nearThreshold';
+  return { ...base, class: cls as 'correct' | 'minor' | 'verified' | 'inconclusiveBounty' | 'nearThreshold', grade: g.grade, evLossBB: Math.round(g.evLossBB * 1000) / 1000, bestAction: g.bestAction, frequency: g.frequency };
 }

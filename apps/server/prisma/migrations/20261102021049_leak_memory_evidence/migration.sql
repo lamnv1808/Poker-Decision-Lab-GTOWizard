@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "LeakMemory" ADD COLUMN     "evLossMinBB" DOUBLE PRECISION,
+ADD COLUMN     "notVerified" INTEGER NOT NULL DEFAULT 0;

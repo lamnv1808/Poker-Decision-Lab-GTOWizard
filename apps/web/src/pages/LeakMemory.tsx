@@ -21,6 +21,8 @@ interface Memory {
   bandLo: number | null;
   bandHi: number | null;
   evLossBB: number | null;
+  evLossMinBB: number | null;
+  notVerified: number;
   recentN: number;
   recentRate: number | null;
   examples: string[];
@@ -38,12 +40,12 @@ const pct = (x: number | null) => (x === null ? '—' : `${(x * 100).toFixed(1)}
 /** Persistent mistake memory from real hands and training (My Leaks). */
 export function LeakMemoryPanel() {
   const { t, lang } = useT();
-  const [data, setData] = useState<{ refreshedAt: string | null; leaks: Memory[] } | null>(null);
+  const [data, setData] = useState<{ refreshedAt: string | null; pendingContext?: number; leaks: Memory[] } | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
   useEffect(() => {
-    api.get<{ refreshedAt: string | null; leaks: Memory[] }>('/memory').then(setData).catch(setError);
+    api.get<{ refreshedAt: string | null; pendingContext?: number; leaks: Memory[] }>('/memory').then(setData).catch(setError);
   }, []);
   const refresh = async () => {
     setBusy(true);
@@ -65,6 +67,7 @@ export function LeakMemoryPanel() {
       <p className="mb-2 text-xs text-ink-400">{t('mem.intro')}</p>
       <ErrorNote error={error} />
       {!data && !error && <Spinner />}
+      {!!data?.pendingContext && <p className="mb-2 rounded-md border border-gold/40 bg-gold/5 px-3 py-2 text-xs text-gold">{t('mem.pending', { n: data.pendingContext.toLocaleString() })}</p>}
       {data && (shown.length === 0 ? <Empty>{t('mem.none')}</Empty> : (
         <ul className="space-y-2" data-testid="mem-list">
           {shown.map((l) => (
@@ -84,8 +87,9 @@ export function LeakMemoryPanel() {
                 )}
                 {l.evidence === 'solver' && (
                   <>
-                    <span>{t('mem.verifiedMistakes', { k: Math.round((l.rate ?? 0) * l.n), n: l.n })}</span>
-                    <span>{t('mem.chipEv')}: <b className="text-ink-100">−{(l.evLossBB ?? 0).toFixed(2)} BB</b></span>
+                    <span>{t('mem.verifiedMistakes', { k: Math.round((l.rate ?? 0) * l.n), n: l.n })}{l.notVerified > 0 && ` · ${t('mem.notVerified', { n: l.notVerified })}`}</span>
+                    <span>{t('mem.chipEvTotal', { sum: (l.evLossBB ?? 0).toFixed(2), min: (l.evLossMinBB ?? l.evLossBB ?? 0).toFixed(2), avg: ((l.evLossBB ?? 0) / Math.max(1, Math.round((l.rate ?? 0) * l.n))).toFixed(2) })}</span>
+                    <span className="text-[11px] text-ink-500 sm:col-span-2">{t('mem.icmNote')}</span>
                   </>
                 )}
                 {l.evidence === 'training' && <span>{t('mem.trainingErrors', { rate: pct(l.rate), n: l.n })}</span>}
@@ -114,17 +118,23 @@ export function LeakMemoryPanel() {
   );
 }
 
-interface Change { current: { k: number; n: number; rate: number | null }; previous: { k: number; n: number; rate: number | null }; verdict: 'better' | 'worse' | 'noClearChange' | 'insufficient'; p: number | null }
+interface Change { current: { k: number; n: number; rate: number | null }; previous: { k: number; n: number; rate: number | null }; verdict: 'better' | 'worse' | 'towardBand' | 'awayFromBand' | 'noClearChange' | 'insufficient'; p: number | null; q?: number | null; designEffect?: number | null; method?: string }
 interface Improvement {
   realPlay: { anchor: string | null; periods: { days: number; decisions: { current: number; previous: number }; solver: Change & { evLossBB: { current: number; previous: number } }; patterns: (Change & { leakKey: string; label: Localized })[] }[] };
   training: { periods: { days: number; attempts: { current: number; previous: number }; errors: Change; avgEvLossBB: { current: number | null; previous: number | null }; ratingDelta: { strategy: number | null; fundamentals: number | null }; dailySessions: number; drills: { leakKey: string; label: Localized; sessions: number; first: number; last: number }[] }[] };
 }
 
-const VERDICT = { better: 'text-emerald-300', worse: 'text-red-300', noClearChange: 'text-ink-300', insufficient: 'text-ink-500' };
+const VERDICT = { better: 'text-emerald-300', worse: 'text-red-300', towardBand: 'text-emerald-300', awayFromBand: 'text-amber-300', noClearChange: 'text-ink-300', insufficient: 'text-ink-500' };
 
 function Verdict({ c }: { c: Change }) {
   const { t } = useT();
-  return <span className={`text-xs ${VERDICT[c.verdict]}`} title={c.p !== null ? `p = ${c.p}` : undefined}>{t(`imp.${c.verdict}`)}</span>;
+  const stats = c.p !== null ? `p = ${c.p}${c.q != null ? `, q = ${c.q}` : ''}${c.designEffect ? `, deff ${c.designEffect}` : ''}${c.method ? ` (${c.method})` : ''}` : undefined;
+  return (
+    <span className={`text-xs ${VERDICT[c.verdict]}`} title={stats}>
+      {t(`imp.${c.verdict}`)}
+      {stats && <span className="block text-[10px] text-ink-500">{stats}</span>}
+    </span>
+  );
 }
 
 const side = (c: Change['current']) => (c.n ? `${(c.rate! * 100).toFixed(1)}% (${c.k}/${c.n})` : '—');
@@ -156,6 +166,7 @@ export function ImprovementPanel() {
                   <thead className="text-ink-400"><tr><th className="text-left" /><th className="text-right">{t('imp.current')}</th><th className="text-right">{t('imp.previous')}</th><th className="text-right" /></tr></thead>
                   <tbody>
                     <tr className="border-t border-ink-800"><td className="py-1">{t('imp.solverMistakes')}</td><td className="text-right">{side(rp.solver.current)}</td><td className="text-right">{side(rp.solver.previous)}</td><td className="text-right"><Verdict c={rp.solver} /></td></tr>
+                    {rp.patterns.length > 0 && <tr><td colSpan={4} className="pt-2 text-[10px] uppercase text-ink-500">{t('imp.exploratory')}</td></tr>}
                     {rp.patterns.map((p) => (
                       <tr key={p.leakKey} className="border-t border-ink-800"><td className="py-1">{loc(p.label, lang)}</td><td className="text-right">{side(p.current)}</td><td className="text-right">{side(p.previous)}</td><td className="text-right"><Verdict c={p} /></td></tr>
                     ))}

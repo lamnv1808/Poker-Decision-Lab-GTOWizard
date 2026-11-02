@@ -316,10 +316,11 @@ describe('GTO push/fold quiz and audit', () => {
     const imp = await agent.post('/api/imports').attach('file', Buffer.from(hand), 'h.txt').expect(201);
     expect(imp.body.handsParsed).toBe(1);
     const a = await agent.get('/api/gto/audit').expect(200);
+    // a user with only file uploads gets the legacy verdicts (correct spots are not listed)
+    expect(a.body.source).toBe('legacyUploads');
     expect(a.body.sbShove.graded).toBe(1);
-    expect(a.body.worst[0].heroAction).toBe('shove');
-    expect(a.body.worst[0].stackBB).toBe(8);
-    expect(a.body.worst[0].grade).toBe('excellent');
+    expect(a.body.sbShove.verified).toBe(0);
+    expect(a.body.worst).toHaveLength(0);
   });
 });
 

@@ -47,6 +47,8 @@ export interface PlanItem {
 
 export interface PriorityParts {
   severity: number;
+  /** Strength of the evidence class: solver-verified 1, graded training 0.8, heuristic pattern 0.6. */
+  evidence: number;
   confidence: number;
   recurrence: number;
   learning: number;
@@ -54,9 +56,11 @@ export interface PriorityParts {
 }
 
 const CONF = { low: 0.55, medium: 0.8, high: 1 } as const;
+const EVIDENCE = { solver: 1, training: 0.8, pattern: 0.6 } as const;
 
 /**
- * priority = severity × confidence × recurrence × learning, each factor shown to the user.
+ * priority = severity × evidence × confidence × recurrence × learning, each factor shown to the user.
+ *  - evidence: a solver-verified mistake outranks a heuristic suspicion of the same size;
  *  - recurrence: grows (log) with the times a leak was re-detected and its recent occurrences;
  *  - learning: due/never-drilled leaks first; a leak drilled well recently waits its turn;
  *  - resolved leaks are kept in memory but not planned.
@@ -69,9 +73,10 @@ export function leakPriority(l: PlanLeak, now: Date): PriorityParts {
   let learning = due ? (l.drillCount === 0 ? 1.25 : 1.1) : 0.45;
   if (l.lastDrillAccuracy !== null && !due) learning *= l.lastDrillAccuracy >= 0.85 ? 0.7 : 1.2;
   if (l.status === 'improving') learning *= 0.75;
-  const score = l.status === 'resolved' ? 0 : severity * confidence * recurrence * learning;
+  const evidence = EVIDENCE[l.evidence];
+  const score = l.status === 'resolved' ? 0 : severity * evidence * confidence * recurrence * learning;
   const r = (x: number) => Math.round(x * 1000) / 1000;
-  return { severity: r(severity), confidence: r(confidence), recurrence: r(recurrence), learning: r(learning), score: r(score) };
+  return { severity: r(severity), evidence: r(evidence), confidence: r(confidence), recurrence: r(recurrence), learning: r(learning), score: r(score) };
 }
 
 /** What to practise for a leak. Solver leaks get solver-verified quiz items; every real-hand leak also replays the user's own hands. */
@@ -158,6 +163,9 @@ export function buildDailyPlan(input: { minutes: DailyMinutes; leaks: PlanLeak[]
       }
       block.push(it);
     }
+    // every focus leak gets at least one graded drill (own-hand replays are reflection only)
+    const graded = pool.find((x) => !x.params?.decisionId);
+    if (graded && !block.some((x) => !x.params?.decisionId)) block.push(graded);
     leakBlocks.push(block);
     focus.push({ leakKey: l.leakKey, label: l.label, evidence: l.evidence, priority: p, items: block.length, seconds: secs(block) });
   }

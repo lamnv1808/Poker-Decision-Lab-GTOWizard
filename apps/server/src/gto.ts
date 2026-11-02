@@ -8,7 +8,6 @@ import {
   PUSHFOLD_DATA_INFO,
   type GtoAction,
   type GtoSpot,
-  type PushFoldAudit,
   applyAction,
   createHand,
   generateGtoSpot,
@@ -18,6 +17,8 @@ import {
   publicState,
   solvePushFold,
 } from '@pdl/core';
+import { classifySolver } from '@pdl/core';
+import { loadDecisionRows } from './leakEngine';
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireUser } from './auth';
@@ -169,41 +170,59 @@ gtoRouter.post('/answer', async (req, res) => {
   res.json({ ...outcome.result, ranges: result.ranges });
 });
 
-/** Push/fold audit across the user's imported hands. */
+/**
+ * Push/fold audit across the user's imported real hands (RealDecision.pfAudit, the same verdicts the
+ * leak engine uses). Every spot is classified: verified chip-EV mistake, near threshold (the grid
+ * rounding could produce the verdict), inconclusive in a bounty event, correct/small loss, or
+ * outside the model. Totals sum VERIFIED mistakes only.
+ */
 gtoRouter.get('/audit', async (req, res) => {
   const userId = requireUser(req);
-  const rows = await prisma.handHistory.findMany({
-    where: { userId, hasGtoSpot: true },
-    select: { id: true, externalHandId: true, playedAt: true, gtoAudit: true, tournament: { select: { name: true } } },
-    orderBy: { playedAt: 'desc' },
+  let rows = (await loadDecisionRows(userId)).filter((r) => r.pfAudit);
+  const hands = new Map((await prisma.realDecision.findMany({ where: { id: { in: rows.map((r) => r.id) } }, select: { id: true, realHand: { select: { handId: true, tournamentName: true } } } })).map((d) => [d.id, d.realHand]));
+  let source: 'realHands' | 'legacyUploads' = 'realHands';
+  if (!rows.length) {
+    // users who only uploaded hand files on the Hands page: older verdicts without the grid
+    // robustness check, so any mistake there is shown as near threshold (never verified)
+    const legacy = await prisma.handHistory.findMany({ where: { userId, hasGtoSpot: true }, select: { id: true, externalHandId: true, playedAt: true, gtoAudit: true, tournament: { select: { name: true } } }, orderBy: { playedAt: 'desc' } });
+    source = 'legacyUploads';
+    rows = legacy.map((h) => ({ id: h.id, playedAt: h.playedAt?.toISOString() ?? null, street: 'preflop', position: null, actionContext: null, heroAction: null, stackBucket: null, formatGroup: /PKO|bounty/i.test(h.tournament?.name ?? '') ? 'PKO' : 'regular', facingBetPct: null, requiredEq: null, multiway: false, pfAudit: h.gtoAudit as never }));
+    for (const h of legacy) hands.set(h.id, { handId: h.externalHandId, tournamentName: h.tournament?.name ?? null });
+  }
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const spots = rows.map((r) => {
+    const p = r.pfAudit as NonNullable<typeof r.pfAudit> & { exactStackBB?: number; exactDeadBB?: number; deadBB?: number; frequency?: number };
+    return { decisionId: r.id, externalHandId: hands.get(r.id)?.handId ?? '', tournament: hands.get(r.id)?.tournamentName ?? null, playedAt: r.playedAt, format: r.formatGroup, cls: classifySolver(r), ...p };
   });
-  const spots = rows.map((r) => ({ handId: r.id, externalHandId: r.externalHandId, playedAt: r.playedAt, tournament: r.tournament?.name ?? null, ...(r.gtoAudit as unknown as PushFoldAudit) }));
-  const graded = spots.filter((s) => s.grade);
-  const sum = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) * 100) / 100;
-  const group = (role: string) => {
-    const g = graded.filter((s) => s.role === role);
-    const tight = g.filter((s) => s.heroAction === 'fold' && s.bestAction !== 'fold' && s.bestAction !== 'mixed');
-    const loose = g.filter((s) => s.heroAction !== 'fold' && s.bestAction === 'fold');
-    const bands = [[1, 6], [6.5, 10], [10.5, 15]].map(([lo, hi]) => {
-      const b = g.filter((s) => s.stackBB >= lo! && s.stackBB <= hi!);
-      return { band: `${lo}–${hi}`, n: b.length, accuracyPct: b.length ? Math.round((100 * b.filter((s) => (s.evLossBB ?? 0) < 0.2).length) / b.length) : null, evLossBB: sum(b.map((s) => s.evLossBB ?? 0)) };
+  const group = (role: 'sbShove' | 'bbCall') => {
+    const g = spots.filter((s) => s.role === role);
+    const of = (c: string) => g.filter((s) => s.cls === c);
+    const verified = of('verified');
+    const bands = [['≤6', 0, 6], ['6.5–10', 6.5, 10], ['10.5–15', 10.5, 15]].map(([band, lo, hi]) => {
+      const b = g.filter((s) => s.cls !== 'outsideModel' && s.stackBB >= (lo as number) && s.stackBB <= (hi as number));
+      const v = b.filter((s) => s.cls === 'verified');
+      return { band, n: b.length, verified: v.length, evLossBB: r2(v.reduce((a, s) => a + (s.evLossBB ?? 0), 0)) };
     });
     return {
-      spots: spots.filter((s) => s.role === role).length,
-      graded: g.length,
-      outsideModel: spots.filter((s) => s.role === role && !s.grade).length,
-      mistakes: g.filter((s) => s.grade === 'mistake' || s.grade === 'major').length,
-      evLossBB: sum(g.map((s) => s.evLossBB ?? 0)),
-      tooTight: { n: tight.length, evLossBB: sum(tight.map((s) => s.evLossBB ?? 0)) },
-      tooLoose: { n: loose.length, evLossBB: sum(loose.map((s) => s.evLossBB ?? 0)) },
+      spots: g.length,
+      graded: g.filter((s) => s.cls !== 'outsideModel').length,
+      outsideModel: of('outsideModel').length,
+      verified: verified.length,
+      nearThreshold: of('nearThreshold').length,
+      inconclusiveBounty: of('inconclusiveBounty').length,
+      evLossBB: r2(verified.reduce((a, s) => a + (s.evLossBB ?? 0), 0)),
+      tooTight: verified.filter((s) => s.heroAction === 'fold').length,
+      tooLoose: verified.filter((s) => s.heroAction !== 'fold').length,
       bands,
     };
   };
+  const order = { verified: 0, nearThreshold: 1, inconclusiveBounty: 2 } as Record<string, number>;
   res.json({
-    totalHands: await prisma.handHistory.count({ where: { userId } }),
+    source,
+    totalHands: source === 'realHands' ? await prisma.realHand.count({ where: { userId, status: 'accepted' } }) : await prisma.handHistory.count({ where: { userId } }),
     sbShove: group('sbShove'),
     bbCall: group('bbCall'),
-    worst: [...graded].sort((a, b) => (b.evLossBB ?? 0) - (a.evLossBB ?? 0)).slice(0, 40),
+    worst: spots.filter((s) => s.cls in order).sort((a, b) => order[a.cls]! - order[b.cls]! || (b.evLossBB ?? 0) - (a.evLossBB ?? 0)).slice(0, 60),
     assumptions: GTO_ASSUMPTIONS,
   });
 });

@@ -23,7 +23,9 @@ const leak = (o: Partial<PlanLeak> = {}): PlanLeak => ({
 describe('leakPriority', () => {
   it('is the product of its visible parts and orders as documented', () => {
     const p = leakPriority(leak(), now);
-    expect(p.score).toBeCloseTo(p.severity * p.confidence * p.recurrence * p.learning, 2);
+    expect(p.score).toBeCloseTo(p.severity * p.evidence * p.confidence * p.recurrence * p.learning, 2);
+    // a solver-verified leak outranks a heuristic pattern of the same size
+    expect(leakPriority(leak({ evidence: 'solver' }), now).score).toBeGreaterThan(p.score);
     // more severe, more confident, recurring and due → higher
     expect(leakPriority(leak({ severity: 0.9 }), now).score).toBeGreaterThan(p.score);
     expect(leakPriority(leak({ confidence: 'high' }), now).score).toBeGreaterThan(p.score);
@@ -64,6 +66,8 @@ describe('buildDailyPlan', () => {
     // no three of a kind in a row, unless only that type is left
     for (let i = 2; i < p.items.length; i++)
       if (p.items[i]!.type === p.items[i - 1]!.type && p.items[i]!.type === p.items[i - 2]!.type) expect(p.items.slice(i).every((x) => x.type === p.items[i]!.type)).toBe(true);
+    // every focus leak has at least one graded drill
+    for (const f of p.focus) expect(p.items.some((i) => i.leakKey === f.leakKey && !i.params?.decisionId)).toBe(true);
     // one own hand is replayed at most once
     const replays = p.items.filter((i) => i.params?.decisionId).map((i) => i.params!.decisionId);
     expect(new Set(replays).size).toBe(replays.length);

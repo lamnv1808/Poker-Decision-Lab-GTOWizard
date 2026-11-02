@@ -1,4 +1,4 @@
-import { LEAK_ENGINE_VERSION, LEAK_LABELS, type LeakKey, type PatternResult, type SolverFinding, analyzePatterns, analyzeSolver, classifySolver, rankLeaks, reviewSrs, initialSrs, type Grade } from '@pdl/core';
+import { CONTEXT_VERSION, LEAK_ENGINE_VERSION, LEAK_LABELS, type LeakKey, type PatternResult, type SolverFinding, analyzePatterns, analyzeSolver, classifySolver, rankLeaks, reviewSrs, initialSrs, type Grade } from '@pdl/core';
 import { Router } from 'express';
 import { requireUser } from './auth';
 import { prisma } from './db';
@@ -20,7 +20,9 @@ import { loadDecisionRows } from './leakEngine';
  *  - training: `improving` when the recent error rate is ≥ 10 points lower than the earlier one;
  *    `resolved` when the tracker no longer ranks it.
  * Severity is put on a common 0..1 scale: pattern = distance of the 90% interval from the band / 15
- * points; solver = verified chip-EV loss / 10 BB (min 0.15); training = tracker priority / 0.6.
+ * points; solver = conservative verified chip-EV loss / 10 BB (min 0.15); training = tracker priority / 0.6.
+ * Solver evidence is CHIP EV against the heads-up push/fold equilibrium: ICM and payouts are not
+ * modelled, so late in a tournament a chip-losing fold can still be the right tournament decision.
  */
 export const LEAK_MEMORY_VERSION = 'memory-v1';
 const RECENT_DAYS = 30;
@@ -43,6 +45,8 @@ interface Candidate {
   ci: [number, number] | null;
   band: [number, number] | null;
   evLossBB: number | null;
+  evLossMinBB: number | null;
+  notVerified: number;
   recentN: number;
   recentRate: number | null;
   recentVerdict: string | null;
@@ -83,14 +87,15 @@ export async function leakCandidates(userId: string): Promise<{ candidates: Cand
   // 1. Solver-verified push/fold mistakes
   const solver = analyzeSolver(rows);
   const recentSolver = analyzeSolver(recent);
-  for (const f of solver.findings.filter((x) => x.n > 0)) {
+  // findings with no verified mistake left can only resolve an existing memory (e.g. re-classified as near threshold)
+  for (const f of solver.findings) {
     const rf = recentSolver.findings.find((x) => x.key === f.key);
     const [lo, hi] = f.stackBand === '≤6' ? [0, 6] : f.stackBand === '6.5–10' ? [6.5, 10] : [10.5, 15];
     const recentSpots = recent.filter((d) => d.pfAudit && d.pfAudit.role === f.role && d.pfAudit.stackBB >= lo && d.pfAudit.stackBB <= hi && classifySolver(d) !== 'outsideModel').length;
     // zero recent mistakes only counts when it would be unlikely at the old mistake rate:
     // P(0 mistakes in k spots | rate) = (1 - rate)^k ≤ 10% → improving, ≤ 1% → resolved
     const pZero = Math.pow(1 - f.n / Math.max(1, f.spots), recentSpots);
-    const status = rf && rf.n > 0 ? 'active' : pZero <= 0.01 ? 'resolved' : pZero <= 0.1 ? 'improving' : 'active';
+    const status = f.n === 0 ? 'resolved' : rf && rf.n > 0 ? 'active' : pZero <= 0.01 ? 'resolved' : pZero <= 0.1 ? 'improving' : 'active';
     out.push({
       leakKey: f.key,
       source: 'real',
@@ -101,19 +106,22 @@ export async function leakCandidates(userId: string): Promise<{ candidates: Cand
       label: SOLVER_LABEL(f),
       drill: 'gto:pushfold',
       status,
-      severity: r4(Math.min(1, Math.max(0.15, f.evLossBB / 10))),
+      // severity from the conservative (grid-cell minimum) verified chip-EV loss
+      severity: r4(Math.min(1, Math.max(0.15, f.evLossMinBB / 10))),
       confidence: f.confidence,
       n: f.spots,
       rate: f.spots ? r4(f.n / f.spots) : null,
       ci: null,
       band: null,
       evLossBB: f.evLossBB,
+      evLossMinBB: f.evLossMinBB,
+      notVerified: f.nearThreshold + f.inconclusive,
       recentN: recentSpots,
       recentRate: recentSpots ? r4((rf?.n ?? 0) / recentSpots) : null,
       recentVerdict: rf && rf.n > 0 ? 'mistakes' : recentSpots ? 'clean' : null,
       examples: f.examples,
       lastSeenAt: f.lastSeen,
-      detected: true,
+      detected: f.n > 0,
     });
   }
 
@@ -143,6 +151,8 @@ export async function leakCandidates(userId: string): Promise<{ candidates: Cand
       ci: p.ci,
       band: p.band,
       evLossBB: null,
+      evLossMinBB: null,
+      notVerified: 0,
       recentN: rp?.n ?? 0,
       recentRate: rp?.rate ?? null,
       recentVerdict: rp?.verdict ?? null,
@@ -172,6 +182,8 @@ export async function leakCandidates(userId: string): Promise<{ candidates: Cand
       ci: null,
       band: null,
       evLossBB: s.avgEvLossBB,
+      evLossMinBB: null,
+      notVerified: 0,
       recentN: 0,
       recentRate: null,
       recentVerdict: s.trend === null ? null : s.trend <= -0.1 ? 'better' : s.trend >= 0.1 ? 'worse' : 'flat',
@@ -213,6 +225,8 @@ export async function refreshLeakMemory(userId: string) {
       bandLo: c.band?.[0] ?? null,
       bandHi: c.band?.[1] ?? null,
       evLossBB: c.evLossBB,
+      evLossMinBB: c.evLossMinBB,
+      notVerified: c.notVerified,
       recentN: c.recentN,
       recentRate: c.recentRate,
       recentVerdict: c.recentVerdict,
@@ -240,6 +254,8 @@ export async function refreshLeakMemory(userId: string) {
 
 /** Refresh if never done, the data changed size, or the last refresh is older than a day. */
 export async function ensureFreshMemory(userId: string) {
+  // while decisions are still being (re)analysed after an update, keep the last memory as it is
+  if (await prisma.realDecision.count({ where: { userId, status: 'accepted', contextV: { lt: CONTEXT_VERSION } }, take: 1 })) return;
   const st = await prisma.leakMemoryState.findUnique({ where: { userId } });
   const decisions = await prisma.realDecision.count({ where: { userId, status: 'accepted', contextV: { gte: 1 } } });
   const obs = await prisma.leakObservation.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
@@ -277,7 +293,10 @@ export async function listMemory(userId: string) {
   ]);
   const due = new Map(reviews.map((r) => [r.itemRef, r.dueAt]));
   const order = { active: 0, improving: 1, resolved: 2 } as Record<string, number>;
+  const pendingContext = await prisma.realDecision.count({ where: { userId, status: 'accepted', contextV: { lt: CONTEXT_VERSION } } });
   return {
+    // decisions still being analysed after an update (the memory refreshes when they are done)
+    pendingContext,
     refreshedAt: st?.refreshedAt ?? null,
     engine: st?.engine ?? null,
     leaks: mem

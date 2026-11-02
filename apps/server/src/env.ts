@@ -10,6 +10,11 @@ const Env = z.object({
   REGISTRATION: z.enum(['invite', 'open']).optional(),
   /** Comma-separated emails allowed to create invites. */
   OWNER_EMAILS: z.string().default(''),
+  /**
+   * The admin backup download (GET /api/admin/backup). Off by default in production: weekly
+   * backups are taken with pg_dump by a scheduled job; switch on only for a break-glass backup.
+   */
+  BACKUP_ENDPOINT: z.enum(['on', 'off']).optional(),
 });
 
 const parsed = Env.safeParse(process.env);
@@ -33,3 +38,8 @@ export function setRegistrationMode(m: 'invite' | 'open') {
   registrationMode = m;
 }
 export const ownerEmails = new Set(env.OWNER_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean));
+export let backupEndpointOn = (env.BACKUP_ENDPOINT ?? (isProd ? 'off' : 'on')) === 'on';
+/** Tests only. */
+export function setBackupEndpoint(on: boolean) {
+  backupEndpointOn = on;
+}

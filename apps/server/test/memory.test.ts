@@ -27,12 +27,12 @@ beforeAll(async () => {
   await clone(
     a.id,
     100,
-    `jsonb_build_object('id', gen_random_uuid()::text, 'externalId', 'syn-rfi-' || g, 'street', 'preflop', 'position', 'UTG', 'actionContext', 'unopened', 'stackBucket', '25-40', 'heroAction', CASE WHEN g <= 60 THEN 'raise' ELSE 'fold' END, 'formatGroup', 'regular', 'multiway', false, 'pfAudit', null, 'contextV', 2, 'status', 'accepted', 'playedAt', to_jsonb(timestamp '2026-10-01' + g * interval '1 hour'))`,
+    `jsonb_build_object('id', gen_random_uuid()::text, 'externalId', 'syn-rfi-' || g, 'street', 'preflop', 'position', 'UTG', 'actionContext', 'unopened', 'stackBucket', '25-40', 'heroAction', CASE WHEN g <= 60 THEN 'raise' ELSE 'fold' END, 'formatGroup', 'regular', 'multiway', false, 'pfAudit', null, 'contextV', 3, 'status', 'accepted', 'playedAt', to_jsonb(timestamp '2026-10-01' + g * interval '1 hour'))`,
   );
   await clone(
     a.id,
     5,
-    `jsonb_build_object('id', gen_random_uuid()::text, 'externalId', 'syn-pf-' || g, 'street', 'preflop', 'position', 'SB', 'actionContext', 'unopened', 'stackBucket', '<=10', 'heroAction', 'fold', 'formatGroup', 'regular', 'contextV', 2, 'status', 'accepted', 'playedAt', to_jsonb(timestamp '2026-10-02' + g * interval '1 hour'), 'pfAudit', jsonb_build_object('role', 'sbShove', 'stackBB', 8, 'deadBB', 0, 'exactStackBB', 8, 'heroClass', 'A8o', 'heroAction', 'fold', 'grade', 'mistake', 'evLossBB', 0.4, 'bestAction', 'shove', 'frequency', 1, 'evAggressive', 0.4))`,
+    `jsonb_build_object('id', gen_random_uuid()::text, 'externalId', 'syn-pf-' || g, 'street', 'preflop', 'position', 'SB', 'actionContext', 'unopened', 'stackBucket', '<=10', 'heroAction', 'fold', 'formatGroup', 'regular', 'contextV', 3, 'status', 'accepted', 'playedAt', to_jsonb(timestamp '2026-10-02' + g * interval '1 hour'), 'pfAudit', jsonb_build_object('role', 'sbShove', 'stackBB', 8, 'deadBB', 0, 'exactStackBB', 8, 'heroClass', 'A8o', 'heroAction', 'fold', 'grade', 'mistake', 'evLossBB', 0.4, 'bestAction', 'shove', 'frequency', 1, 'evAggressive', 0.4, 'robust', true, 'evLossRangeBB', jsonb_build_array(0.35, 0.45), 'exactStackBB', 8.1, 'exactDeadBB', 0))`,
     { requiredEq: { not: null } }, // a spot facing a bet, so fold is a legal replay answer
   );
 });
@@ -65,6 +65,17 @@ describe('leak memory (D3)', () => {
     expect(plan.focus).toEqual([]);
     expect(plan.items.length).toBeGreaterThan(0); // new material only, no replays (no real hands)
     expect(plan.items.some((i: { type: string }) => i.type === 'replay')).toBe(false);
+  });
+});
+
+describe('Push/Fold Audit page uses the audited real-hand verdicts', () => {
+  it('counts only verified mistakes and sums their chip-EV loss', async () => {
+    const r = (await a.agent.get('/api/gto/audit').expect(200)).body;
+    expect(r.source).toBe('realHands');
+    expect(r.sbShove.verified).toBe(5);
+    expect(r.sbShove.tooTight).toBe(5);
+    expect(r.sbShove.evLossBB).toBeCloseTo(2, 5); // 5 × 0.4 BB
+    expect(r.worst.every((w: { cls: string }) => ['verified', 'nearThreshold', 'inconclusiveBounty'].includes(w.cls))).toBe(true);
   });
 });
 

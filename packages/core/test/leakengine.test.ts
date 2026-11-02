@@ -40,7 +40,13 @@ describe('leak engine v2 — statistics', () => {
 });
 
 describe('leak engine v2 — solver evidence and PKO', () => {
-  const pf = (heroAction: 'shove' | 'call' | 'fold', grade: string, ev: number, role: 'sbShove' | 'bbCall' = 'sbShove') => ({ role, stackBB: 10, heroAction, grade, evLossBB: ev, bestAction: heroAction === 'fold' ? (role === 'sbShove' ? 'shove' : 'call') : 'fold', heroClass: 'K9o' });
+  const pf = (heroAction: 'shove' | 'call' | 'fold', grade: string, ev: number, role: 'sbShove' | 'bbCall' = 'sbShove') => ({ role, stackBB: 10, heroAction, grade, evLossBB: ev, bestAction: heroAction === 'fold' ? (role === 'sbShove' ? 'shove' : 'call') : 'fold', heroClass: 'K9o', robust: true, evLossRangeBB: [ev * 0.8, ev * 1.2] as [number, number] });
+  it('a mistake the grid rounding could have produced is never verified', () => {
+    expect(classifySolver(row({ pfAudit: { ...pf('fold', 'mistake', 0.8), robust: false } }))).toBe('nearThreshold');
+    // legacy rows without the robustness check are not verified either
+    const { robust: _r, ...legacy } = pf('fold', 'mistake', 0.8);
+    expect(classifySolver(row({ pfAudit: legacy }))).toBe('nearThreshold');
+  });
   it('folding where chip EV says shove/call stays verified in PKO; aggressive mistakes there are inconclusive', () => {
     expect(classifySolver(row({ formatGroup: 'PKO', pfAudit: pf('fold', 'mistake', 0.8) }))).toBe('verified');
     expect(classifySolver(row({ formatGroup: 'PKO', pfAudit: pf('shove', 'major', 1.2) }))).toBe('inconclusiveBounty');

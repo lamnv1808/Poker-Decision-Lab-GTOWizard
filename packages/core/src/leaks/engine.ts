@@ -27,7 +27,9 @@ export interface DecisionRow {
   facingBetPct: number | null;
   requiredEq: number | null;
   multiway: boolean;
-  pfAudit: null | { role: 'sbShove' | 'bbCall'; stackBB: number; heroAction: 'shove' | 'call' | 'fold' | 'other'; grade: string | null; evLossBB: number | null; bestAction: string; heroClass: string };
+  pfAudit: null | { role: 'sbShove' | 'bbCall'; stackBB: number; heroAction: 'shove' | 'call' | 'fold' | 'other'; grade: string | null; evLossBB: number | null; bestAction: string; heroClass: string; robust?: boolean; evLossRangeBB?: [number, number] | null };
+  /** Tournament (or hand) id, used as the cluster for statistics: decisions in one tournament are not independent. */
+  cluster?: string | null;
 }
 
 /** 90% Wilson score interval for k successes in n trials. */
@@ -263,7 +265,7 @@ export function analyzePatterns(rows: readonly DecisionRow[], defs: readonly Pat
   return out;
 }
 
-export type SolverClass = 'verified' | 'inconclusiveBounty' | 'correct' | 'outsideModel';
+export type SolverClass = 'verified' | 'inconclusiveBounty' | 'nearThreshold' | 'correct' | 'outsideModel';
 
 export interface SolverFinding {
   key: string; // e.g. pf:sbShove:tooTight:10-15
@@ -272,8 +274,15 @@ export interface SolverFinding {
   stackBand: string;
   n: number; // verified mistakes
   spots: number; // all solver-graded spots in this role/band
+  /** SUM of chip-EV loss (BB) over the verified mistakes, at the solved grid point (not an average). */
   evLossBB: number;
+  /** Conservative sum: each mistake's smallest loss over the grid cell around its exact stack/antes. */
+  evLossMinBB: number;
+  /** Average chip-EV loss per verified mistake (BB). */
+  avgEvLossBB: number;
   inconclusive: number; // PKO verdicts the bounty could overturn
+  /** Same-direction mistakes that the stack/ante rounding could have produced (not counted as verified). */
+  nearThreshold: number;
   examples: string[];
   lastSeen: string | null;
   confidence: 'low' | 'medium' | 'high';
@@ -291,12 +300,14 @@ export function classifySolver(d: DecisionRow): SolverClass {
   if (!mistake) return 'correct';
   const aggressive = p.heroAction !== 'fold';
   if (aggressive && d.formatGroup === 'PKO') return 'inconclusiveBounty';
+  // the stack/ante rounding to the solved grid could have produced the verdict → not verified
+  if (p.robust !== true) return 'nearThreshold';
   return 'verified';
 }
 
 const PF_BANDS: [string, number, number][] = [['≤6', 0, 6], ['6.5–10', 6.5, 10], ['10.5–15', 10.5, 15]];
 
-export function analyzeSolver(rows: readonly DecisionRow[]): { findings: SolverFinding[]; graded: number; verifiedMistakes: number; inconclusive: number; evLossBB: number } {
+export function analyzeSolver(rows: readonly DecisionRow[]): { findings: SolverFinding[]; graded: number; verifiedMistakes: number; inconclusive: number; nearThreshold: number; evLossBB: number } {
   const spots = rows.filter((d) => d.pfAudit && d.pfAudit.grade && d.pfAudit.heroAction !== 'other');
   const findings: SolverFinding[] = [];
   for (const role of ['sbShove', 'bbCall'] as const)
@@ -306,11 +317,12 @@ export function analyzeSolver(rows: readonly DecisionRow[]): { findings: SolverF
         const wrongWay = inBand.filter((d) => {
           const c = classifySolver(d);
           const fold = d.pfAudit!.heroAction === 'fold';
-          return (c === 'verified' || c === 'inconclusiveBounty') && (direction === 'tooTight' ? fold : !fold);
+          return (c === 'verified' || c === 'inconclusiveBounty' || c === 'nearThreshold') && (direction === 'tooTight' ? fold : !fold);
         });
         const verified = wrongWay.filter((d) => classifySolver(d) === 'verified');
         if (!wrongWay.length) continue;
         const ev = verified.reduce((s, d) => s + (d.pfAudit!.evLossBB ?? 0), 0);
+        const evMin = verified.reduce((s, d) => s + (d.pfAudit!.evLossRangeBB?.[0] ?? d.pfAudit!.evLossBB ?? 0), 0);
         const sorted = [...verified].sort((a, b) => (b.pfAudit!.evLossBB ?? 0) - (a.pfAudit!.evLossBB ?? 0));
         findings.push({
           key: `pf:${role}:${direction}:${band}`,
@@ -320,7 +332,10 @@ export function analyzeSolver(rows: readonly DecisionRow[]): { findings: SolverF
           n: verified.length,
           spots: inBand.length,
           evLossBB: Math.round(ev * 100) / 100,
-          inconclusive: wrongWay.length - verified.length,
+          evLossMinBB: Math.round(evMin * 100) / 100,
+          avgEvLossBB: verified.length ? Math.round((ev / verified.length) * 100) / 100 : 0,
+          inconclusive: wrongWay.filter((d) => classifySolver(d) === 'inconclusiveBounty').length,
+          nearThreshold: wrongWay.filter((d) => classifySolver(d) === 'nearThreshold').length,
           examples: sorted.slice(0, 8).map((d) => d.id),
           lastSeen: verified.reduce<string | null>((m, d) => (d.playedAt && (!m || d.playedAt > m) ? d.playedAt : m), null),
           confidence: verified.length >= 10 ? 'high' : verified.length >= 4 ? 'medium' : 'low',
@@ -332,6 +347,7 @@ export function analyzeSolver(rows: readonly DecisionRow[]): { findings: SolverF
     graded: spots.length,
     verifiedMistakes: spots.filter((d) => classifySolver(d) === 'verified').length,
     inconclusive: spots.filter((d) => classifySolver(d) === 'inconclusiveBounty').length,
+    nearThreshold: spots.filter((d) => classifySolver(d) === 'nearThreshold').length,
     evLossBB: Math.round(spots.filter((d) => classifySolver(d) === 'verified').reduce((s, d) => s + (d.pfAudit!.evLossBB ?? 0), 0) * 100) / 100,
   };
 }

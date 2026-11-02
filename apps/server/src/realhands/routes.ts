@@ -316,7 +316,7 @@ realRouter.post('/decisions/:id/answer', async (req, res) => {
   const topics = d.topics as Topic[];
   // exact heads-up push/fold spot: show the solver's chip-EV verdict for the learner's answer
   // (informational; it does not grade the replay or move any rating)
-  const pfa = d.pfAudit as { role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string } | null;
+  const pfa = d.pfAudit as { role: 'sbShove' | 'bbCall'; stackBB: number; deadBB: number; heroClass: string; exactStackBB?: number; exactDeadBB?: number } | null;
   let pushFold: ReturnType<typeof pushFoldChoiceVerdict> | null = null;
   if (pfa) {
     const behind = (snap.state.players.find((p) => p.id === snap.heroId)?.stack ?? 0) + (snap.state.players.find((p) => p.id === snap.heroId)?.streetCommitted ?? 0);
