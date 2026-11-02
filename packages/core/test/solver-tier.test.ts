@@ -127,7 +127,7 @@ describe('Solver tier is never claimed outside exact spots', () => {
     }
   });
 
-  it('random deep-stacked tables: every solver label comes from an exact push/fold spot or the solved flop library', () => {
+  it('random deep-stacked tables: every solver label comes from an exact push/fold spot', () => {
     let decisions = 0;
     for (let seed = 1; seed <= 120; seed++) {
       const cfg = randomSimConfig(seed, { tableSize: 2 + (seed % 5), stackBB: seed % 3 === 0 ? 10 : 40 });
@@ -141,7 +141,7 @@ describe('Solver tier is never claimed outside exact spots', () => {
       for (const d of run.decisions) {
         if (!d.feedback) continue;
         decisions++;
-        if (d.feedback.tier === 'solver') expect(d.info.solver ?? d.oracle).toBeTruthy();
+        if (d.feedback.tier === 'solver') expect(d.info.solver).toBeTruthy(); // random tables have no solved-flop node
         if (d.feedback.tier !== 'solver') expect(d.feedback.assessment).not.toBe('solverVerified');
         if (d.feedback.tier === 'model') expect(d.feedback.basis).toBe('modelEv');
         if (d.feedback.basis === 'modelEv') expect(d.feedback.tier).not.toBe('solver');
