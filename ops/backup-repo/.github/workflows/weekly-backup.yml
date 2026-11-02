@@ -1,0 +1,204 @@
+# Weekly production backup for Poker Decision Lab.
+#
+# Install this file as .github/workflows/weekly-backup.yml in a PRIVATE repository (see
+# docs/BACKUP.md). It refuses to run in a public repository, because workflow artifacts of a public
+# repository can be downloaded by any GitHub user.
+#
+# Each run: pg_dump (one consistent snapshot) → restore into a throw-away Postgres 18 → the app's own
+# integrity report and a server smoke test against the restored copy → GPG AES-256 encryption →
+# private artifact kept 35 days (≥ 4 weekly recovery points). Any failure opens an issue in this
+# repository (and GitHub e-mails the owner about the failed run).
+#
+# Storage: the encrypted dump is kept as a private workflow artifact (35 days) and, when the optional
+# BACKUP_S3_* secrets are set, also copied to private S3-compatible object storage (e.g. Cloudflare R2
+# or Backblaze B2; set the retention there with a lifecycle rule, recommended 8 weeks).
+#
+# Required repository secrets:
+#   PDL_DATABASE_URL   Render "External Database URL" of the production database (read access is enough)
+#   BACKUP_PASSPHRASE  long random passphrase; keep a copy in your password manager — without it the
+#                      backups cannot be decrypted
+# Optional (object storage): BACKUP_S3_BUCKET, BACKUP_S3_ENDPOINT, BACKUP_S3_ACCESS_KEY_ID,
+#                      BACKUP_S3_SECRET_ACCESS_KEY (a key limited to that one bucket)
+name: weekly-backup
+
+on:
+  schedule:
+    - cron: '17 19 * * 0' # Sundays 19:17 UTC (Monday 02:17 in Vietnam)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: weekly-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      restore:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: restore
+          POSTGRES_DB: restore
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      RESTORE_URL: postgresql://postgres:restore@localhost:5432/restore
+    steps:
+      - name: Refuse to run in a public repository
+        if: ${{ !github.event.repository.private }}
+        run: |
+          echo "::error::This repository is public: backup artifacts would be downloadable by anyone. Use a private repository."
+          exit 1
+
+      - name: Check secrets
+        env:
+          PDL_DATABASE_URL: ${{ secrets.PDL_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$PDL_DATABASE_URL" || { echo "::error::secret PDL_DATABASE_URL is missing"; exit 1; }
+          test ${#BACKUP_PASSPHRASE} -ge 20 || { echo "::error::secret BACKUP_PASSPHRASE is missing or shorter than 20 characters"; exit 1; }
+
+      - name: Install PostgreSQL 18 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-18
+          /usr/lib/postgresql/18/bin/pg_dump --version
+
+      - name: Dump production (one consistent snapshot, read-only)
+        env:
+          PDL_DATABASE_URL: ${{ secrets.PDL_DATABASE_URL }}
+        run: |
+          umask 077
+          URL="$PDL_DATABASE_URL"; case "$URL" in *sslmode=*) ;; *\?*) URL="$URL&sslmode=require" ;; *) URL="$URL?sslmode=require" ;; esac
+          STAMP=$(date -u +%Y%m%dT%H%MZ); echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/18/bin/pg_dump --format=custom --no-owner --no-acl --compress=6 --file=pdl-$STAMP.dump "$URL"
+          /usr/lib/postgresql/18/bin/pg_restore --list pdl-$STAMP.dump > toc.txt
+          echo "dump: $(stat -c %s pdl-$STAMP.dump) bytes, $(grep -c 'TABLE DATA' toc.txt) tables with data"
+
+      - name: Restore into an isolated database
+        run: |
+          /usr/lib/postgresql/18/bin/pg_restore --no-owner --no-acl --exit-on-error --dbname="$RESTORE_URL" pdl-$STAMP.dump
+          # constraints (primary/foreign keys, unique) are created after the data, so a successful
+          # restore also proves referential integrity of the snapshot
+          psql "$RESTORE_URL" -Atc "SELECT count(*) FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL" > migrations.txt
+          psql "$RESTORE_URL" -At -F ' ' -c "SELECT relname, n_live_tup FROM pg_stat_user_tables ORDER BY relname" > /dev/null
+          for t in User RealHand RealDecision Annotation DecisionAttempt LeakMemory; do
+            printf '%s %s\n' "$t" "$(psql "$RESTORE_URL" -Atc "SELECT count(*) FROM \"$t\"" 2>/dev/null || echo missing)"
+          done | tee counts.txt
+          test "$(awk '$1=="User"{print $2}' counts.txt)" -ge 1
+          test "$(awk '$1=="RealHand"{print $2}' counts.txt)" -ge 1
+
+      - uses: actions/checkout@v4
+        with:
+          path: backup-repo
+
+      - name: Integrity checks on the restored copy
+        run: |
+          psql "$RESTORE_URL" -At -F '|' -f backup-repo/scripts/integrity.sql | tee integrity.txt
+          python3 - <<'PY'
+          import json
+          rows = [l.split('|') for l in open('integrity.txt').read().split()]
+          bad = [k for k, n in rows if int(n) != 0]
+          json.dump({'ok': not bad, 'failed': bad}, open('integrity.json', 'w'))
+          print('integrity ok:', not bad, bad)
+          raise SystemExit(1 if bad else 0)
+          PY
+          echo "integrity checks: $(grep -c . integrity.txt) passed" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: lamnv1808/Poker-Decision-Lab-GTOWizard
+          path: app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Server smoke test (released app) on the restored copy
+        working-directory: app
+        env:
+          DATABASE_URL: ${{ env.RESTORE_URL }}
+          APP_SECRET: restore-check-only-not-production
+          NODE_ENV: test
+          PORT: '8099'
+        run: |
+          npm ci --no-audit --no-fund
+          npx prisma generate --schema apps/server/prisma/schema.prisma
+          (cd apps/server && npx tsx src/main.ts > ../../../server.log 2>&1 &)
+          for i in $(seq 1 60); do curl -fs localhost:8099/api/health >/dev/null && break; sleep 2; done
+          curl -fs localhost:8099/api/health
+          curl -fs localhost:8099/api/auth/config
+          echo "server smoke test on the restored copy: ok" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Encrypt and write manifest
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          umask 077
+          sha256sum pdl-$STAMP.dump > pdl-$STAMP.sha256
+          printf '%s' "$BACKUP_PASSPHRASE" > .pass
+          gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file .pass --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512 --s2k-count 65011712 -o pdl-$STAMP.dump.gpg pdl-$STAMP.dump
+          # prove the encrypted file decrypts to the same bytes
+          gpg --batch --quiet --pinentry-mode loopback --passphrase-file .pass -d pdl-$STAMP.dump.gpg | sha256sum | cut -c1-64 | diff - <(cut -c1-64 pdl-$STAMP.sha256)
+          rm -f .pass pdl-$STAMP.dump
+          {
+            echo "backup: pdl-$STAMP.dump.gpg"
+            echo "plaintext sha256: $(cut -c1-64 pdl-$STAMP.sha256)"
+            echo "applied migrations: $(cat migrations.txt)"
+            cat counts.txt
+            python3 -c "import json; r=json.load(open('integrity.json')); print('integrity ok:', r['ok'], '| failed:', r['failed'])"
+          } | tee manifest.txt
+          cat manifest.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdl-backup-${{ env.STAMP }}
+          path: |
+            pdl-*.dump.gpg
+            pdl-*.sha256
+            manifest.txt
+          retention-days: 35
+          if-no-files-found: error
+
+      - name: Copy to private object storage (optional)
+        env:
+          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ENDPOINT_URL: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION || 'auto' }}
+          KEEP_WEEKS: ${{ vars.BACKUP_KEEP_WEEKS || '8' }}
+        run: |
+          if [ -z "$BUCKET" ]; then echo "object storage not configured — artifact only"; exit 0; fi
+          for f in pdl-$STAMP.dump.gpg pdl-$STAMP.sha256 manifest.txt; do
+            aws s3 cp --only-show-errors "$f" "s3://$BUCKET/weekly/$STAMP/$f"
+          done
+          # verify the upload: size of the encrypted dump in storage equals the local file
+          remote=$(aws s3api head-object --bucket "$BUCKET" --key "weekly/$STAMP/pdl-$STAMP.dump.gpg" --query ContentLength --output text)
+          test "$remote" = "$(stat -c %s pdl-$STAMP.dump.gpg)"
+          echo "object storage: weekly/$STAMP verified ($remote bytes)" >> "$GITHUB_STEP_SUMMARY"
+          # retention: keep the newest KEEP_WEEKS recovery points (never fewer than 4), delete older ones
+          keep=$(( KEEP_WEEKS < 4 ? 4 : KEEP_WEEKS ))
+          aws s3 ls "s3://$BUCKET/weekly/" | awk '{print $2}' | sed 's#/$##' | sort | head -n -"$keep" | while read -r old; do
+            [ -n "$old" ] && aws s3 rm --only-show-errors --recursive "s3://$BUCKET/weekly/$old/" && echo "retention: removed weekly/$old" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Report failure to the owner
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Weekly backup FAILED (${new Date().toISOString().slice(0, 10)})`,
+              body: `The weekly Poker Decision Lab backup failed. Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nNo new recovery point was created this week. See docs/BACKUP.md (Troubleshooting).`,
+            });

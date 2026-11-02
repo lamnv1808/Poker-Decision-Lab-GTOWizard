@@ -61,7 +61,7 @@ GitHub user, so the job must live in a private repository (it refuses to run oth
    counts and `integrity ok: True`. Then tell Claude the run is green (no links to files or secrets needed).
 
 Failure alerting: a failed run opens an issue in that repository and GitHub e-mails you about the failed
-workflow. GitHub disables scheduled workflows after 60 days without repository activity — if the issue
+workflow. The monthly restore drill also fails if the newest backup is older than 8 days — if the issue
 list and the Actions tab stay silent for more than a week, check the workflow is still enabled.
 
 ## Restore

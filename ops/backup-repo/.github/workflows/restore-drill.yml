@@ -1,0 +1,158 @@
+# Restore drill for Poker Decision Lab backups (monthly, and on demand).
+#
+# Proves that the newest OFF-PLATFORM backup can be downloaded, decrypted and restored — using only
+# this repository's secrets, a GitHub runner and public tools. Nothing here depends on Render being
+# up (except for nothing at all: the database is not contacted) or on any development environment.
+#
+# Steps: find the newest recovery point in object storage (falls back to the newest workflow
+# artifact) → fail if it is older than 8 days (the weekly job has stopped) → download → verify the
+# SHA-256 manifest → decrypt with BACKUP_PASSPHRASE → verify the plaintext SHA-256 → pg_restore into an
+# isolated Postgres 18 → the app's integrity report and a server smoke test on the restored copy.
+# A failure opens an issue (and GitHub e-mails the owner).
+name: restore-drill
+
+on:
+  schedule:
+    - cron: '41 20 1 * *' # monthly, 1st of the month 20:41 UTC (03:41 next day in Vietnam)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  drill:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      restore:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: restore
+          POSTGRES_DB: restore
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      RESTORE_URL: postgresql://postgres:restore@localhost:5432/restore
+    steps:
+      - name: Refuse to run in a public repository
+        if: ${{ !github.event.repository.private }}
+        run: |
+          echo "::error::This repository is public. Use a private repository for backups."
+          exit 1
+
+      - name: Install PostgreSQL 18 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-18
+
+      - name: Download the newest recovery point (object storage, else workflow artifact)
+        env:
+          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ENDPOINT_URL: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION || 'auto' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          umask 077
+          mkdir -p dl
+          if [ -n "$BUCKET" ]; then
+            latest=$(aws s3 ls "s3://$BUCKET/weekly/" | awk '{print $2}' | sed 's#/$##' | sort | tail -n 1)
+            test -n "$latest" || { echo "::error::no recovery point in object storage"; exit 1; }
+            aws s3 cp --only-show-errors --recursive "s3://$BUCKET/weekly/$latest/" dl/
+            echo "SOURCE=object storage weekly/$latest" >> "$GITHUB_ENV"
+          else
+            run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow weekly-backup.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
+            test -n "$run" || { echo "::error::no successful weekly-backup run"; exit 1; }
+            gh run download "$run" -R "$GITHUB_REPOSITORY" -D dl
+            find dl -type f -exec mv {} dl/ \; 2>/dev/null || true
+            echo "SOURCE=workflow artifact of run $run" >> "$GITHUB_ENV"
+          fi
+          f=$(ls dl/pdl-*.dump.gpg | head -n 1)
+          stamp=$(basename "$f" .dump.gpg | sed 's/^pdl-//')
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          # staleness: the newest point must be at most 8 days old
+          age_days=$(( ( $(date -u +%s) - $(date -u -d "$(echo "$stamp" | sed -E 's/(....)(..)(..)T(..)(..)Z/\1-\2-\3 \4:\5:00/')" +%s) ) / 86400 ))
+          echo "newest recovery point: $stamp ($age_days days old) from ${SOURCE:-}" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$age_days" -le 8 || { echo "::error::the newest backup is $age_days days old — the weekly job is not running"; exit 1; }
+
+      - name: Decrypt and verify checksums
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          umask 077
+          printf '%s' "$BACKUP_PASSPHRASE" > .pass
+          gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file .pass -d "dl/pdl-$STAMP.dump.gpg" > pdl.dump
+          rm -f .pass
+          want=$(cut -c1-64 "dl/pdl-$STAMP.sha256")
+          got=$(sha256sum pdl.dump | cut -c1-64)
+          test "$want" = "$got" || { echo "::error::plaintext checksum mismatch"; exit 1; }
+          echo "decrypted, SHA-256 verified (${got:0:16}…)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore into an isolated database
+        run: |
+          /usr/lib/postgresql/18/bin/pg_restore --no-owner --no-acl --exit-on-error --dbname="$RESTORE_URL" pdl.dump
+          rm -f pdl.dump
+          for t in User RealHand RealDecision Annotation DecisionAttempt; do
+            printf '%s %s\n' "$t" "$(psql "$RESTORE_URL" -Atc "SELECT count(*) FROM \"$t\"")"
+          done | tee counts.txt
+          cat counts.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        with:
+          path: backup-repo
+
+      - name: Integrity checks on the restored copy
+        run: |
+          psql "$RESTORE_URL" -At -F '|' -f backup-repo/scripts/integrity.sql | tee integrity.txt
+          python3 - <<'PY'
+          import json
+          rows = [l.split('|') for l in open('integrity.txt').read().split()]
+          bad = [k for k, n in rows if int(n) != 0]
+          json.dump({'ok': not bad, 'failed': bad}, open('integrity.json', 'w'))
+          print('integrity ok:', not bad, bad)
+          raise SystemExit(1 if bad else 0)
+          PY
+          echo "integrity checks: $(grep -c . integrity.txt) passed" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: lamnv1808/Poker-Decision-Lab-GTOWizard
+          path: app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Server smoke test (released app) on the restored copy
+        working-directory: app
+        env:
+          DATABASE_URL: ${{ env.RESTORE_URL }}
+          APP_SECRET: restore-check-only-not-production
+          NODE_ENV: test
+          PORT: '8099'
+        run: |
+          npm ci --no-audit --no-fund
+          npx prisma generate --schema apps/server/prisma/schema.prisma
+          (cd apps/server && npx tsx src/main.ts > ../../../server.log 2>&1 &)
+          for i in $(seq 1 60); do curl -fs localhost:8099/api/health >/dev/null && break; sleep 2; done
+          curl -fs localhost:8099/api/health
+          curl -fs localhost:8099/api/auth/config
+          echo "server smoke test on the restored copy: ok" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report failure to the owner
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Restore drill FAILED (${new Date().toISOString().slice(0, 10)})`,
+              body: `The monthly restore drill failed — the newest backup could not be proven recoverable. Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nSee README.md (Troubleshooting).`,
+            });
