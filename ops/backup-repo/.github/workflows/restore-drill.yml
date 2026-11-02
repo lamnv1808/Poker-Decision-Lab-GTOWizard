@@ -65,21 +65,29 @@ jobs:
             latest=$(aws s3 ls "s3://$BUCKET/weekly/" | awk '{print $2}' | sed 's#/$##' | sort | tail -n 1)
             test -n "$latest" || { echo "::error::no recovery point in object storage"; exit 1; }
             aws s3 cp --only-show-errors --recursive "s3://$BUCKET/weekly/$latest/" dl/
-            echo "SOURCE=object storage weekly/$latest" >> "$GITHUB_ENV"
+            source="object storage weekly/$latest"
           else
             run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow weekly-backup.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
             test -n "$run" || { echo "::error::no successful weekly-backup run"; exit 1; }
             gh run download "$run" -R "$GITHUB_REPOSITORY" -D dl
             find dl -type f -exec mv {} dl/ \; 2>/dev/null || true
-            echo "SOURCE=workflow artifact of run $run" >> "$GITHUB_ENV"
+            source="private workflow artifact of weekly-backup run $run"
           fi
           f=$(ls dl/pdl-*.dump.gpg | head -n 1)
           stamp=$(basename "$f" .dump.gpg | sed 's/^pdl-//')
           echo "STAMP=$stamp" >> "$GITHUB_ENV"
           # staleness: the newest point must be at most 8 days old
           age_days=$(( ( $(date -u +%s) - $(date -u -d "$(echo "$stamp" | sed -E 's/(....)(..)(..)T(..)(..)Z/\1-\2-\3 \4:\5:00/')" +%s) ) / 86400 ))
-          echo "newest recovery point: $stamp ($age_days days old) from ${SOURCE:-}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "newest recovery point: $stamp ($age_days days old) from $source" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "encrypted file: $(stat -c %s "$f") bytes; plaintext SHA-256 expected: $(cut -c1-16 "dl/pdl-$stamp.sha256")…" | tee -a "$GITHUB_STEP_SUMMARY"
           test "$age_days" -le 8 || { echo "::error::the newest backup is $age_days days old — the weekly job is not running"; exit 1; }
+
+      - name: Key fingerprint (lets the owner check the password-manager copy without revealing it)
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          fp=$(python3 -c "import hashlib,os; print(hashlib.pbkdf2_hmac('sha256', os.environ['BACKUP_PASSPHRASE'].encode(), b'pdl-backup-key-check-v1', 600000)[:6].hex())")
+          echo "key fingerprint: $fp (compare with README → Check your passphrase)" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Decrypt and verify checksums
         env:
@@ -92,7 +100,7 @@ jobs:
           want=$(cut -c1-64 "dl/pdl-$STAMP.sha256")
           got=$(sha256sum pdl.dump | cut -c1-64)
           test "$want" = "$got" || { echo "::error::plaintext checksum mismatch"; exit 1; }
-          echo "decrypted, SHA-256 verified (${got:0:16}…)" >> "$GITHUB_STEP_SUMMARY"
+          echo "decrypted with BACKUP_PASSPHRASE; plaintext SHA-256 verified (${got:0:16}…)" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Restore into an isolated database
         run: |
@@ -141,8 +149,13 @@ jobs:
           npx prisma generate --schema apps/server/prisma/schema.prisma
           (cd apps/server && npx tsx src/main.ts > ../../../server.log 2>&1 &)
           for i in $(seq 1 60); do curl -fs localhost:8099/api/health >/dev/null && break; sleep 2; done
-          curl -fs localhost:8099/api/health
-          curl -fs localhost:8099/api/auth/config
+          echo "GET /api/health -> $(curl -fs localhost:8099/api/health)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "GET /api/auth/config -> $(curl -fs localhost:8099/api/auth/config)" | tee -a "$GITHUB_STEP_SUMMARY"
+          # the app reads and writes the restored database (throw-away user, isolated copy only)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -c jar -H 'content-type: application/json' -d '{"email":"restore-check@example.invalid","password":"restore-check-only-123","displayName":"check"}' localhost:8099/api/auth/register)
+          me=$(curl -s -o /dev/null -w '%{http_code}' -b jar localhost:8099/api/auth/me)
+          echo "app on restored copy: register -> HTTP $code, session read -> HTTP $me" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$code" = 201 && test "$me" = 200
           echo "server smoke test on the restored copy: ok" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report failure to the owner

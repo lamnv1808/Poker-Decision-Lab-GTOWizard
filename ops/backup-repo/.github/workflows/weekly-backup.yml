@@ -64,6 +64,13 @@ jobs:
           test -n "$PDL_DATABASE_URL" || { echo "::error::secret PDL_DATABASE_URL is missing"; exit 1; }
           test ${#BACKUP_PASSPHRASE} -ge 20 || { echo "::error::secret BACKUP_PASSPHRASE is missing or shorter than 20 characters"; exit 1; }
 
+      - name: Key fingerprint (lets the owner check the password-manager copy without revealing it)
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          fp=$(python3 -c "import hashlib,os; print(hashlib.pbkdf2_hmac('sha256', os.environ['BACKUP_PASSPHRASE'].encode(), b'pdl-backup-key-check-v1', 600000)[:6].hex())")
+          echo "key fingerprint: $fp (compare with README → Check your passphrase)" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Install PostgreSQL 18 client
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -134,8 +141,13 @@ jobs:
           npx prisma generate --schema apps/server/prisma/schema.prisma
           (cd apps/server && npx tsx src/main.ts > ../../../server.log 2>&1 &)
           for i in $(seq 1 60); do curl -fs localhost:8099/api/health >/dev/null && break; sleep 2; done
-          curl -fs localhost:8099/api/health
-          curl -fs localhost:8099/api/auth/config
+          echo "GET /api/health -> $(curl -fs localhost:8099/api/health)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "GET /api/auth/config -> $(curl -fs localhost:8099/api/auth/config)" | tee -a "$GITHUB_STEP_SUMMARY"
+          # the app reads and writes the restored database (throw-away user, isolated copy only)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -c jar -H 'content-type: application/json' -d '{"email":"restore-check@example.invalid","password":"restore-check-only-123","displayName":"check"}' localhost:8099/api/auth/register)
+          me=$(curl -s -o /dev/null -w '%{http_code}' -b jar localhost:8099/api/auth/me)
+          echo "app on restored copy: register -> HTTP $code, session read -> HTTP $me" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$code" = 201 && test "$me" = 200
           echo "server smoke test on the restored copy: ok" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Encrypt and write manifest
