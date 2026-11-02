@@ -90,6 +90,62 @@ describe('release safety: backup endpoint, integrity report, test-account remova
     expect(manifestHash({ rows: { b: 1, a: 2 } })).toBe(createHash('sha256').update('{"rows":{"a":2,"b":1}}').digest('hex'));
   });
 
+  it('revalidates inside the deletion transaction, counts cascaded rows, revokes sessions, rolls back on mismatch', async () => {
+    const t = await newUser('gone3');
+    const keep = await newUser('stays3');
+    const mem = await prisma.leakMemory.create({ data: { userId: t.id, leakKey: 'training:potOdds', source: 'training', evidence: 'training', category: 'math', label: { en: 'x', vi: 'x' }, drill: 'math', status: 'active', severity: 0.5, confidence: 'low', n: 3 } });
+    await prisma.leakSnapshot.create({ data: { memoryId: mem.id, status: 'active', n: 3, severity: 0.5 } });
+    await t.agent.get('/api/auth/me').expect(200);
+    const post = (body: object) => request(app).post('/api/admin/accounts/delete').set('x-admin-token', admin()).send(body);
+    const dry = (await post({ ids: [t.id] }).expect(200)).body;
+    // rows without userId that Postgres removes by cascade are part of the manifest (and the hash)
+    expect(dry.manifest.cascade.LeakSnapshot).toBe(1);
+    expect(dry.manifest.rows.LeakMemory).toBe(1);
+    expect(dry.manifest.rows.Session).toBeGreaterThanOrEqual(1);
+
+    // the transaction itself refuses a stale hash even if the caller skips the endpoint's pre-check
+    const { deleteTestAccounts, DeletionAborted } = await import('../src/accountCleanup');
+    await prisma.leakSnapshot.create({ data: { memoryId: mem.id, status: 'active', n: 4, severity: 0.5 } });
+    await expect(deleteTestAccounts([t.id], dry.hash)).rejects.toBeInstanceOf(DeletionAborted);
+    expect(await prisma.user.count({ where: { id: t.id } })).toBe(1);
+    expect(await prisma.leakSnapshot.count({ where: { memoryId: mem.id } })).toBe(2); // nothing was deleted
+
+    // with the fresh hash: everything goes, cascades verified, sessions revoked, cookie no longer works
+    const fresh = (await post({ ids: [t.id] }).expect(200)).body;
+    expect(fresh.manifest.cascade.LeakSnapshot).toBe(2);
+    const done = (await post({ ids: [t.id], confirmHash: fresh.hash }).expect(200)).body;
+    expect(done.deletedRows.LeakSnapshot).toBe(2);
+    expect(done.deletedRows.User).toBe(1);
+    expect(done.remainingSessions).toBe(0);
+    await t.agent.get('/api/auth/me').expect(401);
+    await keep.agent.get('/api/auth/me').expect(200);
+    expect(done.after.ok).toBe(true);
+  });
+
+  it('a row-count surprise inside the transaction rolls everything back', async () => {
+    const t = await newUser('gone4');
+    const { deleteTestAccounts, dryRunTestAccounts, DeletionAborted } = await import('../src/accountCleanup');
+    const dry = await dryRunTestAccounts([t.id]);
+    // simulate a concurrent writer between the dry run and the deletion: the transaction must notice
+    await prisma.session.create({ data: { userId: t.id, tokenHash: `extra-${Date.now()}`, expiresAt: new Date(Date.now() + 3600_000) } });
+    await expect(deleteTestAccounts([t.id], dry.hash)).rejects.toBeInstanceOf(DeletionAborted);
+    expect(await prisma.user.count({ where: { id: t.id } })).toBe(1);
+    expect(await prisma.session.count({ where: { userId: t.id } })).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the dry run is read-only at the database level', async () => {
+    const t = await newUser('ro');
+    const { dryRunTestAccounts } = await import('../src/accountCleanup');
+    const before = await prisma.session.count({ where: { userId: t.id } });
+    const r = await dryRunTestAccounts([t.id]);
+    expect(r.problems).toEqual([]);
+    await expect(prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+      await tx.$executeRawUnsafe(`DELETE FROM "Session" WHERE "userId" = $1`, t.id);
+    })).rejects.toThrow(/read-only/);
+    expect(await prisma.session.count({ where: { userId: t.id } })).toBe(before);
+  });
+
   it("refuses when other users' data refers to the account", async () => {
     const t = await newUser('referenced');
     const other = await newUser('other');
