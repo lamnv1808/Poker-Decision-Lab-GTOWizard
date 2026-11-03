@@ -3,6 +3,10 @@ import { expect, type Page } from '@playwright/test';
 export const PASSWORD = 'correct horse battery';
 
 export async function register(page: Page, name = 'E2E') {
+  // The server allows 20 registrations per client IP per 10 minutes (a production control, unchanged).
+  // The local test server has no proxy in front, so each test presents its own client address
+  // (X-Forwarded-For, trusted for one hop) and the suite can register more than 20 users per run.
+  await page.setExtraHTTPHeaders({ 'X-Forwarded-For': `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}` });
   const email = `${name.toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.dev`;
   await page.goto('/login');
   await page.getByTestId('tab-register').click();
