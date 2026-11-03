@@ -224,7 +224,13 @@ async function nextItem(tx: Prisma.TransactionClient, userId: string, s: { id: s
     w = await weights(userId, cfg, hasReal);
     type = null;
   }
-  if (!type) throw new HttpError(409, 'no_items', 'No item types available for this focus');
+  // Everything in the focus ran out mid-session (e.g. every curated scenario played): end normally
+  // through the summary instead of an error. (Ported from the Codex P0 patch.) A focus that can never
+  // serve anything is refused earlier, when the session is created.
+  if (!type) {
+    await tx.trainingSession.update({ where: { id: s.id }, data: { config: cfg as object } });
+    return { done: true, remainingSec, reason: 'no_items' };
+  }
   if (href) {
     /* scenario run already started */
   } else if (type === 'solverFlop') {

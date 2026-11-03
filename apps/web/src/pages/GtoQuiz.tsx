@@ -1,6 +1,6 @@
 import type { HandState } from '@pdl/core/engine';
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, newAttemptId, mixedSessionId } from '../api';
 import { GtoGrid } from '../components/GtoGrid';
 import { PokerTable } from '../components/PokerTable';
@@ -31,6 +31,7 @@ interface Result {
 }
 
 export function GtoQuiz() {
+  const nav = useNavigate();
   const { t, lang } = useT();
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
   // a daily-plan item can pre-select the spot family that matches a detected leak
@@ -52,6 +53,7 @@ export function GtoQuiz() {
   const [street, setStreet] = useState<'preflop' | 'postflop'>(() => (new URLSearchParams(window.location.search).get('street') === 'postflop' ? 'postflop' : 'preflop'));
 
   const next = useCallback(async () => {
+    setSpot(null);
     setResult(null);
     setError(null);
     const [lo, hi] = range.split('-');
@@ -61,6 +63,11 @@ export function GtoQuiz() {
       setError(e);
     }
   }, [range, role]);
+  const advance = useCallback(async () => {
+    const session = mixedSessionId();
+    if (session) nav(`/mixed/${session}`);
+    else await next();
+  }, [nav, next]);
   useEffect(() => {
     if (street === 'preflop') void next();
   }, [next, street]);
@@ -94,12 +101,12 @@ export function GtoQuiz() {
       if (!result && (k === 's' || k === 'c')) void answer(spot.role === 'sbShove' ? 'shove' : 'call');
       if (result && (k === 'enter' || k === 'n' || k === ' ')) {
         e.preventDefault();
-        void next();
+        void advance();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [spot, result, answer, next, street]);
+  }, [spot, result, answer, advance, street]);
 
   const aggressive = spot?.role === 'sbShove' ? 'shove' : 'call';
   return (
@@ -126,8 +133,8 @@ export function GtoQuiz() {
         <span>{t('gto.evLost')}: <b className="text-ink-100">{fmtNum(stats.ev, 2)} BB</b></span>
         <span>{t('gto.streak')}: <b className="text-gold">{stats.streak}</b></span>
       </div>
-      <ErrorNote error={error} />
-      {!spot ? <Spinner /> : (
+      <ErrorNote error={error} onRetry={!spot ? () => void next() : undefined} />
+      {!spot ? (error ? null : <Spinner />) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="gto-spot">
@@ -144,7 +151,10 @@ export function GtoQuiz() {
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={() => void next()} className="w-full rounded-xl bg-felt-500 py-4 text-base font-bold hover:bg-felt-600" data-testid="gto-next">{t('gto.next')} <span className="text-xs opacity-60">(Enter)</span></button>
+              <div className="space-y-2" data-testid="gto-quick-feedback" aria-live="polite">
+                <div className="flex items-center gap-2"><GradeBadge grade={result.grade} /><span>{t('fb.evLoss')}: {fmtNum(result.evLossBB, 2)} BB</span></div>
+                <button type="button" onClick={() => void advance()} className="w-full rounded-xl bg-felt-500 py-4 text-base font-bold hover:bg-felt-600" data-testid="gto-next">{t(mixedSessionId() ? 'mixed.next' : 'gto.next')} <span className="text-xs opacity-60">(Enter)</span></button>
+              </div>
             )}
           </div>
           <Panel title={t('run.feedback')}>

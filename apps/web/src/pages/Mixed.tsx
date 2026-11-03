@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { Empty, ErrorNote, GradeBadge, Panel, Spinner, Stat, Toggle } from '../components/ui';
@@ -37,13 +37,20 @@ const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padSta
 /** Ask the server for the next item and go there (or to the summary when time is up). */
 export function useMixedNext() {
   const nav = useNavigate();
-  return async (id: string) => {
-    const r = await api.post<{ done: boolean; href?: string }>(`/mixed/sessions/${id}/next`);
-    if (r.done) {
-      await api.post(`/mixed/sessions/${id}/end`);
-      nav(`/mixed/${id}/summary`);
-    } else nav(r.href!);
-  };
+  return useCallback(
+    async (id: string) => {
+      const r = await api.post<{ done: boolean; href?: string }>(`/mixed/sessions/${id}/next`);
+      if (r.done) {
+        await api.post(`/mixed/sessions/${id}/end`);
+        nav(`/mixed/${id}/summary`);
+        return;
+      }
+      // only ever navigate inside the app (ported from the Codex P0 patch)
+      if (!r.href?.startsWith('/') || r.href.startsWith('//')) throw new Error('Unable to open the next item. Please try again.');
+      nav(r.href);
+    },
+    [nav],
+  );
 }
 
 export function MixedSetup() {
@@ -114,6 +121,24 @@ export function MixedBar() {
   const [info, setInfo] = useState<SessionInfo | null>(null);
   const [left, setLeft] = useState(0);
   const next = useMixedNext();
+  // one advance at a time; a failure is shown instead of being swallowed (ported from the Codex P0 patch)
+  const [barError, setBarError] = useState<unknown>(null);
+  const [barBusy, setBarBusy] = useState(false);
+  const pending = useRef(false);
+  const advance = async () => {
+    if (pending.current || !id) return;
+    pending.current = true;
+    setBarBusy(true);
+    setBarError(null);
+    try {
+      await next(id);
+    } catch (e) {
+      setBarError(e);
+    } finally {
+      pending.current = false;
+      setBarBusy(false);
+    }
+  };
   useEffect(() => {
     if (!id) return;
     api.get<SessionInfo>(`/mixed/sessions/${id}`).then((s) => {
@@ -133,8 +158,9 @@ export function MixedBar() {
       <span className="tabular text-ink-300">{left > 0 ? `${mmss(left)} ${t('mixed.left')}` : t('mixed.timeUp')}</span>
       <span className="text-ink-300">{t('mixed.answered', { n: info.answered })}</span>
       <span className="flex-1" />
-      <button type="button" onClick={() => void next(id)} className="rounded-md bg-felt-500 px-3 py-1 font-semibold" data-testid="mixed-bar-next">{left > 0 ? t('mixed.next') : t('mixed.finish')}</button>
-      <Link to={`/mixed/${id}/summary`} onClick={() => void api.post(`/mixed/sessions/${id}/end`)} className="text-xs text-ink-400">{t('mixed.end')}</Link>
+      <button type="button" disabled={barBusy} onClick={() => void advance()} className="rounded-md bg-felt-500 px-3 py-1 font-semibold disabled:opacity-60" data-testid="mixed-bar-next">{left > 0 ? t('mixed.next') : t('mixed.finish')}</button>
+      <Link to={`/mixed/${id}/summary`} onClick={() => void api.post(`/mixed/sessions/${id}/end`).catch(setBarError)} className="text-xs text-ink-400">{t('mixed.end')}</Link>
+      {barError != null && <div className="w-full"><ErrorNote error={barError} onRetry={() => void advance()} /></div>}
     </div>
   );
 }
@@ -146,11 +172,15 @@ export function MixedRunner() {
   const { t } = useT();
   const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
+  // StrictMode runs effects twice in development; ask the server once per id/attempt (Codex P0 patch)
+  const requested = useRef<string | null>(null);
   useEffect(() => {
+    const key = `${id}:${attempt}`;
+    if (!id || requested.current === key) return;
+    requested.current = key;
     setError(null);
-    if (id) void next(id).catch(setError);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, attempt]);
+    void next(id).catch(setError);
+  }, [id, attempt, next]);
   if (!error) return <Spinner label={t('mixed.loadingNext')} />;
   return (
     <div className="space-y-2">
