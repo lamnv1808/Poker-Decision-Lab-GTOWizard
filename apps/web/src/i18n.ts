@@ -1020,6 +1020,9 @@ const en: Dict = {
   "today.loadingPlan": "Building today's plan…",
   "today.empty": "Nothing to plan right now. Try another duration or start a Mixed session.",
   "mixed.loadingNext": "Preparing the next item…",
+  "common.err.focus_unavailable": "Nothing in this focus can be served yet: Real Hand Replay needs imported hands. Add another focus or import hands first.",
+  "common.err.no_items": "No exercises are left for this focus. Choose more focus areas or start a new session.",
+  "common.err.pool_exhausted": "You have completed every scenario in this pool. Pick another pool or reset your history.",
 };
 
 const vi: Dict = {
@@ -2038,6 +2041,9 @@ const vi: Dict = {
   "today.loadingPlan": "Đang lập kế hoạch hôm nay…",
   "today.empty": "Hiện chưa có gì để lập kế hoạch. Hãy chọn thời lượng khác hoặc bắt đầu buổi tập Hỗn hợp.",
   "mixed.loadingNext": "Đang chuẩn bị bài tiếp theo…",
+  "common.err.focus_unavailable": "Chưa có bài nào cho lựa chọn này: Xem lại ván thật cần có ván đã nhập. Hãy chọn thêm nội dung khác hoặc nhập ván trước.",
+  "common.err.no_items": "Không còn bài tập cho lựa chọn này. Hãy chọn thêm nội dung hoặc bắt đầu buổi tập mới.",
+  "common.err.pool_exhausted": "Bạn đã hoàn thành mọi tình huống trong nhóm này. Hãy chọn nhóm khác hoặc đặt lại lịch sử.",
 };
 
 export const DICTS: Record<Lang, Dict> = { en, vi };

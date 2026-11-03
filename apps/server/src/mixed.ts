@@ -83,9 +83,23 @@ const Create = z.object({
   mode: z.enum(['practice', 'rated']).default('rated'),
 });
 
+/** Item types a focus can serve for this user (imported-hand items need imported hands). */
+export function servableTypes(focus: readonly string[], hasRealHands: boolean): MixedType[] {
+  const out = new Set(focus.flatMap((f) => FOCUS[f] ?? []));
+  if (!hasRealHands) {
+    out.delete('potodds');
+    out.delete('replay');
+  }
+  return [...out];
+}
+
 mixedRouter.post('/sessions', async (req, res) => {
   const userId = requireUser(req);
   const body = parse(Create, req.body ?? {});
+  // Refuse a session that could never serve an item (e.g. only "Real Hand Replay" without imported
+  // hands) instead of creating it and failing on the first /next.
+  const hasReal = (await prisma.realDecision.count({ where: { userId, status: 'accepted' }, take: 1 })) > 0;
+  if (!servableTypes(body.focus, hasReal).length) throw new HttpError(400, 'focus_unavailable', 'Nothing in this focus can be served yet: Real Hand Replay needs imported hands. Add another focus or import hands first.');
   const cfg: MixedConfig = { durationMin: body.durationMin, difficulty: body.difficulty, focus: [...new Set(body.focus)], mix: body.mix, exhausted: [], served: [] };
   const s = await prisma.trainingSession.create({ data: { userId, kind: 'mixed', mode: body.mode, config: cfg as object } });
   res.status(201).json({ id: s.id, mode: s.mode, ...cfg });

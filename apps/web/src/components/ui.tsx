@@ -100,11 +100,22 @@ export function Spinner({ label }: { label?: string } = {}) {
   );
 }
 
+const KNOWN_CODES = new Set(['focus_unavailable', 'no_items', 'pool_exhausted']);
+
+/** Whether trying the same request again can help (connection problems, timeouts, server errors, rate limits). */
+export function isRetryable(error: unknown): boolean {
+  const status = (error as { status?: unknown })?.status;
+  if (typeof status !== 'number') return true;
+  return status === 0 || status === 408 || status === 429 || status >= 500;
+}
+
 /** Human message for any thrown value; never empty. Connection problems are localised. */
 export function errorMessage(error: unknown, t: (k: string) => string): string {
   const code = (error as { code?: unknown })?.code;
   if (code === 'timeout') return t('common.err.timeout');
   if (code === 'network') return t('common.err.network');
+  // known refusals have their own localised explanation
+  if (typeof code === 'string' && KNOWN_CODES.has(code)) return t(`common.err.${code}`);
   const msg = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   return msg.trim() || t('common.err.generic');
 }
@@ -115,7 +126,7 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
   return (
     <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-red-500/40 bg-red-900/20 px-3 py-2 text-sm text-red-200" data-testid="error-note">
       <span className="flex-1">{errorMessage(error, t)}</span>
-      {onRetry && <button type="button" onClick={onRetry} className="min-h-9 rounded-md border border-red-300/50 px-3 py-1 text-xs font-semibold text-red-100 hover:bg-red-900/40" data-testid="error-retry">{t('common.retry')}</button>}
+      {onRetry && isRetryable(error) && <button type="button" onClick={onRetry} className="min-h-9 rounded-md border border-red-300/50 px-3 py-1 text-xs font-semibold text-red-100 hover:bg-red-900/40" data-testid="error-retry">{t('common.retry')}</button>}
     </div>
   );
 }
