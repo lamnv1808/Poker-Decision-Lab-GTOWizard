@@ -90,3 +90,35 @@ test('Today: a plan request that fails shows a retry instead of an endless spinn
   await page.getByTestId('error-retry').click();
   await expect(page.getByTestId('today-items')).toBeVisible();
 });
+
+test('in a Mixed session whose time is up, the end-of-hand button says Finish session and opens the summary', async ({ page }) => {
+  await register(page, 'FinishSess');
+  await waitForContent(page);
+  await page.goto('/mixed');
+  for (const f of ['preflop', 'postflop', 'math', 'villain', 'replay']) await page.getByTestId(`mixed-focus-${f}`).uncheck({ force: true });
+  await page.getByTestId('mixed-start').click();
+  // full-hand focus can also serve a curated scenario; only a /play/ item is used here
+  for (let i = 0; i < 5 && !/\/play\//.test(page.url()); i++) {
+    await page.getByTestId('mixed-bar-next').click();
+    await page.waitForTimeout(300);
+  }
+  test.skip(!/\/play\//.test(page.url()), 'session served no full hand in five items');
+  const sid = new URL(page.url()).searchParams.get('mixed')!;
+  for (let k = 0; k < 25 && !(await page.getByTestId('sim-net').isVisible()); k++) {
+    const bar = page.getByTestId('action-bar');
+    if (!(await bar.isVisible())) {
+      await page.waitForTimeout(200);
+      continue;
+    }
+    const cc = bar.locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ });
+    const target = (await cc.count()) ? cc.first() : bar.locator('button:not([disabled])').filter({ hasText: /^Fold/ }).first();
+    // the session clock runs out while the last hand is being played
+    if (k === 0) await page.route(`**/api/mixed/sessions/${sid}`, async (r) => r.fulfill({ json: { ...(await (await r.fetch()).json()), remainingSec: 0, ended: true } }));
+    await Promise.all([page.waitForResponse((r) => r.url().includes('/act') && r.request().method() === 'POST'), target.click()]);
+  }
+  await expect(page.getByTestId('mixed-next')).toHaveText('Finish session');
+  await page.unroute(`**/api/mixed/sessions/${sid}`);
+  await page.route(`**/api/mixed/sessions/${sid}/next`, (r) => r.fulfill({ json: { done: true, remainingSec: 0 } }));
+  await page.getByTestId('mixed-next').click();
+  await expect(page.getByTestId('mixed-summary')).toBeVisible();
+});

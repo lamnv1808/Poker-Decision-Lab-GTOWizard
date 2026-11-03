@@ -233,6 +233,16 @@ export function HeroSimPage() {
   useEffect(() => setDetailOpen(feedbackStyle === 'deep'), [last, feedbackStyle]);
   // the feedback is the first thing to see after acting (on phones it would otherwise sit below the fold)
   const handOver = !!v?.review;
+  // inside a Mixed session, the label says Finish session once the session clock has run out
+  const [sessionOver, setSessionOver] = useState(false);
+  useEffect(() => {
+    if (!handOver || !mixed) return;
+    let live = true;
+    api.get<{ ended: boolean }>(`/mixed/sessions/${mixed}`).then((x) => live && setSessionOver(x.ended)).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [handOver, mixed]);
   useEffect(() => {
     if (last || handOver) lastRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [last, handOver]);
@@ -311,8 +321,8 @@ export function HeroSimPage() {
   const hero = v.state.players.find((p) => p.id === v.config.heroPos)!;
   const lastDecision = v.decisions[v.decisions.length - 1];
   const handComplete = !!v.review;
-  const quick = last ? toQuickFeedback(last.fb, { selectedAction: lastDecision ? actionLabel(lastDecision.action, bb, t) : '', lang, handComplete, inSession: !!mixed, fullHand: true, facts: lastDecision?.facts, hasModelEquity: !!last.eq && Number.isFinite(last.eq.equity) }) : null;
-  const nextCta: Cta | null = handComplete ? { label: t(mixed ? 'qf.next.nextScenario' : 'qf.next.nextHand'), onClick: () => void next.run(), busy: next.busy, testId: mixed ? 'mixed-next' : 'sim-next' } : null;
+  const quick = last ? toQuickFeedback(last.fb, { selectedAction: lastDecision ? actionLabel(lastDecision.action, bb, t) : '', lang, handComplete, inSession: !!mixed, sessionComplete: sessionOver, fullHand: true, facts: lastDecision?.facts, hasModelEquity: !!last.eq && Number.isFinite(last.eq.equity) }) : null;
+  const nextCta: Cta | null = handComplete ? { label: t(mixed ? (sessionOver ? 'qf.next.finishSession' : 'qf.next.nextScenario') : 'qf.next.nextHand'), onClick: () => void next.run(), busy: next.busy, testId: mixed ? 'mixed-next' : 'sim-next' } : null;
   const toMove: Cta | null = !handComplete && v.current ? { label: t('qf.next.nextDecision'), onClick: () => { moveRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); moveRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus({ preventScroll: true }); }, testId: 'qf-next-decision' } : null;
   return (
     <div className="space-y-3">
