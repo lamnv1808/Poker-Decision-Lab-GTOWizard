@@ -74,7 +74,11 @@ describe('Mixed Training V3.1: all modules, mixes, history-aware', () => {
     const u = await newUser('mix5');
     const s = (await u.agent.post('/api/mixed/sessions').send({ durationMin: 30, mix: 'heroFocus', mode: 'practice' }).expect(201)).body;
     const types: string[] = [];
-    for (let i = 0; i < 12; i++) {
+    // The picker is seeded per session (random id). With 12 draws both assertions were random: in 400 measured
+    // sessions 2% had a Hero share of exactly 0.5 or less, and 0.5% served no scenario. PR #2 kept drawing until
+    // a scenario appeared, which fixed the second but not the first. Over a fixed 40 draws neither failed in
+    // 200 measured sessions (scripted measurement, 2026-11-03).
+    for (let i = 0; i < 40; i++) {
       const n = (await u.agent.post(`/api/mixed/sessions/${s.id}/next`).expect(200)).body;
       types.push(n.type);
       if (n.type === 'scenario') {
