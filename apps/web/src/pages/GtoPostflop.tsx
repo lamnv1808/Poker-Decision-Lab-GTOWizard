@@ -1,5 +1,6 @@
 import type { HandState } from '@pdl/core/engine';
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, newAttemptId, mixedSessionId } from '../api';
 import { CardText } from '../components/Cards';
 import { PokerTable } from '../components/PokerTable';
@@ -27,6 +28,7 @@ interface Result {
 }
 
 export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
+  const nav = useNavigate();
   const { t, lang } = useT();
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
   const [node, setNode] = useState<Node>('any');
@@ -37,6 +39,7 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
   const [stats, setStats] = useState({ n: 0, ok: 0, ev: 0 });
 
   const next = useCallback(async () => {
+    setSpot(null);
     setResult(null);
     setError(null);
     try {
@@ -45,6 +48,11 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
       setError(e);
     }
   }, [node]);
+  const advance = useCallback(async () => {
+    const session = mixedSessionId();
+    if (session) nav(`/mixed/${session}`);
+    else await next();
+  }, [nav, next]);
   useEffect(() => {
     void next();
   }, [next]);
@@ -71,12 +79,12 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
       if (!result && /^[1-9]$/.test(e.key) && Number(e.key) <= spot.actions.length) void answer(Number(e.key) - 1);
       if (result && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
-        void next();
+        void advance();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [spot, result, answer, next]);
+  }, [spot, result, answer, advance]);
 
   const situation = spot ? (spot.node === 'ip_vs_check' ? t('pf.ipVsCheck') : t('pf.oopVsBet')) : '';
   return (
@@ -89,8 +97,8 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
         <span>{t('gto.correct')}: <b className="text-ink-100">{stats.n ? Math.round((100 * stats.ok) / stats.n) : 0}%</b></span>
         <span>{t('gto.evLost')}: <b className="text-ink-100">{fmtNum(stats.ev, 2)} BB</b></span>
       </div>
-      <ErrorNote error={error} />
-      {!spot ? <Spinner /> : (
+      <ErrorNote error={error} onRetry={!spot ? () => void next() : undefined} />
+      {!spot ? (error ? null : <Spinner />) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="pf-spot">
@@ -107,7 +115,10 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
                 ))}
               </div>
             ) : (
-              <button type="button" onClick={() => void next()} className="w-full rounded-xl bg-felt-500 py-4 text-base font-bold hover:bg-felt-600" data-testid="pf-next">{t('gto.next')} <span className="text-xs opacity-60">(Enter)</span></button>
+              <div className="space-y-2" data-testid="pf-quick-feedback" aria-live="polite">
+                <div className="flex items-center gap-2"><GradeBadge grade={result.grade} /><span>{t('fb.evLoss')}: {fmtNum(result.evLossBB, 2)} BB</span></div>
+                <button type="button" onClick={() => void advance()} className="w-full rounded-xl bg-felt-500 py-4 text-base font-bold hover:bg-felt-600" data-testid="pf-next">{t(mixedSessionId() ? 'mixed.next' : 'gto.next')} <span className="text-xs opacity-60">(Enter)</span></button>
+              </div>
             )}
           </div>
           <Panel title={t('run.feedback')}>
