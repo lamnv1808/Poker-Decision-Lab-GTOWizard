@@ -27,10 +27,14 @@ test('play a full hand as Hero, review it and replay the deal', async ({ page })
       await page.getByTestId('reason-open').click();
       await page.getByTestId('reason-potOdds').click();
     }
-    await bar.locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ }).first().click();
+    // wait for THIS action's response: the previous decision's feedback is already visible, so waiting for
+    // feedback alone raced the request and could leave the loop clicking on a hand that had just ended
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/act') && r.request().method() === 'POST'),
+      bar.locator('button:not([disabled])').filter({ hasText: /^(Check|Call)/ }).first().click(),
+    ]);
     // feedback leads with a grade or an explicit "assessment limited", never a bare "not graded"
     await expect(page.getByTestId('quick-feedback').first()).toBeVisible();
-    await page.waitForTimeout(150);
   }
   await expect(page.getByTestId('sim-net')).toBeVisible();
   // the completed hand is revealed automatically: opponents' cards, no reveal buttons
