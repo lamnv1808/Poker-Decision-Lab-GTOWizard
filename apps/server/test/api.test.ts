@@ -63,9 +63,9 @@ describe('hero training run', () => {
     expect(view.state.players.filter((p: { cards?: string[] }) => p.cards).length).toBe(1);
     expect(view.legal.minRaiseTo).toBe(2000);
     // illegal sizing rejected by the engine
-    expect((await agent.post(`/api/runs/${view.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'raise', amount: 1500 } })).status).toBe(400);
+    expect((await agent.post(`/api/runs/${view.runId}/act`).send({ nodeKey: view.nodeKey, clientAttemptId: cid(), action: { type: 'raise', amount: 1500 } })).status).toBe(400);
     const id1 = cid();
-    const r1 = await agent.post(`/api/runs/${view.runId}/act`).send({ clientAttemptId: id1, action: { type: 'raise', amount: 2200 } }).expect(200);
+    const r1 = await agent.post(`/api/runs/${view.runId}/act`).send({ nodeKey: view.nodeKey, clientAttemptId: id1, action: { type: 'raise', amount: 2200 } }).expect(200);
     expect(r1.body.feedback.grade).toBe('excellent');
     expect(r1.body.feedback.basis).toBe('rubric');
     expect(r1.body.feedback.evLoss).toBeNull();
@@ -73,11 +73,17 @@ describe('hero training run', () => {
     expect(r1.body.feedback.ratingChanges).toEqual([]);
     expect(r1.body.view.state.board).toEqual(['Ks', '7d', '3s']);
     // idempotent retry
-    const again = await agent.post(`/api/runs/${view.runId}/act`).send({ clientAttemptId: id1, action: { type: 'raise', amount: 2200 } }).expect(200);
+    const again = await agent.post(`/api/runs/${view.runId}/act`).send({ nodeKey: view.nodeKey, clientAttemptId: id1, action: { type: 'raise', amount: 2200 } }).expect(200);
     expect(again.body.view.nodeKey).toBe('d-flop');
-    const r2 = await agent.post(`/api/runs/${view.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'check' } }).expect(200);
+    // a stale action (new id, but for the node already answered) is refused and changes nothing
+    const stepsBefore = (await prisma.scenarioRun.findUniqueOrThrow({ where: { id: view.runId } })).steps;
+    const stale = await agent.post(`/api/runs/${view.runId}/act`).send({ nodeKey: view.nodeKey, clientAttemptId: cid(), action: { type: 'check' } });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toBe('stale_decision');
+    expect((await prisma.scenarioRun.findUniqueOrThrow({ where: { id: view.runId } })).steps).toEqual(stepsBefore);
+    const r2 = await agent.post(`/api/runs/${view.runId}/act`).send({ nodeKey: r1.body.view.nodeKey, clientAttemptId: cid(), action: { type: 'check' } }).expect(200);
     expect(r2.body.view.nodeKey).toBe('d-turn');
-    const r3 = await agent.post(`/api/runs/${view.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'check' } }).expect(200);
+    const r3 = await agent.post(`/api/runs/${view.runId}/act`).send({ nodeKey: r2.body.view.nodeKey, clientAttemptId: cid(), action: { type: 'check' } }).expect(200);
     expect(r3.body.view.status).toBe('complete');
     expect(r3.body.view.feedback).toHaveLength(3);
   });
@@ -86,7 +92,7 @@ describe('hero training run', () => {
     const { agent, id } = await newUser('rated');
     const start = await agent.post('/api/runs').send({ scenarioId: 'bb-k9o-call-sb-shove-12bb', mode: 'rated' }).expect(201);
     const clientAttemptId = cid();
-    const r = await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId, action: { type: 'call' } }).expect(200);
+    const r = await agent.post(`/api/runs/${start.body.runId}/act`).send({ nodeKey: start.body.nodeKey, clientAttemptId, action: { type: 'call' } }).expect(200);
     const fb = r.body.feedback;
     expect(fb.basis).toBe('modelEv');
     expect(fb.ratingEligible).toBe(false);
@@ -98,7 +104,7 @@ describe('hero training run', () => {
     expect(att.track).toBe('fundamentals');
     expect((await prisma.rating.findMany({ where: { userId: id } })).map((r) => r.skill)).toEqual(['fundamentals']);
     // idempotent retry
-    await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId, action: { type: 'call' } }).expect(200);
+    await agent.post(`/api/runs/${start.body.runId}/act`).send({ nodeKey: start.body.nodeKey, clientAttemptId, action: { type: 'call' } }).expect(200);
     expect(await prisma.decisionAttempt.count({ where: { userId: id } })).toBe(1);
   });
 
@@ -116,7 +122,7 @@ describe('hero training run', () => {
   it('practice mode records attempts but never changes ratings', async () => {
     const { agent, id } = await newUser('practice');
     const start = await agent.post('/api/runs').send({ scenarioId: 'bb-k9o-call-sb-shove-12bb', mode: 'practice' }).expect(201);
-    await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }).expect(200);
+    await agent.post(`/api/runs/${start.body.runId}/act`).send({ nodeKey: start.body.nodeKey, clientAttemptId: cid(), action: { type: 'fold' } }).expect(200);
     expect(await prisma.rating.count({ where: { userId: id } })).toBe(0);
     expect(await prisma.decisionAttempt.count({ where: { userId: id } })).toBe(1);
     // the mistake is scheduled for review
@@ -129,7 +135,7 @@ describe('hero training run', () => {
     const b = await newUser('b');
     const start = await a.agent.post('/api/runs').send({ scenarioId: 'bb-k9o-call-sb-shove-12bb' }).expect(201);
     expect((await b.agent.get(`/api/runs/${start.body.runId}`)).status).toBe(404);
-    expect((await b.agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'call' } })).status).toBe(404);
+    expect((await b.agent.post(`/api/runs/${start.body.runId}/act`).send({ nodeKey: start.body.nodeKey, clientAttemptId: cid(), action: { type: 'call' } })).status).toBe(404);
   });
 });
 
@@ -198,7 +204,7 @@ describe('dashboard, progress, leaks, curriculum', () => {
   it('returns analytics without merging metrics', async () => {
     const { agent } = await newUser('dash');
     const start = await agent.post('/api/runs').send({ scenarioId: 'bb-k9o-call-sb-shove-12bb', mode: 'rated' }).expect(201);
-    await agent.post(`/api/runs/${start.body.runId}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }).expect(200);
+    await agent.post(`/api/runs/${start.body.runId}/act`).send({ nodeKey: start.body.nodeKey, clientAttemptId: cid(), action: { type: 'fold' } }).expect(200);
     const d = await agent.get('/api/dashboard').expect(200);
     // folding K9o loses ~0.5BB: graded "acceptable" (not an error); assumed-range models never rate
     expect(d.body.rating).toBeNull();

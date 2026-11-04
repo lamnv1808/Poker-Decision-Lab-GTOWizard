@@ -3,11 +3,11 @@ import { prisma } from '../src/db';
 import { cid, ensureSeeded, newUser } from './helpers';
 
 type Agent = Awaited<ReturnType<typeof newUser>>['agent'];
-type View = { id: string; status: string; legal: { canCheck: boolean; canFold: boolean } | null; state: { board: string[]; players: { id: string; cards?: string[] }[] }; config: { heroPos: string }; origin: { kind: string; flop: string | null }; review: null | { timeline: { villain?: { source: string } }[]; winners: unknown[]; endedBy: string }; decisions: { feedback?: { assessment?: string; graded: boolean; basis: string; track: string | null } }[] };
+type View = { id: string; decisionIndex: number | null; status: string; legal: { canCheck: boolean; canFold: boolean } | null; state: { board: string[]; players: { id: string; cards?: string[] }[] }; config: { heroPos: string }; origin: { kind: string; flop: string | null }; review: null | { timeline: { villain?: { source: string } }[]; winners: unknown[]; endedBy: string }; decisions: { feedback?: { assessment?: string; graded: boolean; basis: string; track: string | null } }[] };
 
 async function playOut(agent: Agent, v: View, pick: (l: NonNullable<View['legal']>) => object = (l) => (l.canCheck ? { type: 'check' } : { type: 'call' })) {
   let view = v;
-  for (let i = 0; i < 30 && view.status === 'active' && view.legal; i++) view = (await agent.post(`/api/sim/hands/${view.id}/act`).send({ clientAttemptId: cid(), action: pick(view.legal) }).expect(200)).body.view;
+  for (let i = 0; i < 30 && view.status === 'active' && view.legal; i++) view = (await agent.post(`/api/sim/hands/${view.id}/act`).send({ decisionIndex: view.decisionIndex ?? 0, clientAttemptId: cid(), action: pick(view.legal) }).expect(200)).body.view;
   return view;
 }
 
@@ -21,8 +21,8 @@ describe('continuation, Branch Challenge, hidden info, solver-flop table', () =>
       if (r.status !== 201) break;
       let run = r.body;
       for (let k = 0; k < 10 && run.status !== 'complete'; k++) {
-        if (run.status === 'decision') run = (await u.agent.post(`/api/runs/${run.runId}/act`).send({ clientAttemptId: cid(), action: run.legal.canCheck ? { type: 'check' } : { type: 'call' } }).expect(200)).body.view;
-        else run = (await u.agent.post(`/api/runs/${run.runId}/answer`).send({ clientAttemptId: cid(), answer: run.question.choices ? { choiceId: run.question.choices[0].id } : run.question.type === 'rangeGrid' ? { classes: ['AA'] } : { value: 10 } }).expect(200)).body.view;
+        if (run.status === 'decision') run = (await u.agent.post(`/api/runs/${run.runId}/act`).send({ nodeKey: run.nodeKey, clientAttemptId: cid(), action: run.legal.canCheck ? { type: 'check' } : { type: 'call' } }).expect(200)).body.view;
+        else run = (await u.agent.post(`/api/runs/${run.runId}/answer`).send({ nodeKey: run.nodeKey, clientAttemptId: cid(), answer: run.question.choices ? { choiceId: run.question.choices[0].id } : run.question.type === 'rangeGrid' ? { classes: ['AA'] } : { value: 10 } }).expect(200)).body.view;
       }
       const c = await u.agent.post(`/api/sim/from-run/${run.runId}`);
       if (c.status === 409) continue; // the hand was already over
@@ -83,7 +83,7 @@ describe('continuation, Branch Challenge, hidden info, solver-flop table', () =>
       expect(JSON.stringify(opts)).not.toMatch(/"f"|"ev"|freq/);
       const bet = opts.find((o) => o.action.type === 'bet')!;
       const choice = i % 2 ? bet.action : { type: 'check' };
-      const r = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: choice }).expect(200);
+      const r = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ decisionIndex: v.decisionIndex ?? 0, clientAttemptId: cid(), action: choice }).expect(200);
       const fb = r.body.feedback;
       if (fb?.assessment === 'solverVerified') {
         expect(fb.track).toBe('strategy');

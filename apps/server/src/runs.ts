@@ -304,9 +304,12 @@ runsRouter.get('/:id', async (req, res) => {
   res.json(runView(run, v.id, v.scenario, v.sourceClass, cursor, feedbackLog));
 });
 
+/** The node (view.nodeKey) the answer belongs to. */
+const NodeKey = z.string().min(1).max(200);
+
 runsRouter.post('/:id/act', async (req, res) => {
   const userId = requireUser(req);
-  const body = parse(z.object({ clientAttemptId: z.string().min(8).max(100), action: ActionInput, confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }), req.body);
+  const body = parse(z.object({ clientAttemptId: z.string().min(8).max(100), nodeKey: NodeKey, action: ActionInput, confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }), req.body);
   const { run, v, steps, cursor } = await loadRun(userId, String(req.params.id));
   const s = v.scenario;
   const dup = await prisma.decisionAttempt.findUnique({ where: { userId_clientAttemptId: { userId, clientAttemptId: body.clientAttemptId } } });
@@ -316,6 +319,8 @@ runsRouter.post('/:id/act', async (req, res) => {
     return;
   }
   const node = s.nodes[cursor.nodeId];
+  // only the node that was shown may be answered: a stale retry never lands on the next node
+  if (body.nodeKey !== cursor.nodeId) throw new HttpError(409, 'stale_decision', 'This answer was for an earlier step; the run has moved on');
   if (cursor.terminated || !node || node.kind !== 'decision') throw new HttpError(409, 'not_at_decision', 'This run is not waiting for a decision');
   const before = cursor.state;
   let step;
@@ -411,7 +416,7 @@ const AnswerInput = z.union([
 
 runsRouter.post('/:id/answer', async (req, res) => {
   const userId = requireUser(req);
-  const body = parse(z.object({ clientAttemptId: z.string().min(8).max(100), answer: AnswerInput, confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }), req.body);
+  const body = parse(z.object({ clientAttemptId: z.string().min(8).max(100), nodeKey: NodeKey, answer: AnswerInput, confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }), req.body);
   const { run, v, steps, cursor } = await loadRun(userId, String(req.params.id));
   const s = v.scenario;
   const dup = await prisma.decisionAttempt.findUnique({ where: { userId_clientAttemptId: { userId, clientAttemptId: body.clientAttemptId } } });
@@ -421,6 +426,8 @@ runsRouter.post('/:id/answer', async (req, res) => {
     return;
   }
   const node = s.nodes[cursor.nodeId];
+  // only the node that was shown may be answered: a stale retry never lands on the next node
+  if (body.nodeKey !== cursor.nodeId) throw new HttpError(409, 'stale_decision', 'This answer was for an earlier step; the run has moved on');
   if (cursor.terminated || !node || node.kind !== 'question') throw new HttpError(409, 'not_at_question', 'This run is not waiting for an answer');
   let g;
   try {

@@ -1,7 +1,8 @@
 import type { HandState } from '@pdl/core/engine';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, newAttemptId, mixedSessionId } from '../api';
+import { api, mixedSessionId } from '../api';
+import { useAttemptIds } from '../attempt';
 import { GtoGrid } from '../components/GtoGrid';
 import { PokerTable } from '../components/PokerTable';
 import { GtoPostflop } from './GtoPostflop';
@@ -45,6 +46,7 @@ export function GtoQuiz() {
   });
   const [mode, setMode] = useState<'rated' | 'practice'>('rated');
   const [spot, setSpot] = useState<Spot | null>(null);
+  const attemptFor = useAttemptIds();
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -77,7 +79,7 @@ export function GtoQuiz() {
       if (!spot || result || busy) return;
       setBusy(true);
       try {
-        const r = await api.post<Result>('/gto/answer', { token: spot.token, action, clientAttemptId: newAttemptId(), mode, sessionId: mixedSessionId() });
+        const r = await api.post<Result>('/gto/answer', { token: spot.token, action, clientAttemptId: attemptFor(spot), mode, sessionId: mixedSessionId() });
         setResult(r);
         setView(spot.role === 'sbShove' ? 'push' : 'call');
         const ok = r.evLossBB < 0.05;
@@ -88,7 +90,7 @@ export function GtoQuiz() {
         setBusy(false);
       }
     },
-    [spot, result, busy, mode],
+    [spot, result, busy, mode, attemptFor],
   );
 
   useEffect(() => {

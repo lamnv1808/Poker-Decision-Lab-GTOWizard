@@ -1,7 +1,8 @@
 import type { HandState } from '@pdl/core/engine';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, newAttemptId, mixedSessionId } from '../api';
+import { api, mixedSessionId } from '../api';
+import { useAttemptIds } from '../attempt';
 import { CardText } from '../components/Cards';
 import { PokerTable } from '../components/PokerTable';
 import { StrategyGrid, actionColor } from '../components/StrategyGrid';
@@ -33,6 +34,7 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
   const [node, setNode] = useState<Node>('any');
   const [spot, setSpot] = useState<Spot | null>(null);
+  const attemptFor = useAttemptIds();
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -62,7 +64,7 @@ export function GtoPostflop({ mode }: { mode: 'rated' | 'practice' }) {
       if (!spot || result || busy) return;
       setBusy(true);
       try {
-        const r = await api.post<Result>('/gto/postflop/answer', { token: spot.token, actionIndex, clientAttemptId: newAttemptId(), mode, sessionId: mixedSessionId() });
+        const r = await api.post<Result>('/gto/postflop/answer', { token: spot.token, actionIndex, clientAttemptId: attemptFor(spot), mode, sessionId: mixedSessionId() });
         setResult(r);
         setStats((s) => ({ n: s.n + 1, ok: s.ok + (r.grade === 'excellent' ? 1 : 0), ev: s.ev + r.evLossBB }));
       } catch (e) {

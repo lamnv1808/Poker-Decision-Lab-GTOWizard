@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, newAttemptId, mixedSessionId, ApiError } from '../api';
+import { api, mixedSessionId, ApiError } from '../api';
+import { useAttemptIds } from '../attempt';
 import { PokerTable } from '../components/PokerTable';
 import { Empty, ErrorNote, GradeBadge, Panel, Spinner } from '../components/ui';
 import { fmtNum, loc } from '../format';
@@ -16,6 +17,7 @@ export function FundamentalsPage() {
   const { t, lang } = useT();
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
   const [q, setQ] = useState<DecisionQuestion | null>(null);
+  const attemptFor = useAttemptIds();
   const [value, setValue] = useState('');
   const [res, setRes] = useState<PotOddsResult | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -39,7 +41,7 @@ export function FundamentalsPage() {
     e.preventDefault();
     if (!q || value === '') return;
     try {
-      const r = await api.post<PotOddsResult>(`/real/potodds/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), valuePct: Number(value.replace(',', '.')), responseMs: Date.now() - shownAt.current, sessionId: mixedSessionId() });
+      const r = await api.post<PotOddsResult>(`/real/potodds/${q.decisionId}/answer`, { clientAttemptId: attemptFor(q), valuePct: Number(value.replace(',', '.')), responseMs: Date.now() - shownAt.current, sessionId: mixedSessionId() });
       setRes(r);
       setStats((s) => ({ n: s.n + 1, ok: s.ok + (r.grade === 'excellent' ? 1 : 0) }));
     } catch (err) {

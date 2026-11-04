@@ -136,6 +136,8 @@ export function simView(h: SimHand, run: SimRun = build(h)) {
     state: publicState(run.state, hero),
     heroCards: run.state.players.find((p) => p.id === hero)!.cards,
     legal: current ? legalActions(run.state) : null,
+    /** Index of the open Hero decision; sent back with the action (null when Hero is not to act). */
+    decisionIndex: current ? steps(h).length : null,
     progress: { street: run.state.street, decisionNumber: run.decisions.filter((d) => d.action).length + (current ? 1 : 0), complete },
     // the solved tree's actions (sizes only, never frequencies) so Hero can stay inside the tree
     current: current ? { ...facts(current.info), solverOptions: current.info.oracle ? current.info.oracle.actions.map((key, i) => ({ key, action: current.info.oracle!.options[i]! })) : null } : null,
@@ -246,6 +248,8 @@ simRouter.get('/hands/:id', async (req, res) => {
 
 const Act = z.object({
   clientAttemptId: z.string().min(8).max(100),
+  /** The Hero decision this action answers (view.decisionIndex when it was shown). Immutable per decision. */
+  decisionIndex: z.number().int().min(0).max(1000),
   action: z.object({ type: z.enum(['fold', 'check', 'call', 'bet', 'raise']), amount: z.number().int().positive().optional() }),
   confidence: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   reasoning: z.string().max(1000).optional(),
@@ -254,13 +258,28 @@ const Act = z.object({
   responseMs: z.number().int().min(0).max(3_600_000).optional(),
 });
 
+/** Response for a repeated clientAttemptId: the stored step's feedback, same reveal rule as the original. */
+function duplicateAnswer(h: SimHand, st: Step[], clientAttemptId: string, decisionIndex: number) {
+  const idx = st.findIndex((s) => s.clientAttemptId === clientAttemptId);
+  if (idx !== decisionIndex) throw new HttpError(409, 'attempt_mismatch', 'This attempt id belongs to another decision');
+  const run = build(h, st);
+  const d = run.decisions[idx];
+  const stored = (st[idx] as Step & { fb?: Record<string, unknown> }).fb ?? d?.feedback ?? null;
+  const reveal = h.feedback === 'guided' || h.status !== 'active';
+  return { view: simView(h, run), feedback: reveal && stored && d ? { ...stored, modelEquity: d.info.modelEquity, solver: d.info.solver } : null, duplicate: true };
+}
+
 simRouter.post('/hands/:id/act', async (req, res) => {
   const userId = requireUser(req);
   const body = parse(Act, req.body);
   const h = await load(userId, String(req.params.id));
   const st = steps(h);
-  if (st.some((s) => s.clientAttemptId === body.clientAttemptId)) return void res.json({ view: simView(h), duplicate: true });
+  // A retry of an action that was already recorded (e.g. its response was lost): answer with what was
+  // stored, never apply it again — and never to a later decision.
+  if (st.some((s) => s.clientAttemptId === body.clientAttemptId)) return void res.json(duplicateAnswer(h, st, body.clientAttemptId, body.decisionIndex));
   if (h.status !== 'active') throw new HttpError(409, 'not_active', 'This hand is finished');
+  // The action must answer the decision that is open now; a stale one changes nothing.
+  if (body.decisionIndex !== st.length) throw new HttpError(409, 'stale_decision', 'This action was for an earlier decision; the hand has moved on');
   const before = build(h, st);
   if (!before.awaitingHero) throw new HttpError(409, 'not_awaiting', 'Hero is not to act');
   const step: Step = { action: body.action as PlayerAction, confidence: body.confidence, reasoning: body.reasoning?.trim() || undefined, reasons: body.reasons, responseMs: body.responseMs, clientAttemptId: body.clientAttemptId };
@@ -296,7 +315,12 @@ simRouter.post('/hands/:id/act', async (req, res) => {
     where: { id: h.id, userId, version: h.version },
     data: { steps: [...st, step] as object, version: { increment: 1 }, ...(complete ? { status: 'complete', completedAt: new Date() } : {}) },
   });
-  if (claimed.count === 0) throw new HttpError(409, 'conflict', 'The hand changed on another device; reload it');
+  if (claimed.count === 0) {
+    // Lost the race. If the winner was this same action (a concurrent retry), answer like a retry.
+    const now = await load(userId, h.id);
+    if (steps(now).some((s) => s.clientAttemptId === body.clientAttemptId)) return void res.json(duplicateAnswer(now, steps(now), body.clientAttemptId, body.decisionIndex));
+    throw new HttpError(409, 'conflict', 'The hand changed on another device; reload it');
+  }
   // Only original hands count; replays and branches are exploration and never recorded (no double counting).
   if (h.kind === 'play' && fb.graded && fb.track) {
     const mixed = await mixedSessionFor(userId, h.sessionId);

@@ -1,7 +1,8 @@
 import type { PlayerAction } from '@pdl/core/engine';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, newAttemptId, ApiError, mixedSessionId } from '../api';
+import { api, ApiError, mixedSessionId } from '../api';
+import { useAttemptIds } from '../attempt';
 import { ActionBar } from '../components/ActionBar';
 import { DecisionFeedbackView, QuestionFeedbackView } from '../components/Feedback';
 import { ActionHistory, PokerTable } from '../components/PokerTable';
@@ -71,6 +72,9 @@ export function RunPage() {
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
   const nav = useNavigate();
   const [view, setView] = useState<RunView | null>(null);
+  const attemptFor = useAttemptIds();
+  // the decision on screen: run, how many answers are already recorded, and the node shown
+  const decisionKey = (v: RunView) => `${v.runId}:${v.feedback.length}:${v.nodeKey}`;
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [latest, setLatest] = useState<DecisionFeedback | QuestionFeedback | null>(null);
@@ -94,7 +98,7 @@ export function RunPage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.post<{ feedback: DecisionFeedback; view: RunView }>(`/runs/${id}/act`, { clientAttemptId: newAttemptId(), action, confidence });
+      const r = await api.post<{ feedback: DecisionFeedback; view: RunView }>(`/runs/${id}/act`, { clientAttemptId: attemptFor(decisionKey(view!)), nodeKey: view!.nodeKey, action, confidence });
       setLatest(r.feedback);
       setView(r.view);
     } catch (e) {
@@ -107,7 +111,7 @@ export function RunPage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.post<{ feedback: QuestionFeedback; view: RunView }>(`/runs/${id}/answer`, { clientAttemptId: newAttemptId(), answer: a, confidence });
+      const r = await api.post<{ feedback: QuestionFeedback; view: RunView }>(`/runs/${id}/answer`, { clientAttemptId: attemptFor(decisionKey(view!)), nodeKey: view!.nodeKey, answer: a, confidence });
       setLatest(r.feedback);
       setView(r.view);
     } catch (e) {
