@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { login, register, waitForContent } from './helpers';
+import { login, register, switchLang, waitForContent } from './helpers';
 
 const fixture = readFileSync(new URL('../../../packages/core/test/fixtures/gg-sample.txt', import.meta.url));
 
@@ -13,7 +13,7 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await expect(page.getByRole('link', { name: 'Tổng quan' })).toBeVisible();
   await page.getByTestId('lang-en').click();
   await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-  await page.getByTestId('lang-vi').click();
+  await switchLang(page, 'vi'); // saved before the full page load below
 
   // Rated, math-verified hero decision
   await page.goto('/hero/browse');
@@ -37,7 +37,7 @@ test('MVP critical path: train, review, import, persist across devices', async (
   await expect(page.getByTestId('strategy-text')).not.toHaveText(gto ?? '');
 
   // Multi-street heuristic tree with sizing
-  await page.getByTestId('lang-en').click();
+  await switchLang(page, 'en'); // saved before the full page load below
   await page.goto('/hero/browse');
   await page.getByTestId('start-btn-ajs-35bb-open-flop-cbet').click();
   await page.getByRole('button', { name: '2.2BB' }).click();
