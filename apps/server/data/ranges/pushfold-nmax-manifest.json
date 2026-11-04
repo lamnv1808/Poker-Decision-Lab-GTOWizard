@@ -1,0 +1,3646 @@
+{
+ "schema": "pdl-range-schema-1",
+ "method": "pdl-pushfold-nmax-fp-v1",
+ "evidence": "approximateModel",
+ "approximation": "Restricted game: after the first call all remaining players fold (no overcalls / multiway all-ins); blockers of players who folded earlier ignored; equal effective stacks.",
+ "equitySource": "Seeded Monte Carlo, 20000 random combo-pair/board samples per class matchup; exact combo-pair weights",
+ "licence": {
+  "id": "PDL-computed",
+  "redistributable": true
+ },
+ "generatedAt": "2026-11-04T14:04:32.028Z",
+ "iterations": 3000,
+ "configurations": 184,
+ "records": 5796,
+ "handRows": 979524,
+ "totalRuntimeMs": 2501124,
+ "peakRssMB": 274,
+ "benchmarkVsHeadsUp": [
+  {
+   "stackBB": 5,
+   "deadBB": 0,
+   "maxFreqDiff": 0.01,
+   "maxEvDiffBB": 0.00181,
+   "evSignFlips": 0,
+   "epsilonNmax": 0.0001265438658835841,
+   "exploitabilityHU": 0.00003824612018810125
+  },
+  {
+   "stackBB": 10,
+   "deadBB": 0,
+   "maxFreqDiff": 0.01,
+   "maxEvDiffBB": 0.00434,
+   "evSignFlips": 2,
+   "epsilonNmax": 0.0002679522292116847,
+   "exploitabilityHU": 0.00010897085116851057
+  },
+  {
+   "stackBB": 10,
+   "deadBB": 1,
+   "maxFreqDiff": 0.01,
+   "maxEvDiffBB": 0.00228,
+   "evSignFlips": 0,
+   "epsilonNmax": 0.0002297809792357556,
+   "exploitabilityHU": 0.00005387549348256915
+  },
+  {
+   "stackBB": 15,
+   "deadBB": 1.5,
+   "maxFreqDiff": 0.01,
+   "maxEvDiffBB": 0.00618,
+   "evSignFlips": 0,
+   "epsilonNmax": 0.00034909231596724825,
+   "exploitabilityHU": 0.00012503228127591637
+  }
+ ],
+ "configurationsList": [
+  {
+   "tableSize": 6,
+   "stackBB": 5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0007731643495657034,
+   "maxNodeGainBB": 0.0019612247689690795,
+   "epsilonBySeat": [
+    0.0006937,
+    0.0007697,
+    0.0007732,
+    0.000699,
+    0.0004943,
+    0.0002978
+   ],
+   "runtimeMs": 5240
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.00201800673199934,
+   "maxNodeGainBB": 0.003042097505890494,
+   "epsilonBySeat": [
+    0.002018,
+    0.001881,
+    0.00131,
+    0.0008949,
+    0.0003447,
+    0.00008773
+   ],
+   "runtimeMs": 5394
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 5.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0008376207190133067,
+   "maxNodeGainBB": 0.0022734993507680444,
+   "epsilonBySeat": [
+    0.0005838,
+    0.0007513,
+    0.0008376,
+    0.0007555,
+    0.0005758,
+    0.0003518
+   ],
+   "runtimeMs": 5032
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 5.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0019325320908153195,
+   "maxNodeGainBB": 0.003387829377830011,
+   "epsilonBySeat": [
+    0.001856,
+    0.001933,
+    0.001686,
+    0.001256,
+    0.0006483,
+    0.000217
+   ],
+   "runtimeMs": 5187
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 6,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0008167592828681679,
+   "maxNodeGainBB": 0.002260216543550549,
+   "epsilonBySeat": [
+    0.0005248,
+    0.0007775,
+    0.0008168,
+    0.0007571,
+    0.0005611,
+    0.0004017
+   ],
+   "runtimeMs": 5096
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 6,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001669271253603399,
+   "maxNodeGainBB": 0.0024950588657376414,
+   "epsilonBySeat": [
+    0.001669,
+    0.001428,
+    0.00129,
+    0.00101,
+    0.0006101,
+    0.0002614
+   ],
+   "runtimeMs": 5182
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 6.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0007907025962199637,
+   "maxNodeGainBB": 0.00232390945943377,
+   "epsilonBySeat": [
+    0.0005321,
+    0.0007275,
+    0.0007907,
+    0.0007707,
+    0.000617,
+    0.0004351
+   ],
+   "runtimeMs": 4824
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 6.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001288695837392242,
+   "maxNodeGainBB": 0.0022418660307800048,
+   "epsilonBySeat": [
+    0.001253,
+    0.001289,
+    0.001125,
+    0.0008873,
+    0.0005914,
+    0.0002934
+   ],
+   "runtimeMs": 4982
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 7,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0007367130418022874,
+   "maxNodeGainBB": 0.001965224790536416,
+   "epsilonBySeat": [
+    0.0005929,
+    0.0006435,
+    0.0007367,
+    0.0007341,
+    0.0006296,
+    0.0005053
+   ],
+   "runtimeMs": 7449
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 7,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0012048566187848212,
+   "maxNodeGainBB": 0.002140836560057177,
+   "epsilonBySeat": [
+    0.001174,
+    0.001205,
+    0.001011,
+    0.0008349,
+    0.0005723,
+    0.0003039
+   ],
+   "runtimeMs": 5602
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 7.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0007697536234692676,
+   "maxNodeGainBB": 0.002409217963653358,
+   "epsilonBySeat": [
+    0.0005653,
+    0.0006346,
+    0.0007439,
+    0.0007698,
+    0.0007502,
+    0.0005898
+   ],
+   "runtimeMs": 6191
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 7.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011403103795233388,
+   "maxNodeGainBB": 0.0024501142711586205,
+   "epsilonBySeat": [
+    0.000867,
+    0.00114,
+    0.001009,
+    0.0008429,
+    0.0005833,
+    0.0003501
+   ],
+   "runtimeMs": 7987
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 8,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0008074885825462046,
+   "maxNodeGainBB": 0.002607122351354474,
+   "epsilonBySeat": [
+    0.0005578,
+    0.0007115,
+    0.0007766,
+    0.0008075,
+    0.0007735,
+    0.0006245
+   ],
+   "runtimeMs": 9187
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 8,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0012270968809725588,
+   "maxNodeGainBB": 0.0029043464303433867,
+   "epsilonBySeat": [
+    0.0008239,
+    0.001227,
+    0.001152,
+    0.0009601,
+    0.000657,
+    0.000403
+   ],
+   "runtimeMs": 8087
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 8.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0008538036769128311,
+   "maxNodeGainBB": 0.0026706746903043233,
+   "epsilonBySeat": [
+    0.0006743,
+    0.0007825,
+    0.0008154,
+    0.0008538,
+    0.0008051,
+    0.0006661
+   ],
+   "runtimeMs": 7896
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 8.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011355091149291509,
+   "maxNodeGainBB": 0.0027280125514205877,
+   "epsilonBySeat": [
+    0.0008104,
+    0.001136,
+    0.00109,
+    0.0009317,
+    0.0006769,
+    0.0004521
+   ],
+   "runtimeMs": 7998
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 9,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.00092644526174219,
+   "maxNodeGainBB": 0.003181547975535736,
+   "epsilonBySeat": [
+    0.0006358,
+    0.0007768,
+    0.0008599,
+    0.0009264,
+    0.0008353,
+    0.0007592
+   ],
+   "runtimeMs": 9063
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 9,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001001356007315882,
+   "maxNodeGainBB": 0.002423627675684974,
+   "epsilonBySeat": [
+    0.0008677,
+    0.0009969,
+    0.001001,
+    0.0009079,
+    0.0006904,
+    0.0004707
+   ],
+   "runtimeMs": 8778
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 9.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0009239504344309482,
+   "maxNodeGainBB": 0.0029190623380299834,
+   "epsilonBySeat": [
+    0.0005852,
+    0.0008047,
+    0.000818,
+    0.0009006,
+    0.000924,
+    0.000782
+   ],
+   "runtimeMs": 8435
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 9.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001044194605059782,
+   "maxNodeGainBB": 0.002619665147416324,
+   "epsilonBySeat": [
+    0.0008474,
+    0.0009825,
+    0.001044,
+    0.0009401,
+    0.0007616,
+    0.0005163
+   ],
+   "runtimeMs": 8159
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 10,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0009376963093112793,
+   "maxNodeGainBB": 0.003078802693833138,
+   "epsilonBySeat": [
+    0.0006484,
+    0.000749,
+    0.0008606,
+    0.0009095,
+    0.0009377,
+    0.000828
+   ],
+   "runtimeMs": 8508
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 10,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001125150131574549,
+   "maxNodeGainBB": 0.002948957859480182,
+   "epsilonBySeat": [
+    0.0008665,
+    0.001041,
+    0.001125,
+    0.001048,
+    0.0008433,
+    0.0005908
+   ],
+   "runtimeMs": 8303
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 10.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0009427178320275427,
+   "maxNodeGainBB": 0.0032035399784898864,
+   "epsilonBySeat": [
+    0.0005925,
+    0.000831,
+    0.0008979,
+    0.0009427,
+    0.000942,
+    0.0008941
+   ],
+   "runtimeMs": 8560
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 10.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011462337840920237,
+   "maxNodeGainBB": 0.002983374504123036,
+   "epsilonBySeat": [
+    0.0008138,
+    0.001025,
+    0.001146,
+    0.001056,
+    0.0008701,
+    0.0006594
+   ],
+   "runtimeMs": 8441
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 11,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0010097811754157182,
+   "maxNodeGainBB": 0.003642769693836984,
+   "epsilonBySeat": [
+    0.0007073,
+    0.0008921,
+    0.0009517,
+    0.00101,
+    0.0009894,
+    0.0009577
+   ],
+   "runtimeMs": 9366
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 11,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011979700569303058,
+   "maxNodeGainBB": 0.0033811100849196764,
+   "epsilonBySeat": [
+    0.0007482,
+    0.00114,
+    0.001198,
+    0.00111,
+    0.0008998,
+    0.0006674
+   ],
+   "runtimeMs": 8032
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 11.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001080720911778752,
+   "maxNodeGainBB": 0.0038532114577519644,
+   "epsilonBySeat": [
+    0.0007243,
+    0.0008934,
+    0.001002,
+    0.00104,
+    0.001081,
+    0.0009713
+   ],
+   "runtimeMs": 8204
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 11.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011412249718543396,
+   "maxNodeGainBB": 0.0032175488126417887,
+   "epsilonBySeat": [
+    0.0007931,
+    0.001077,
+    0.001141,
+    0.001084,
+    0.0009092,
+    0.000692
+   ],
+   "runtimeMs": 8463
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 12,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011431104552615124,
+   "maxNodeGainBB": 0.004049902182458106,
+   "epsilonBySeat": [
+    0.0007903,
+    0.000918,
+    0.001023,
+    0.001073,
+    0.001143,
+    0.001051
+   ],
+   "runtimeMs": 8147
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 12,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011121538577599202,
+   "maxNodeGainBB": 0.0032945304515010774,
+   "epsilonBySeat": [
+    0.0007931,
+    0.001038,
+    0.001112,
+    0.001096,
+    0.001065,
+    0.000775
+   ],
+   "runtimeMs": 8478
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 12.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0012093660884910837,
+   "maxNodeGainBB": 0.004154822741945441,
+   "epsilonBySeat": [
+    0.0007223,
+    0.0008704,
+    0.001018,
+    0.001068,
+    0.001209,
+    0.001144
+   ],
+   "runtimeMs": 8388
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 12.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011352061172803262,
+   "maxNodeGainBB": 0.0034829944033534233,
+   "epsilonBySeat": [
+    0.0009665,
+    0.001027,
+    0.001125,
+    0.001135,
+    0.001054,
+    0.0008274
+   ],
+   "runtimeMs": 8084
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 13,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0012210253754705658,
+   "maxNodeGainBB": 0.00495844959506553,
+   "epsilonBySeat": [
+    0.0006497,
+    0.0009031,
+    0.0011,
+    0.001116,
+    0.001174,
+    0.001221
+   ],
+   "runtimeMs": 8443
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 13,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011697008432211685,
+   "maxNodeGainBB": 0.0036105061537235433,
+   "epsilonBySeat": [
+    0.000975,
+    0.001011,
+    0.001144,
+    0.00117,
+    0.001094,
+    0.0009017
+   ],
+   "runtimeMs": 8950
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 13.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001271986890719642,
+   "maxNodeGainBB": 0.005018970021406458,
+   "epsilonBySeat": [
+    0.0006058,
+    0.0009407,
+    0.00117,
+    0.001186,
+    0.001208,
+    0.001272
+   ],
+   "runtimeMs": 8045
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 13.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0012124061109695888,
+   "maxNodeGainBB": 0.0038540994079351385,
+   "epsilonBySeat": [
+    0.000928,
+    0.0009977,
+    0.001162,
+    0.001212,
+    0.001171,
+    0.0009873
+   ],
+   "runtimeMs": 8122
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 14,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0013105597866019008,
+   "maxNodeGainBB": 0.004967994793268586,
+   "epsilonBySeat": [
+    0.0006407,
+    0.001068,
+    0.0012,
+    0.001256,
+    0.001311,
+    0.001232
+   ],
+   "runtimeMs": 7949
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 14,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0012639596753084457,
+   "maxNodeGainBB": 0.004289775422969029,
+   "epsilonBySeat": [
+    0.0009368,
+    0.001052,
+    0.001227,
+    0.001264,
+    0.001248,
+    0.00104
+   ],
+   "runtimeMs": 8952
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 14.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0013652411653840085,
+   "maxNodeGainBB": 0.005623076786090756,
+   "epsilonBySeat": [
+    0.0005928,
+    0.001126,
+    0.00126,
+    0.001283,
+    0.001365,
+    0.001349
+   ],
+   "runtimeMs": 8495
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 14.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0013174239001600037,
+   "maxNodeGainBB": 0.004618492357004591,
+   "epsilonBySeat": [
+    0.001005,
+    0.001181,
+    0.001284,
+    0.001317,
+    0.001246,
+    0.001127
+   ],
+   "runtimeMs": 7925
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 15,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0014392643776405842,
+   "maxNodeGainBB": 0.006401858868738701,
+   "epsilonBySeat": [
+    0.0005999,
+    0.001161,
+    0.001289,
+    0.00135,
+    0.001439,
+    0.001418
+   ],
+   "runtimeMs": 8034
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 15,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0013529559604599864,
+   "maxNodeGainBB": 0.004463116343360052,
+   "epsilonBySeat": [
+    0.001075,
+    0.001239,
+    0.001303,
+    0.001353,
+    0.001273,
+    0.00116
+   ],
+   "runtimeMs": 8757
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 17.5,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0018054815758596868,
+   "maxNodeGainBB": 0.008301952519803917,
+   "epsilonBySeat": [
+    0.000511,
+    0.001179,
+    0.001508,
+    0.001643,
+    0.001805,
+    0.001717
+   ],
+   "runtimeMs": 8050
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 17.5,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015204290394479774,
+   "maxNodeGainBB": 0.004992025440371369,
+   "epsilonBySeat": [
+    0.000978,
+    0.001279,
+    0.00139,
+    0.00152,
+    0.001492,
+    0.0014
+   ],
+   "runtimeMs": 7955
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 20,
+   "deadBB": 0,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0020285423736945436,
+   "maxNodeGainBB": 0.00948814225341761,
+   "epsilonBySeat": [
+    0.0006124,
+    0.00128,
+    0.001812,
+    0.001965,
+    0.001961,
+    0.002029
+   ],
+   "runtimeMs": 8161
+  },
+  {
+   "tableSize": 6,
+   "stackBB": 20,
+   "deadBB": 1,
+   "nodes": 20,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0017510946214496482,
+   "maxNodeGainBB": 0.006283580198484267,
+   "epsilonBySeat": [
+    0.001312,
+    0.001508,
+    0.001696,
+    0.001747,
+    0.001751,
+    0.001642
+   ],
+   "runtimeMs": 8061
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001392749856972159,
+   "maxNodeGainBB": 0.004081476366728161,
+   "epsilonBySeat": [
+    0.0009498,
+    0.001393,
+    0.001325,
+    0.001219,
+    0.001068,
+    0.0007691,
+    0.0004412
+   ],
+   "runtimeMs": 11792
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0031539581163150562,
+   "maxNodeGainBB": 0.00438641065958685,
+   "epsilonBySeat": [
+    0.003154,
+    0.002979,
+    0.002192,
+    0.001427,
+    0.000923,
+    0.0003471,
+    0.00009968
+   ],
+   "runtimeMs": 12525
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 5.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011523775538110634,
+   "maxNodeGainBB": 0.003190156627342007,
+   "epsilonBySeat": [
+    0.001027,
+    0.001099,
+    0.001152,
+    0.001151,
+    0.001024,
+    0.0007736,
+    0.0004921
+   ],
+   "runtimeMs": 11140
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 5.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002787852577516172,
+   "maxNodeGainBB": 0.004355813206846826,
+   "epsilonBySeat": [
+    0.002788,
+    0.00271,
+    0.002285,
+    0.001799,
+    0.001297,
+    0.0006705,
+    0.0002282
+   ],
+   "runtimeMs": 11223
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 6,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011517027704352,
+   "maxNodeGainBB": 0.0031692441128006463,
+   "epsilonBySeat": [
+    0.001016,
+    0.001012,
+    0.001152,
+    0.001125,
+    0.001024,
+    0.0007871,
+    0.0005786
+   ],
+   "runtimeMs": 11453
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 6,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002353393414297528,
+   "maxNodeGainBB": 0.0038958334868772074,
+   "epsilonBySeat": [
+    0.002196,
+    0.002353,
+    0.001855,
+    0.001519,
+    0.001152,
+    0.0007052,
+    0.0003171
+   ],
+   "runtimeMs": 12047
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 6.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0010765144625988843,
+   "maxNodeGainBB": 0.0031787548865193625,
+   "epsilonBySeat": [
+    0.000862,
+    0.0009705,
+    0.001075,
+    0.001077,
+    0.001015,
+    0.0008671,
+    0.0006073
+   ],
+   "runtimeMs": 11701
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 6.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002011982701908323,
+   "maxNodeGainBB": 0.003940107425094707,
+   "epsilonBySeat": [
+    0.001902,
+    0.002012,
+    0.001761,
+    0.001436,
+    0.001109,
+    0.0007108,
+    0.0003838
+   ],
+   "runtimeMs": 12346
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 7,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0010197746003230382,
+   "maxNodeGainBB": 0.0032387582973442118,
+   "epsilonBySeat": [
+    0.0008677,
+    0.0009961,
+    0.0009876,
+    0.00102,
+    0.0009765,
+    0.000871,
+    0.0006843
+   ],
+   "runtimeMs": 11541
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 7,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0019208925820475334,
+   "maxNodeGainBB": 0.003944963829568375,
+   "epsilonBySeat": [
+    0.001607,
+    0.001921,
+    0.001707,
+    0.001381,
+    0.001109,
+    0.0007129,
+    0.0004019
+   ],
+   "runtimeMs": 11584
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 7.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001030387545487584,
+   "maxNodeGainBB": 0.003238400981176483,
+   "epsilonBySeat": [
+    0.0008416,
+    0.0009648,
+    0.0009788,
+    0.00103,
+    0.001015,
+    0.0009417,
+    0.0008098
+   ],
+   "runtimeMs": 11241
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 7.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016349205566858881,
+   "maxNodeGainBB": 0.003834631784507656,
+   "epsilonBySeat": [
+    0.001495,
+    0.001615,
+    0.001635,
+    0.001387,
+    0.001142,
+    0.0007856,
+    0.0004609
+   ],
+   "runtimeMs": 11290
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 8,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0010927431761565897,
+   "maxNodeGainBB": 0.00394829802406862,
+   "epsilonBySeat": [
+    0.0007634,
+    0.0009918,
+    0.001078,
+    0.001093,
+    0.001082,
+    0.001001,
+    0.0009042
+   ],
+   "runtimeMs": 11261
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 8,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0018512027391715084,
+   "maxNodeGainBB": 0.004720503479940482,
+   "epsilonBySeat": [
+    0.001483,
+    0.001728,
+    0.001851,
+    0.001639,
+    0.001363,
+    0.0009445,
+    0.0005871
+   ],
+   "runtimeMs": 11076
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 8.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011680286186604547,
+   "maxNodeGainBB": 0.004009059707664373,
+   "epsilonBySeat": [
+    0.0007954,
+    0.001119,
+    0.001168,
+    0.001156,
+    0.001152,
+    0.001092,
+    0.0009115
+   ],
+   "runtimeMs": 11144
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 8.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001767334757068438,
+   "maxNodeGainBB": 0.004787064717649028,
+   "epsilonBySeat": [
+    0.00156,
+    0.001675,
+    0.001767,
+    0.001595,
+    0.001356,
+    0.0009992,
+    0.0006963
+   ],
+   "runtimeMs": 11347
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 9,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011990667230166703,
+   "maxNodeGainBB": 0.0037826128080344795,
+   "epsilonBySeat": [
+    0.0008018,
+    0.001058,
+    0.00114,
+    0.001175,
+    0.001199,
+    0.001096,
+    0.0009934
+   ],
+   "runtimeMs": 11289
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 9,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016058631685991263,
+   "maxNodeGainBB": 0.004299502044992697,
+   "epsilonBySeat": [
+    0.001299,
+    0.001606,
+    0.001576,
+    0.001466,
+    0.001296,
+    0.0009655,
+    0.000671
+   ],
+   "runtimeMs": 11216
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 9.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0011994563124294317,
+   "maxNodeGainBB": 0.004185646843670547,
+   "epsilonBySeat": [
+    0.0008712,
+    0.001007,
+    0.001163,
+    0.001142,
+    0.001183,
+    0.001199,
+    0.001041
+   ],
+   "runtimeMs": 11856
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 9.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016220948553893138,
+   "maxNodeGainBB": 0.0046171709528920295,
+   "epsilonBySeat": [
+    0.001258,
+    0.001622,
+    0.001603,
+    0.001542,
+    0.001365,
+    0.001038,
+    0.0007557
+   ],
+   "runtimeMs": 11422
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 10,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001211214429443914,
+   "maxNodeGainBB": 0.004197386472709345,
+   "epsilonBySeat": [
+    0.0008859,
+    0.001048,
+    0.001103,
+    0.00117,
+    0.001185,
+    0.001211,
+    0.001093
+   ],
+   "runtimeMs": 11532
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 10,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016589105177849176,
+   "maxNodeGainBB": 0.004800432535769547,
+   "epsilonBySeat": [
+    0.001318,
+    0.001639,
+    0.001659,
+    0.001622,
+    0.001469,
+    0.001116,
+    0.000807
+   ],
+   "runtimeMs": 11493
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 10.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001236183997210028,
+   "maxNodeGainBB": 0.004555418528609989,
+   "epsilonBySeat": [
+    0.0008201,
+    0.001016,
+    0.001195,
+    0.001224,
+    0.001236,
+    0.001218,
+    0.001181
+   ],
+   "runtimeMs": 11670
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 10.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015768758852027513,
+   "maxNodeGainBB": 0.004410558113709625,
+   "epsilonBySeat": [
+    0.001257,
+    0.001494,
+    0.001566,
+    0.001577,
+    0.001427,
+    0.001219,
+    0.000905
+   ],
+   "runtimeMs": 11626
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 11,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001331099550388501,
+   "maxNodeGainBB": 0.005361446755139576,
+   "epsilonBySeat": [
+    0.0007588,
+    0.001158,
+    0.001287,
+    0.001309,
+    0.001331,
+    0.001261,
+    0.001308
+   ],
+   "runtimeMs": 12225
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 11,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015991490557776776,
+   "maxNodeGainBB": 0.004970556069359072,
+   "epsilonBySeat": [
+    0.001291,
+    0.001365,
+    0.001599,
+    0.001572,
+    0.001434,
+    0.001322,
+    0.0009538
+   ],
+   "runtimeMs": 11133
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 11.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0014063680889474096,
+   "maxNodeGainBB": 0.0050424481745829875,
+   "epsilonBySeat": [
+    0.0007927,
+    0.001201,
+    0.001318,
+    0.001382,
+    0.001386,
+    0.001406,
+    0.001274
+   ],
+   "runtimeMs": 11753
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 11.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015094458845489641,
+   "maxNodeGainBB": 0.005012100818137959,
+   "epsilonBySeat": [
+    0.001281,
+    0.001351,
+    0.001509,
+    0.001496,
+    0.00139,
+    0.001333,
+    0.001016
+   ],
+   "runtimeMs": 11273
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 12,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015209629916430269,
+   "maxNodeGainBB": 0.006168441867259682,
+   "epsilonBySeat": [
+    0.0007037,
+    0.001326,
+    0.001405,
+    0.001464,
+    0.001477,
+    0.001521,
+    0.001418
+   ],
+   "runtimeMs": 11824
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 12,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015710823251802505,
+   "maxNodeGainBB": 0.005123210335694447,
+   "epsilonBySeat": [
+    0.001448,
+    0.001447,
+    0.001571,
+    0.00156,
+    0.001481,
+    0.001382,
+    0.001138
+   ],
+   "runtimeMs": 11620
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 12.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015894051885749902,
+   "maxNodeGainBB": 0.0065474563862557905,
+   "epsilonBySeat": [
+    0.0007207,
+    0.001247,
+    0.001347,
+    0.001448,
+    0.001464,
+    0.001589,
+    0.001522
+   ],
+   "runtimeMs": 11933
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 12.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015966920712812765,
+   "maxNodeGainBB": 0.005261599379411545,
+   "epsilonBySeat": [
+    0.001406,
+    0.001597,
+    0.00157,
+    0.001582,
+    0.001528,
+    0.001384,
+    0.001195
+   ],
+   "runtimeMs": 11446
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 13,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016110080603593544,
+   "maxNodeGainBB": 0.0070259377182024865,
+   "epsilonBySeat": [
+    0.0006924,
+    0.001202,
+    0.001398,
+    0.001545,
+    0.00153,
+    0.001588,
+    0.001611
+   ],
+   "runtimeMs": 11347
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 13,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016106598614328371,
+   "maxNodeGainBB": 0.0049617286204819925,
+   "epsilonBySeat": [
+    0.001347,
+    0.001604,
+    0.001563,
+    0.001611,
+    0.001574,
+    0.001443,
+    0.001245
+   ],
+   "runtimeMs": 12047
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 13.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016730088063665752,
+   "maxNodeGainBB": 0.007340382647531702,
+   "epsilonBySeat": [
+    0.0007755,
+    0.001174,
+    0.001445,
+    0.001621,
+    0.001607,
+    0.001618,
+    0.001673
+   ],
+   "runtimeMs": 11682
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 13.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016521838985913487,
+   "maxNodeGainBB": 0.0052076912146820815,
+   "epsilonBySeat": [
+    0.001333,
+    0.001588,
+    0.001577,
+    0.001652,
+    0.001637,
+    0.001554,
+    0.001313
+   ],
+   "runtimeMs": 11292
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 14,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001754043849732192,
+   "maxNodeGainBB": 0.00805062513977399,
+   "epsilonBySeat": [
+    0.0006214,
+    0.001251,
+    0.001608,
+    0.001698,
+    0.001719,
+    0.001754,
+    0.001676
+   ],
+   "runtimeMs": 11870
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 14,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0017402596561624482,
+   "maxNodeGainBB": 0.005559989370488994,
+   "epsilonBySeat": [
+    0.001312,
+    0.00163,
+    0.001657,
+    0.00174,
+    0.001713,
+    0.001643,
+    0.00141
+   ],
+   "runtimeMs": 11451
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 14.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001855659644029247,
+   "maxNodeGainBB": 0.008242999593335971,
+   "epsilonBySeat": [
+    0.0006186,
+    0.001194,
+    0.00165,
+    0.001743,
+    0.001738,
+    0.001856,
+    0.001773
+   ],
+   "runtimeMs": 11397
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 14.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001808493725920247,
+   "maxNodeGainBB": 0.006218065701599526,
+   "epsilonBySeat": [
+    0.001341,
+    0.001704,
+    0.001784,
+    0.001808,
+    0.001778,
+    0.0017,
+    0.001512
+   ],
+   "runtimeMs": 12233
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 15,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0019323046246209914,
+   "maxNodeGainBB": 0.008671700426795765,
+   "epsilonBySeat": [
+    0.0006635,
+    0.001202,
+    0.001686,
+    0.001776,
+    0.001805,
+    0.001932,
+    0.001898
+   ],
+   "runtimeMs": 11846
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 15,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001820675318484847,
+   "maxNodeGainBB": 0.00637121622534701,
+   "epsilonBySeat": [
+    0.001256,
+    0.001745,
+    0.001821,
+    0.001815,
+    0.001803,
+    0.001709,
+    0.001585
+   ],
+   "runtimeMs": 11292
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 17.5,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002344246739102826,
+   "maxNodeGainBB": 0.011392159428455966,
+   "epsilonBySeat": [
+    0.0008097,
+    0.001214,
+    0.001805,
+    0.002083,
+    0.002182,
+    0.002344,
+    0.00227
+   ],
+   "runtimeMs": 11546
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 17.5,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001965980219661041,
+   "maxNodeGainBB": 0.006855616486989395,
+   "epsilonBySeat": [
+    0.001439,
+    0.001624,
+    0.001839,
+    0.00189,
+    0.001961,
+    0.001966,
+    0.001822
+   ],
+   "runtimeMs": 11505
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 20,
+   "deadBB": 0,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002688572556300282,
+   "maxNodeGainBB": 0.0155489328810467,
+   "epsilonBySeat": [
+    0.0005321,
+    0.001486,
+    0.002081,
+    0.00255,
+    0.002665,
+    0.002641,
+    0.002689
+   ],
+   "runtimeMs": 11647
+  },
+  {
+   "tableSize": 7,
+   "stackBB": 20,
+   "deadBB": 1,
+   "nodes": 27,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002397257059040573,
+   "maxNodeGainBB": 0.009649841988745607,
+   "epsilonBySeat": [
+    0.001203,
+    0.002168,
+    0.002285,
+    0.002397,
+    0.002392,
+    0.002348,
+    0.00223
+   ],
+   "runtimeMs": 11409
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0020239225601268807,
+   "maxNodeGainBB": 0.005593585578242058,
+   "epsilonBySeat": [
+    0.001558,
+    0.0018,
+    0.002024,
+    0.001849,
+    0.00166,
+    0.001447,
+    0.001065,
+    0.0006815
+   ],
+   "runtimeMs": 15332
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0038672195974940645,
+   "maxNodeGainBB": 0.004567211441359429,
+   "epsilonBySeat": [
+    0.003867,
+    0.003714,
+    0.0029,
+    0.001993,
+    0.001269,
+    0.0008052,
+    0.0003066,
+    0.0000901
+   ],
+   "runtimeMs": 14931
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 5.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0017331407277067909,
+   "maxNodeGainBB": 0.00526552957153778,
+   "epsilonBySeat": [
+    0.001216,
+    0.001733,
+    0.001693,
+    0.001648,
+    0.001569,
+    0.001393,
+    0.001077,
+    0.0007484
+   ],
+   "runtimeMs": 15017
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 5.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.00386789369322048,
+   "maxNodeGainBB": 0.005071615029323349,
+   "epsilonBySeat": [
+    0.003868,
+    0.00353,
+    0.002961,
+    0.002319,
+    0.001747,
+    0.001241,
+    0.0006809,
+    0.0002304
+   ],
+   "runtimeMs": 14737
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 6,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016018529520439328,
+   "maxNodeGainBB": 0.004809393935457136,
+   "epsilonBySeat": [
+    0.001284,
+    0.001602,
+    0.00152,
+    0.001567,
+    0.001481,
+    0.00134,
+    0.001092,
+    0.0008171
+   ],
+   "runtimeMs": 14821
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 6,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0032904644280108376,
+   "maxNodeGainBB": 0.004847909602353786,
+   "epsilonBySeat": [
+    0.00329,
+    0.00296,
+    0.002697,
+    0.002068,
+    0.001629,
+    0.00122,
+    0.0007313,
+    0.0003519
+   ],
+   "runtimeMs": 14825
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 6.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0014729587380669013,
+   "maxNodeGainBB": 0.00459464699665198,
+   "epsilonBySeat": [
+    0.0012,
+    0.001409,
+    0.00144,
+    0.001473,
+    0.001423,
+    0.001325,
+    0.001139,
+    0.0008459
+   ],
+   "runtimeMs": 15527
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 6.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0026912435265244636,
+   "maxNodeGainBB": 0.004821828317003621,
+   "epsilonBySeat": [
+    0.002541,
+    0.002691,
+    0.002464,
+    0.002046,
+    0.001629,
+    0.001253,
+    0.0007654,
+    0.0004333
+   ],
+   "runtimeMs": 14939
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 7,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0014202421034773959,
+   "maxNodeGainBB": 0.004558423321125176,
+   "epsilonBySeat": [
+    0.001058,
+    0.001363,
+    0.00142,
+    0.001364,
+    0.001347,
+    0.001269,
+    0.001128,
+    0.000951
+   ],
+   "runtimeMs": 15306
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 7,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002972327192265454,
+   "maxNodeGainBB": 0.007410477587292579,
+   "epsilonBySeat": [
+    0.002712,
+    0.002972,
+    0.002867,
+    0.002427,
+    0.001956,
+    0.001569,
+    0.0009996,
+    0.0005508
+   ],
+   "runtimeMs": 14949
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 7.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0013613749558423196,
+   "maxNodeGainBB": 0.004589081163655949,
+   "epsilonBySeat": [
+    0.001017,
+    0.001302,
+    0.001361,
+    0.00133,
+    0.001336,
+    0.001286,
+    0.001217,
+    0.001048
+   ],
+   "runtimeMs": 15042
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 7.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0027345369114159185,
+   "maxNodeGainBB": 0.007265246449270202,
+   "epsilonBySeat": [
+    0.002602,
+    0.002735,
+    0.002561,
+    0.002354,
+    0.001976,
+    0.001631,
+    0.001137,
+    0.0006919
+   ],
+   "runtimeMs": 15093
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 8,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001442586737359754,
+   "maxNodeGainBB": 0.004786354921906468,
+   "epsilonBySeat": [
+    0.001177,
+    0.001254,
+    0.001409,
+    0.001443,
+    0.001417,
+    0.001372,
+    0.001269,
+    0.001155
+   ],
+   "runtimeMs": 14835
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 8,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0027062308355327155,
+   "maxNodeGainBB": 0.007556043335270071,
+   "epsilonBySeat": [
+    0.002175,
+    0.002706,
+    0.002666,
+    0.002566,
+    0.002228,
+    0.001866,
+    0.001332,
+    0.0008971
+   ],
+   "runtimeMs": 14979
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 8.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015286751298077775,
+   "maxNodeGainBB": 0.005041919106438361,
+   "epsilonBySeat": [
+    0.001117,
+    0.00128,
+    0.001523,
+    0.001529,
+    0.001483,
+    0.001447,
+    0.00138,
+    0.001194
+   ],
+   "runtimeMs": 14480
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 8.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0024993161471455463,
+   "maxNodeGainBB": 0.006424055100082216,
+   "epsilonBySeat": [
+    0.002358,
+    0.002499,
+    0.002423,
+    0.002352,
+    0.002087,
+    0.001786,
+    0.001362,
+    0.0009778
+   ],
+   "runtimeMs": 15043
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 9,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.00152730815675016,
+   "maxNodeGainBB": 0.005349854166846181,
+   "epsilonBySeat": [
+    0.0009921,
+    0.001302,
+    0.00149,
+    0.001527,
+    0.001525,
+    0.001515,
+    0.001386,
+    0.001286
+   ],
+   "runtimeMs": 15044
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 9,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0024110295797327387,
+   "maxNodeGainBB": 0.006596171627608706,
+   "epsilonBySeat": [
+    0.002411,
+    0.002262,
+    0.002367,
+    0.002214,
+    0.002012,
+    0.001773,
+    0.001381,
+    0.000987
+   ],
+   "runtimeMs": 14941
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 9.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015447966773420505,
+   "maxNodeGainBB": 0.005461750499366456,
+   "epsilonBySeat": [
+    0.0009335,
+    0.001355,
+    0.00144,
+    0.001545,
+    0.001494,
+    0.001501,
+    0.001488,
+    0.001338
+   ],
+   "runtimeMs": 14634
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 9.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0023782934699108174,
+   "maxNodeGainBB": 0.006732997597131028,
+   "epsilonBySeat": [
+    0.002097,
+    0.002209,
+    0.002378,
+    0.002246,
+    0.002092,
+    0.001853,
+    0.001489,
+    0.001111
+   ],
+   "runtimeMs": 15336
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 10,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0015565131926962182,
+   "maxNodeGainBB": 0.006230970987629471,
+   "epsilonBySeat": [
+    0.0008622,
+    0.001393,
+    0.001502,
+    0.001518,
+    0.001546,
+    0.001529,
+    0.001557,
+    0.00141
+   ],
+   "runtimeMs": 15448
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 10,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0023500281163493933,
+   "maxNodeGainBB": 0.006624247476952745,
+   "epsilonBySeat": [
+    0.002041,
+    0.002202,
+    0.00235,
+    0.00226,
+    0.002135,
+    0.001923,
+    0.00152,
+    0.001166
+   ],
+   "runtimeMs": 15312
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 10.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0016184165317553937,
+   "maxNodeGainBB": 0.006601076988628188,
+   "epsilonBySeat": [
+    0.0007955,
+    0.00135,
+    0.001491,
+    0.001618,
+    0.001614,
+    0.001595,
+    0.001568,
+    0.001522
+   ],
+   "runtimeMs": 15170
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 10.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002138779985551983,
+   "maxNodeGainBB": 0.006563132542807595,
+   "epsilonBySeat": [
+    0.002091,
+    0.002041,
+    0.002139,
+    0.002108,
+    0.002035,
+    0.001835,
+    0.001598,
+    0.001296
+   ],
+   "runtimeMs": 14955
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 11,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0017405351330578806,
+   "maxNodeGainBB": 0.00749348460619563,
+   "epsilonBySeat": [
+    0.000863,
+    0.001331,
+    0.001657,
+    0.001741,
+    0.001728,
+    0.001718,
+    0.001639,
+    0.001678
+   ],
+   "runtimeMs": 15356
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 11,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0021531800980688328,
+   "maxNodeGainBB": 0.006737550453007675,
+   "epsilonBySeat": [
+    0.001963,
+    0.002072,
+    0.002041,
+    0.002153,
+    0.002052,
+    0.001866,
+    0.001694,
+    0.001362
+   ],
+   "runtimeMs": 15504
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 11.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0018318866380722441,
+   "maxNodeGainBB": 0.008054012930567279,
+   "epsilonBySeat": [
+    0.0008551,
+    0.001398,
+    0.001734,
+    0.001806,
+    0.001832,
+    0.001805,
+    0.001817,
+    0.001676
+   ],
+   "runtimeMs": 15288
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 11.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0020830273673919995,
+   "maxNodeGainBB": 0.006487904564418295,
+   "epsilonBySeat": [
+    0.001732,
+    0.002051,
+    0.002026,
+    0.002083,
+    0.002001,
+    0.001846,
+    0.001686,
+    0.001376
+   ],
+   "runtimeMs": 15084
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 12,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0019598008300990974,
+   "maxNodeGainBB": 0.008996616572433275,
+   "epsilonBySeat": [
+    0.0007711,
+    0.001337,
+    0.001872,
+    0.001912,
+    0.001937,
+    0.00192,
+    0.00196,
+    0.001861
+   ],
+   "runtimeMs": 15872
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 12,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002226379716346833,
+   "maxNodeGainBB": 0.0070616345406540075,
+   "epsilonBySeat": [
+    0.00173,
+    0.002226,
+    0.002141,
+    0.00217,
+    0.002089,
+    0.001957,
+    0.001822,
+    0.001519
+   ],
+   "runtimeMs": 14867
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 12.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0020298719617900638,
+   "maxNodeGainBB": 0.008537354713835038,
+   "epsilonBySeat": [
+    0.0007723,
+    0.001319,
+    0.001771,
+    0.001834,
+    0.0019,
+    0.001889,
+    0.00203,
+    0.001934
+   ],
+   "runtimeMs": 14934
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 12.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0022442179682744183,
+   "maxNodeGainBB": 0.007245321787898946,
+   "epsilonBySeat": [
+    0.00163,
+    0.002159,
+    0.002244,
+    0.002148,
+    0.002092,
+    0.001984,
+    0.001837,
+    0.00158
+   ],
+   "runtimeMs": 14804
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 13,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002063563314478649,
+   "maxNodeGainBB": 0.009321050690631699,
+   "epsilonBySeat": [
+    0.0007653,
+    0.001312,
+    0.001751,
+    0.001903,
+    0.002011,
+    0.001971,
+    0.002031,
+    0.002064
+   ],
+   "runtimeMs": 15253
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 13,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002255206640369496,
+   "maxNodeGainBB": 0.00720235360583066,
+   "epsilonBySeat": [
+    0.001623,
+    0.002109,
+    0.002255,
+    0.00215,
+    0.002126,
+    0.002035,
+    0.001876,
+    0.001659
+   ],
+   "runtimeMs": 14850
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 13.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0021353987534802926,
+   "maxNodeGainBB": 0.00973453173378066,
+   "epsilonBySeat": [
+    0.0007138,
+    0.00143,
+    0.001766,
+    0.001986,
+    0.002121,
+    0.002082,
+    0.002058,
+    0.002135
+   ],
+   "runtimeMs": 15111
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 13.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002243326795702572,
+   "maxNodeGainBB": 0.007727945130928021,
+   "epsilonBySeat": [
+    0.001886,
+    0.002093,
+    0.002243,
+    0.002168,
+    0.002172,
+    0.002102,
+    0.001978,
+    0.001747
+   ],
+   "runtimeMs": 15144
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 14,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002207953908418307,
+   "maxNodeGainBB": 0.009537839384948265,
+   "epsilonBySeat": [
+    0.0007427,
+    0.001295,
+    0.001846,
+    0.002147,
+    0.002202,
+    0.002196,
+    0.002208,
+    0.002123
+   ],
+   "runtimeMs": 15256
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 14,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002312350460674417,
+   "maxNodeGainBB": 0.007832394181317107,
+   "epsilonBySeat": [
+    0.001849,
+    0.002103,
+    0.002312,
+    0.002272,
+    0.002285,
+    0.002206,
+    0.002095,
+    0.001844
+   ],
+   "runtimeMs": 15229
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 14.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002340413203257543,
+   "maxNodeGainBB": 0.010364314070183298,
+   "epsilonBySeat": [
+    0.0008386,
+    0.001299,
+    0.001803,
+    0.002197,
+    0.002257,
+    0.002226,
+    0.00234,
+    0.002241
+   ],
+   "runtimeMs": 15069
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 14.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002385394551474896,
+   "maxNodeGainBB": 0.008060257013296612,
+   "epsilonBySeat": [
+    0.001871,
+    0.002122,
+    0.002375,
+    0.002385,
+    0.00235,
+    0.002271,
+    0.002169,
+    0.00196
+   ],
+   "runtimeMs": 15262
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 15,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0024352575922938005,
+   "maxNodeGainBB": 0.012064784240966814,
+   "epsilonBySeat": [
+    0.0008408,
+    0.001367,
+    0.001839,
+    0.002261,
+    0.002317,
+    0.002319,
+    0.002435,
+    0.002423
+   ],
+   "runtimeMs": 15819
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 15,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0023866809966251257,
+   "maxNodeGainBB": 0.00842231311882587,
+   "epsilonBySeat": [
+    0.001752,
+    0.002003,
+    0.002375,
+    0.002387,
+    0.002331,
+    0.002272,
+    0.002144,
+    0.002062
+   ],
+   "runtimeMs": 15461
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 17.5,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002964533442039044,
+   "maxNodeGainBB": 0.01616630314226073,
+   "epsilonBySeat": [
+    0.000606,
+    0.001647,
+    0.001997,
+    0.002524,
+    0.002757,
+    0.002822,
+    0.002965,
+    0.002888
+   ],
+   "runtimeMs": 15554
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 17.5,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0025628106572322565,
+   "maxNodeGainBB": 0.01078060928903242,
+   "epsilonBySeat": [
+    0.001299,
+    0.002309,
+    0.002417,
+    0.002554,
+    0.002548,
+    0.002563,
+    0.002549,
+    0.002391
+   ],
+   "runtimeMs": 15661
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 20,
+   "deadBB": 0,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003369861349326667,
+   "maxNodeGainBB": 0.02083964687039265,
+   "epsilonBySeat": [
+    0.0009236,
+    0.001426,
+    0.002304,
+    0.002843,
+    0.003261,
+    0.003343,
+    0.003316,
+    0.00337
+   ],
+   "runtimeMs": 15603
+  },
+  {
+   "tableSize": 8,
+   "stackBB": 20,
+   "deadBB": 1,
+   "nodes": 35,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003179852683591726,
+   "maxNodeGainBB": 0.013866741103039634,
+   "epsilonBySeat": [
+    0.001214,
+    0.002257,
+    0.003079,
+    0.00313,
+    0.00318,
+    0.003125,
+    0.003058,
+    0.002919
+   ],
+   "runtimeMs": 15154
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0026191298457886114,
+   "maxNodeGainBB": 0.007374339605467057,
+   "epsilonBySeat": [
+    0.002163,
+    0.002513,
+    0.002564,
+    0.002619,
+    0.002358,
+    0.002098,
+    0.001832,
+    0.001384,
+    0.0009307
+   ],
+   "runtimeMs": 19634
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.004117917998490817,
+   "maxNodeGainBB": 0.004567211441359429,
+   "epsilonBySeat": [
+    0.004118,
+    0.004109,
+    0.003334,
+    0.002421,
+    0.001614,
+    0.001018,
+    0.0006401,
+    0.0002472,
+    0.00007322
+   ],
+   "runtimeMs": 19173
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 5.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0023326579878321482,
+   "maxNodeGainBB": 0.006841806809765418,
+   "epsilonBySeat": [
+    0.001854,
+    0.001996,
+    0.002333,
+    0.002205,
+    0.002084,
+    0.001942,
+    0.001726,
+    0.001419,
+    0.00103
+   ],
+   "runtimeMs": 19277
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 5.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.004530053454497826,
+   "maxNodeGainBB": 0.005794908695179408,
+   "epsilonBySeat": [
+    0.00453,
+    0.004476,
+    0.003683,
+    0.002904,
+    0.002195,
+    0.001617,
+    0.001141,
+    0.0006495,
+    0.0002273
+   ],
+   "runtimeMs": 19579
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 6,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002188992003350159,
+   "maxNodeGainBB": 0.0064789306521727845,
+   "epsilonBySeat": [
+    0.001526,
+    0.001999,
+    0.002189,
+    0.002042,
+    0.002014,
+    0.001878,
+    0.001699,
+    0.001423,
+    0.001127
+   ],
+   "runtimeMs": 20910
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 6,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003877780784527537,
+   "maxNodeGainBB": 0.005382028918753653,
+   "epsilonBySeat": [
+    0.003862,
+    0.003878,
+    0.003243,
+    0.002761,
+    0.002092,
+    0.001617,
+    0.001206,
+    0.0007226,
+    0.0003578
+   ],
+   "runtimeMs": 19587
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 6.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0019064921059756888,
+   "maxNodeGainBB": 0.005991062860659643,
+   "epsilonBySeat": [
+    0.001455,
+    0.00179,
+    0.001906,
+    0.001874,
+    0.001848,
+    0.001755,
+    0.001624,
+    0.00144,
+    0.001128
+   ],
+   "runtimeMs": 19770
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 6.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.00377676425061191,
+   "maxNodeGainBB": 0.007563046504948498,
+   "epsilonBySeat": [
+    0.003756,
+    0.003777,
+    0.003471,
+    0.002975,
+    0.002408,
+    0.001898,
+    0.001464,
+    0.0008747,
+    0.0004991
+   ],
+   "runtimeMs": 19607
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 7,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0018403266601728367,
+   "maxNodeGainBB": 0.006051591490713188,
+   "epsilonBySeat": [
+    0.001416,
+    0.001627,
+    0.00184,
+    0.001839,
+    0.001743,
+    0.001685,
+    0.001576,
+    0.001429,
+    0.001236
+   ],
+   "runtimeMs": 20048
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 7,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.004138042647123954,
+   "maxNodeGainBB": 0.009319480666947147,
+   "epsilonBySeat": [
+    0.004126,
+    0.004138,
+    0.003965,
+    0.003576,
+    0.002982,
+    0.00241,
+    0.001943,
+    0.001291,
+    0.0007166
+   ],
+   "runtimeMs": 19902
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 7.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0017882702390276044,
+   "maxNodeGainBB": 0.006050833425221393,
+   "epsilonBySeat": [
+    0.001295,
+    0.001575,
+    0.00178,
+    0.001788,
+    0.001719,
+    0.001685,
+    0.001606,
+    0.00151,
+    0.001331
+   ],
+   "runtimeMs": 19614
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 7.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.004135364559746736,
+   "maxNodeGainBB": 0.010543182512091718,
+   "epsilonBySeat": [
+    0.003724,
+    0.004135,
+    0.003923,
+    0.003513,
+    0.003119,
+    0.002623,
+    0.002183,
+    0.001556,
+    0.001014
+   ],
+   "runtimeMs": 19785
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 8,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0018813024220122186,
+   "maxNodeGainBB": 0.0067190082804174855,
+   "epsilonBySeat": [
+    0.001155,
+    0.001767,
+    0.001788,
+    0.001881,
+    0.00187,
+    0.001808,
+    0.001731,
+    0.001598,
+    0.001473
+   ],
+   "runtimeMs": 20027
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 8,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003918580838371172,
+   "maxNodeGainBB": 0.011065823618579242,
+   "epsilonBySeat": [
+    0.003678,
+    0.003755,
+    0.003919,
+    0.003651,
+    0.003365,
+    0.002913,
+    0.002465,
+    0.00186,
+    0.001313
+   ],
+   "runtimeMs": 19619
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 8.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0019992219982176524,
+   "maxNodeGainBB": 0.007125897787580455,
+   "epsilonBySeat": [
+    0.001132,
+    0.001722,
+    0.001823,
+    0.001999,
+    0.001964,
+    0.001886,
+    0.001819,
+    0.001732,
+    0.001528
+   ],
+   "runtimeMs": 20062
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 8.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0038016162972497906,
+   "maxNodeGainBB": 0.011108981689661387,
+   "epsilonBySeat": [
+    0.002915,
+    0.003802,
+    0.003695,
+    0.003435,
+    0.003203,
+    0.00283,
+    0.002445,
+    0.001933,
+    0.001452
+   ],
+   "runtimeMs": 19871
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 9,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001959626922205378,
+   "maxNodeGainBB": 0.007737500558119064,
+   "epsilonBySeat": [
+    0.001029,
+    0.00159,
+    0.001828,
+    0.00196,
+    0.001956,
+    0.001919,
+    0.001878,
+    0.00175,
+    0.001644
+   ],
+   "runtimeMs": 20318
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 9,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.00362790143259694,
+   "maxNodeGainBB": 0.010416266343143398,
+   "epsilonBySeat": [
+    0.002724,
+    0.003628,
+    0.003321,
+    0.00325,
+    0.002979,
+    0.002683,
+    0.00237,
+    0.001956,
+    0.001466
+   ],
+   "runtimeMs": 19662
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 9.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.001974556228145797,
+   "maxNodeGainBB": 0.007989475933028277,
+   "epsilonBySeat": [
+    0.0009035,
+    0.001531,
+    0.001875,
+    0.001914,
+    0.001975,
+    0.001896,
+    0.001871,
+    0.001856,
+    0.001701
+   ],
+   "runtimeMs": 20275
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 9.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0032524380191356287,
+   "maxNodeGainBB": 0.010534833847047216,
+   "epsilonBySeat": [
+    0.002767,
+    0.003252,
+    0.003191,
+    0.003195,
+    0.002957,
+    0.002713,
+    0.00241,
+    0.002049,
+    0.001618
+   ],
+   "runtimeMs": 19867
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 10,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0020026452859298826,
+   "maxNodeGainBB": 0.00875900268966216,
+   "epsilonBySeat": [
+    0.0008516,
+    0.001492,
+    0.001939,
+    0.002003,
+    0.001983,
+    0.001977,
+    0.001931,
+    0.001959,
+    0.001799
+   ],
+   "runtimeMs": 19678
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 10,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0031529897911090764,
+   "maxNodeGainBB": 0.00982539520277287,
+   "epsilonBySeat": [
+    0.002529,
+    0.003143,
+    0.003147,
+    0.003153,
+    0.002966,
+    0.00276,
+    0.002488,
+    0.002027,
+    0.001654
+   ],
+   "runtimeMs": 19704
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 10.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0020798846269483224,
+   "maxNodeGainBB": 0.009448745567925644,
+   "epsilonBySeat": [
+    0.0009918,
+    0.001423,
+    0.001897,
+    0.001994,
+    0.00208,
+    0.002046,
+    0.002001,
+    0.001981,
+    0.001938
+   ],
+   "runtimeMs": 19369
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 10.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0030585324916771843,
+   "maxNodeGainBB": 0.009060580626151062,
+   "epsilonBySeat": [
+    0.002325,
+    0.003059,
+    0.002901,
+    0.002882,
+    0.00276,
+    0.002612,
+    0.002362,
+    0.002049,
+    0.001736
+   ],
+   "runtimeMs": 20132
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 11,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0022336614743095904,
+   "maxNodeGainBB": 0.009664928848688225,
+   "epsilonBySeat": [
+    0.0008887,
+    0.001522,
+    0.001919,
+    0.002187,
+    0.002234,
+    0.002193,
+    0.002156,
+    0.002073,
+    0.002097
+   ],
+   "runtimeMs": 19938
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 11,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002902168364132646,
+   "maxNodeGainBB": 0.009476080370760517,
+   "epsilonBySeat": [
+    0.002265,
+    0.002902,
+    0.002891,
+    0.002768,
+    0.002778,
+    0.002611,
+    0.002377,
+    0.002193,
+    0.001808
+   ],
+   "runtimeMs": 19263
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 11.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0023314250179742213,
+   "maxNodeGainBB": 0.010411411402385747,
+   "epsilonBySeat": [
+    0.0008506,
+    0.001552,
+    0.002019,
+    0.002296,
+    0.002331,
+    0.002326,
+    0.002273,
+    0.002244,
+    0.002133
+   ],
+   "runtimeMs": 19281
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 11.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0027961004432614104,
+   "maxNodeGainBB": 0.008813531507093934,
+   "epsilonBySeat": [
+    0.00214,
+    0.002608,
+    0.002796,
+    0.002691,
+    0.002665,
+    0.002523,
+    0.002324,
+    0.002136,
+    0.001814
+   ],
+   "runtimeMs": 19244
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 12,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002444045646608834,
+   "maxNodeGainBB": 0.010438408903797181,
+   "epsilonBySeat": [
+    0.0008602,
+    0.001484,
+    0.001974,
+    0.002437,
+    0.002444,
+    0.002438,
+    0.002394,
+    0.002407,
+    0.002301
+   ],
+   "runtimeMs": 20225
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 12,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003010803676753153,
+   "maxNodeGainBB": 0.009818518510336202,
+   "epsilonBySeat": [
+    0.002216,
+    0.002662,
+    0.003011,
+    0.002854,
+    0.002804,
+    0.002663,
+    0.002482,
+    0.002314,
+    0.001994
+   ],
+   "runtimeMs": 19160
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 12.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.002483614412393985,
+   "maxNodeGainBB": 0.010586990624998679,
+   "epsilonBySeat": [
+    0.0009511,
+    0.001448,
+    0.001925,
+    0.002315,
+    0.002346,
+    0.002381,
+    0.002345,
+    0.002484,
+    0.002366
+   ],
+   "runtimeMs": 19327
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 12.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0028991172911355654,
+   "maxNodeGainBB": 0.009113371378649,
+   "epsilonBySeat": [
+    0.00213,
+    0.002505,
+    0.002896,
+    0.002899,
+    0.002748,
+    0.002637,
+    0.002485,
+    0.002289,
+    0.002011
+   ],
+   "runtimeMs": 19841
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 13,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0025499787615450315,
+   "maxNodeGainBB": 0.012388077691532844,
+   "epsilonBySeat": [
+    0.000893,
+    0.00148,
+    0.001959,
+    0.002338,
+    0.002452,
+    0.002525,
+    0.002462,
+    0.002524,
+    0.00255
+   ],
+   "runtimeMs": 19826
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 13,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0029478778226539708,
+   "maxNodeGainBB": 0.00965499253127227,
+   "epsilonBySeat": [
+    0.002049,
+    0.002532,
+    0.002888,
+    0.002948,
+    0.002789,
+    0.002708,
+    0.002571,
+    0.002372,
+    0.002132
+   ],
+   "runtimeMs": 19602
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 13.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0026621362020023335,
+   "maxNodeGainBB": 0.01325797543785404,
+   "epsilonBySeat": [
+    0.0008855,
+    0.001462,
+    0.002101,
+    0.002386,
+    0.002563,
+    0.002662,
+    0.002598,
+    0.002568,
+    0.002634
+   ],
+   "runtimeMs": 19295
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 13.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0029830995463340196,
+   "maxNodeGainBB": 0.010321443227901125,
+   "epsilonBySeat": [
+    0.001916,
+    0.002811,
+    0.002919,
+    0.002983,
+    0.00285,
+    0.002793,
+    0.002673,
+    0.002494,
+    0.002237
+   ],
+   "runtimeMs": 19309
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 14,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0027758626700779593,
+   "maxNodeGainBB": 0.014093157082327494,
+   "epsilonBySeat": [
+    0.0007492,
+    0.001525,
+    0.002012,
+    0.002499,
+    0.002752,
+    0.002776,
+    0.002743,
+    0.002729,
+    0.00265
+   ],
+   "runtimeMs": 18903
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 14,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003060425708156224,
+   "maxNodeGainBB": 0.010637892524217187,
+   "epsilonBySeat": [
+    0.001872,
+    0.002786,
+    0.002941,
+    0.00306,
+    0.002961,
+    0.002913,
+    0.002787,
+    0.002624,
+    0.002349
+   ],
+   "runtimeMs": 19246
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 14.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0028829201135482435,
+   "maxNodeGainBB": 0.014430096523876192,
+   "epsilonBySeat": [
+    0.0007248,
+    0.001631,
+    0.002033,
+    0.002477,
+    0.002819,
+    0.002847,
+    0.002791,
+    0.002883,
+    0.002767
+   ],
+   "runtimeMs": 19606
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 14.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003168784139329162,
+   "maxNodeGainBB": 0.011816202538293576,
+   "epsilonBySeat": [
+    0.001761,
+    0.002858,
+    0.00301,
+    0.003169,
+    0.003113,
+    0.003021,
+    0.002893,
+    0.002765,
+    0.002526
+   ],
+   "runtimeMs": 18775
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 15,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003006990744544454,
+   "maxNodeGainBB": 0.01577452650173122,
+   "epsilonBySeat": [
+    0.0007282,
+    0.001655,
+    0.00212,
+    0.002534,
+    0.002903,
+    0.002928,
+    0.002902,
+    0.003007,
+    0.002983
+   ],
+   "runtimeMs": 19779
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 15,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003136882979103132,
+   "maxNodeGainBB": 0.012050407709871916,
+   "epsilonBySeat": [
+    0.001689,
+    0.00271,
+    0.002867,
+    0.003137,
+    0.003086,
+    0.002978,
+    0.002872,
+    0.002732,
+    0.002623
+   ],
+   "runtimeMs": 19884
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 17.5,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.003577136108026136,
+   "maxNodeGainBB": 0.02065503512403357,
+   "epsilonBySeat": [
+    0.001091,
+    0.001459,
+    0.002422,
+    0.002728,
+    0.003203,
+    0.003399,
+    0.003436,
+    0.003577,
+    0.003517
+   ],
+   "runtimeMs": 21170
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 17.5,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.0033158018738814435,
+   "maxNodeGainBB": 0.014560922152408888,
+   "epsilonBySeat": [
+    0.001485,
+    0.002331,
+    0.003198,
+    0.003242,
+    0.003316,
+    0.00326,
+    0.003227,
+    0.003219,
+    0.003039
+   ],
+   "runtimeMs": 21006
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 20,
+   "deadBB": 0,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.004013617930586425,
+   "maxNodeGainBB": 0.021638861230741088,
+   "epsilonBySeat": [
+    0.001332,
+    0.001811,
+    0.002266,
+    0.003081,
+    0.003572,
+    0.003949,
+    0.004005,
+    0.003978,
+    0.004014
+   ],
+   "runtimeMs": 21011
+  },
+  {
+   "tableSize": 9,
+   "stackBB": 20,
+   "deadBB": 1,
+   "nodes": 44,
+   "iterations": 3000,
+   "maxEpsilonBB": 0.004002613793374389,
+   "maxNodeGainBB": 0.016468415750052603,
+   "epsilonBySeat": [
+    0.001433,
+    0.002388,
+    0.003296,
+    0.004003,
+    0.003999,
+    0.003998,
+    0.003901,
+    0.003777,
+    0.003607
+   ],
+   "runtimeMs": 20902
+  }
+ ]
+}
