@@ -93,6 +93,7 @@ export function QuickFeedback({ m, primary, secondary, details, open, onToggle, 
         )}
       </dl>
       {m.shortExplanation && <p className="text-ink-200" data-testid="qf-why">{m.shortExplanation}</p>}
+      {m.limitationNote && <p className="text-xs text-ink-400" data-testid="qf-limitation">{m.limitationNote}</p>}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {primary && (
           <button

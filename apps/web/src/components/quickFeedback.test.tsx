@@ -58,8 +58,26 @@ describe('feedback presentation adapter', () => {
     expect(h.qualityLabel).toBe('limited');
     expect(h.recommendedAction).toBeUndefined();
     expect(h.evLossBB).toBeUndefined();
-    expect(h.shortExplanation).toBe('Multiway turn spot: not graded.');
+    // limited decisions lead with the verified facts; the limitation stays as a separate note
+    expect(h.shortExplanation).toBe('Consider the board texture.');
+    expect(h.limitationNote).toBe('Multiway turn spot: not graded.');
     expect(h.score).toBeUndefined();
+  });
+
+  it('limited decision without facts still explains the limitation, and never invents a grade', () => {
+    const bare: EngineFeedback = { ...heuristic, coaching: undefined };
+    const q = toQuickFeedback(bare, { selectedAction: 'Check', lang: 'en', handComplete: false });
+    expect(q.shortExplanation).toBe('Multiway turn spot: not graded.');
+    expect(q.limitationNote).toBeUndefined();
+    expect(q.qualityLabel).toBe('limited');
+    expect(q.recommendedAction).toBeUndefined();
+    expect(q.evLossBB).toBeUndefined();
+    expect(q.grade).toBeUndefined();
+  });
+
+  it('graded decisions are unchanged: no limitation note', () => {
+    const q = toQuickFeedback(solver, { selectedAction: 'Call', lang: 'en', handComplete: false });
+    expect(q.limitationNote).toBeUndefined();
   });
 
   it('localises and lists only the analysis sections that have data', () => {
@@ -84,6 +102,15 @@ describe('QuickFeedback', () => {
     const m = toQuickFeedback(fb, { selectedAction: 'Call 4 BB', lang: 'en', handComplete: true });
     return <QuickFeedback m={m} open={open} onToggle={() => setOpen((x) => !x)} primary={onNext ? { label: 'Next hand', onClick: onNext, testId: 'sim-next' } : undefined} details={<p>DETAIL</p>} />;
   }
+
+  it('a limited decision shows the verified facts first, then the limitation; no grade or recommendation', () => {
+    render(<Harness fb={heuristic} />);
+    expect(screen.getByTestId('qf-quality')).toHaveTextContent('Assessment limited');
+    expect(screen.getByTestId('qf-why')).toHaveTextContent('Consider the board texture.');
+    expect(screen.getByTestId('qf-limitation')).toHaveTextContent('Multiway turn spot: not graded.');
+    expect(screen.queryByTestId('qf-recommended')).toBeNull();
+    expect(screen.queryByTestId('qf-score')).toBeNull();
+  });
 
   it('shows the compact verdict first and keeps detailed analysis collapsed until asked', async () => {
     render(<Harness fb={solver} />);
