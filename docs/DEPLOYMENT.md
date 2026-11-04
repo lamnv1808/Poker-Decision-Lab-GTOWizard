@@ -13,7 +13,7 @@ One web service (Node 20+) serving the API and the built SPA, plus managed Postg
 
 ## Render
 
-**Recommended: Blueprint.** Dashboard → New → Blueprint → pick this repository. `render.yaml` creates the web service *and* the Postgres database, links `DATABASE_URL`, and generates `APP_SECRET`.
+**Production is not Blueprint-managed.** The live service was created in the dashboard and no Blueprint exists. `render.yaml` is a reference that mirrors the live service; it deliberately declares **no database** and marks `DATABASE_URL` / `APP_SECRET` as `sync: false`, so a Blueprint created from it can never create a paid database, relink `DATABASE_URL` or rotate `APP_SECRET`. Do not create a Blueprint from this repository without reviewing `render.yaml` first. The database is configured by setting `DATABASE_URL` on the service (today: Render Postgres; planned: Neon — see the cutover runbook in the backup repository).
 
 **Existing manually created Web Service** (no database attached):
 1. Dashboard → New → PostgreSQL → create it in the same region as the web service.
