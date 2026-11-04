@@ -44,6 +44,12 @@ export interface NmaxParams {
   tableSize: number;
   stackBB: number;
   deadBB: number;
+  /**
+   * PKO prototype (Phase 4A): chip-equivalent value, in BB, of the bounty collected by whoever wins an all-in.
+   * Equal stacks → each player covers the other, so the winner always busts the loser. Default 0 (chip EV).
+   * Split pots pay no bounty; that small effect is ignored.
+   */
+  bountyBB?: number;
 }
 
 export interface NmaxSolution extends NmaxParams {
@@ -66,7 +72,7 @@ export interface NmaxSolution extends NmaxParams {
 
 const blindOf = (pos: string) => (pos === 'SB' ? 0.5 : pos === 'BB' ? 1 : 0);
 
-function shoveEvs(i: number, call: Float64Array[][], S: number, D: number, b: number[], out: Float64Array) {
+function shoveEvs(i: number, call: Float64Array[][], S: number, D: number, b: number[], out: Float64Array, X = 0) {
   const n = b.length;
   const win = 1.5 + D;
   for (let h = 0; h < N; h++) {
@@ -75,7 +81,7 @@ function shoveEvs(i: number, call: Float64Array[][], S: number, D: number, b: nu
     let ev = 0;
     for (let k = i + 1; k < n; k++) {
       const ck = call[i]![k]!;
-      const pot = 2 * S + D + (1.5 - b[i]! - b[k]!);
+      const pot = 2 * S + D + (1.5 - b[i]! - b[k]!) + X;
       const risk = S - b[i]!;
       let pc = 0;
       let showdown = 0;
@@ -93,8 +99,8 @@ function shoveEvs(i: number, call: Float64Array[][], S: number, D: number, b: nu
   }
 }
 
-function callEvs(i: number, k: number, shove: Float64Array, S: number, D: number, b: number[], out: (number | null)[]) {
-  const pot = 2 * S + D + (1.5 - b[i]! - b[k]!);
+function callEvs(i: number, k: number, shove: Float64Array, S: number, D: number, b: number[], out: (number | null)[], X = 0) {
+  const pot = 2 * S + D + (1.5 - b[i]! - b[k]!) + X;
   const risk = S - b[k]!;
   for (let x = 0; x < N; x++) {
     let den = 0;
@@ -130,7 +136,7 @@ export function nmaxExploitability(p: NmaxParams, shove: ArrayLike<number>[], ca
   let reachFirst = 1; // probability that all seats before i fold first-in
   const ev = new Float64Array(N);
   for (let i = 0; i < n - 1; i++) {
-    shoveEvs(i, ca, S, D, b, ev);
+    shoveEvs(i, ca, S, D, b, ev, p.bountyBB ?? 0);
     let gain = 0;
     for (let h = 0; h < N; h++) gain += (COMBOS[h]! / 1326) * (Math.max(ev[h]!, 0) - sh[i]![h]! * ev[h]!);
     eps[i] += reachFirst * gain;
@@ -139,7 +145,7 @@ export function nmaxExploitability(p: NmaxParams, shove: ArrayLike<number>[], ca
     let reachK = reachFirst * pShove;
     const evc: (number | null)[] = new Array(N);
     for (let k = i + 1; k < n; k++) {
-      callEvs(i, k, sh[i]!, S, D, b, evc);
+      callEvs(i, k, sh[i]!, S, D, b, evc, p.bountyBB ?? 0);
       // Hero's hand distribution when facing this shove: combos weighted by compatibility with the range
       let g = 0;
       let tot = 0;
@@ -178,10 +184,10 @@ export function solveNmaxPushFold(p: NmaxParams, opts: { iterations?: number; ro
   const brC: Float64Array[][] = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, k) => (k > i ? new Float64Array(N) : new Float64Array(0))));
   for (let t = 1; t <= iterations; t++) {
     for (let i = 0; i < n - 1; i++) {
-      shoveEvs(i, call, S, D, b, ev);
+      shoveEvs(i, call, S, D, b, ev, p.bountyBB ?? 0);
       for (let h = 0; h < N; h++) brS[i]![h] = ev[h]! > 0 ? 1 : 0;
       for (let k = i + 1; k < n; k++) {
-        callEvs(i, k, shove[i]!, S, D, b, evc);
+        callEvs(i, k, shove[i]!, S, D, b, evc, p.bountyBB ?? 0);
         for (let x = 0; x < N; x++) brC[i]![k]![x] = evc[x] != null && evc[x]! > 0 ? 1 : 0;
       }
     }
@@ -197,13 +203,13 @@ export function solveNmaxPushFold(p: NmaxParams, opts: { iterations?: number; ro
   const sh = shove.map((s) => Array.from(s, r));
   const ca = call.map((row) => row.map((c) => Array.from(c, r)));
   const evShove = sh.map((_, i) => {
-    shoveEvs(i, ca.map((row) => row.map((c) => Float64Array.from(c))), S, D, b, ev);
+    shoveEvs(i, ca.map((row) => row.map((c) => Float64Array.from(c))), S, D, b, ev, p.bountyBB ?? 0);
     return Array.from(ev, (x) => Math.round(x * 1e4) / 1e4);
   });
   const evCall = ca.map((row, i) =>
     row.map((_, k) => {
       if (k <= i || i >= n - 1) return [];
-      callEvs(i, k, Float64Array.from(sh[i]!), S, D, b, evc);
+      callEvs(i, k, Float64Array.from(sh[i]!), S, D, b, evc, p.bountyBB ?? 0);
       return evc.map((x) => (x == null ? null : Math.round(x * 1e4) / 1e4));
     }),
   );
