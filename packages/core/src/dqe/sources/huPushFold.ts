@@ -43,8 +43,8 @@ export const huPushFoldSource: EvidenceSource = {
     const S = d.effStackBB;
     const D = d.deadBB;
     if (S == null || D == null || S > AUDIT_MAX_STACK + 0.25 || S < 1) return { missing: { reason: 'stack_off_grid', detail: `heads-up push/fold grid covers 2–${AUDIT_MAX_STACK} BB; this spot is ${S ?? '?'} BB` } };
-    const stackBB = Math.min(AUDIT_MAX_STACK, Math.max(2, roundTo(S, 0.5)));
-    const deadBB = nearest(D, AUDIT_DEAD_LEVELS);
+    const stackBB = d.pushFoldGrid?.stackBB ?? Math.min(AUDIT_MAX_STACK, Math.max(2, roundTo(S, 0.5)));
+    const deadBB = d.pushFoldGrid?.deadBB ?? nearest(D, AUDIT_DEAD_LEVELS);
     const sol = solvePushFold({ stackBB, deadBB });
     const aggressive = role === 'sbShove' ? 'shove' : 'call';
     const spot = { seed: 0, role, stackBB, anteFormat: 'none', deadBB, heroCards: [] as unknown as GtoSpot['heroCards'], heroClass: d.heroClass } as GtoSpot;
