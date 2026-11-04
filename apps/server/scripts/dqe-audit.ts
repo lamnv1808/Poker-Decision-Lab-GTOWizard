@@ -42,6 +42,7 @@ async function main() {
   const sources = [huPushFoldSource, rangeLibrarySource('pdl-pushfold-nmax', library, tol)];
   mkdirSync(OUT, { recursive: true });
   const jsonl: string[] = [];
+  const contentLines: string[] = []; // id-free: comparable across database copies whose ids differ
   const byCat = new Map<string, number>();
   const byStreetCat = new Map<string, number>();
   const byPosCat = new Map<string, number>();
@@ -66,6 +67,7 @@ async function main() {
     last = page[page.length - 1]!.id;
     for (const h of page) {
       const a = auditHand(h.raw);
+      const rawHash = createHash('sha256').update(h.raw).digest('hex');
       for (const d of h.decisions) {
         if (total >= LIMIT) break;
         total++;
@@ -77,7 +79,9 @@ async function main() {
         }
         const dec = dqeDecisionFromReal(a.rec, snap, h.format, d.id);
         const v: DqeVerdict = evaluateDecision(dec, sources);
-        jsonl.push(JSON.stringify({ id: d.id, category: v.category, label: v.label, grade: v.grade, evLossBB: v.evLossBB, modelEvLossBB: v.modelEvLossBB, source: v.source?.id ?? null, ref: v.source?.referenceKey ?? null, match: v.matchStatus, missing: v.missing?.reason ?? null, engine: v.engineVersion }));
+        const line = { category: v.category, label: v.label, grade: v.grade, evLossBB: v.evLossBB, modelEvLossBB: v.modelEvLossBB, source: v.source?.id ?? null, ref: v.source?.referenceKey ?? null, match: v.matchStatus, missing: v.missing?.reason ?? null, engine: v.engineVersion };
+        jsonl.push(JSON.stringify({ id: d.id, ...line }));
+        contentLines.push(`${createHash('sha256').update(`${rawHash}|${d.heroActionNo}`).digest('hex')}|${JSON.stringify(line)}`);
         const cat = v.category;
         inc(byCat, cat);
         inc(byStreetCat, `${dec.street}|${cat}`);
@@ -126,10 +130,12 @@ async function main() {
     topUnsupportedFamilies: table(unsupported, total, 40),
     shadow: { ...shadow, disagree: shadow.disagree },
     verdictsSha256: createHash('sha256').update(content).digest('hex'),
+    // same verdicts keyed by (hand text, action number) instead of database ids: equal across copies of the same data
+    contentVerdictsSha256: createHash('sha256').update(contentLines.sort().join('\n')).digest('hex'),
     runtimeMs: Date.now() - t0,
     peakRssMB: Math.round(process.resourceUsage().maxRSS / 1024),
   };
   writeFileSync(join(OUT, 'coverage-report.json'), JSON.stringify(report, null, 1));
-  console.log(JSON.stringify({ decisions: total, reconstructionFailed: failed, byCategory: report.byCategory, shadow: { comparable: shadow.comparable, gradeAgree: shadow.gradeAgree, evLossAgree: shadow.evLossAgree, disagreements: shadow.disagree.length, pkoInconclusive: shadow.pkoInconclusive, existingOnly: shadow.existingOnly, dqeOnlySolver: shadow.dqeOnlySolver }, verdictsSha256: report.verdictsSha256, runtimeMs: report.runtimeMs, peakRssMB: report.peakRssMB }));
+  console.log(JSON.stringify({ decisions: total, reconstructionFailed: failed, byCategory: report.byCategory, shadow: { comparable: shadow.comparable, gradeAgree: shadow.gradeAgree, evLossAgree: shadow.evLossAgree, disagreements: shadow.disagree.length, pkoInconclusive: shadow.pkoInconclusive, existingOnly: shadow.existingOnly, dqeOnlySolver: shadow.dqeOnlySolver }, verdictsSha256: report.verdictsSha256, contentVerdictsSha256: report.contentVerdictsSha256, runtimeMs: report.runtimeMs, peakRssMB: report.peakRssMB }));
 }
 main().finally(() => prisma.$disconnect());
