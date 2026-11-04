@@ -95,6 +95,14 @@ describe('DQE: heads-up push/fold keeps the existing grading semantics exactly',
     expect(v.source!.referenceKey).toContain('D=1');
   });
 
+  it("uses the importer's grid point when given, never re-rounding a display-rounded stack (12.249 → 12, not 12.5)", () => {
+    const plain = evaluateDecision(dec({ effStackBB: 12.25, deadBB: 0.75 }), [huPushFoldSource]);
+    expect(plain.source!.referenceKey).toContain('S=12.5'); // what double rounding produced
+    const v = evaluateDecision(dec({ effStackBB: 12.25, deadBB: 0.75, pushFoldGrid: { stackBB: 12, deadBB: 0.75 } }), [huPushFoldSource]);
+    expect(v.source!.referenceKey).toContain('S=12|');
+    expect(v.matchStatus).toBe('grid_rounded');
+  });
+
   it('a stack above the solved grid is Unrated with the precise reason', () => {
     const v = evaluateDecision(dec({ effStackBB: 22 }), [huPushFoldSource]);
     expect(v.category).toBe('INSUFFICIENT_EVIDENCE');
