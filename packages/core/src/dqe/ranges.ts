@@ -142,7 +142,16 @@ function historyMatches(a: PriorAction[], b: PriorAction[]): boolean {
  * Evidence source over a set of records. Matching is exact on every key field except that the
  * stack and dead money must equal a record's grid values exactly (no rounding, no interpolation).
  */
-export function rangeLibrarySource(id: string, records: readonly RangeRecord[]): EvidenceSource {
+/**
+ * Stack/ante tolerance for nearest-grid matching. Allowed ONLY for approximate-model records (the verdict
+ * is then a labelled MODEL_ESTIMATE with matchStatus grid_rounded); verified records always need an exact match.
+ */
+export interface GridTolerance {
+  stackBB: (s: number) => number;
+  deadBB: number;
+}
+
+export function rangeLibrarySource(id: string, records: readonly RangeRecord[], tolerance: GridTolerance | null = null): EvidenceSource {
   const byNode = new Map<string, RangeRecord[]>();
   for (const r of records) {
     const k = `${r.key.economics}|${r.key.tableSize}|${r.key.heroPos}|${r.key.node}`;
@@ -157,7 +166,17 @@ export function rangeLibrarySource(id: string, records: readonly RangeRecord[]):
       if (!cands) return null;
       const sameHistory = cands.filter((r) => historyMatches(r.key.history, d.history));
       if (!sameHistory.length) return null;
-      const r = sameHistory.find((x) => d.effStackBB !== null && d.deadBB !== null && x.key.effStackBB === d.effStackBB && x.key.deadBB === d.deadBB);
+      let r = sameHistory.find((x) => d.effStackBB !== null && d.deadBB !== null && x.key.effStackBB === d.effStackBB && x.key.deadBB === d.deadBB);
+      let rounded = false;
+      if (!r && tolerance && d.effStackBB !== null && d.deadBB !== null) {
+        const S = d.effStackBB;
+        const D = d.deadBB;
+        const near = sameHistory
+          .filter((x) => x.evidence === 'approximateModel' && Math.abs(x.key.effStackBB - S) <= tolerance.stackBB(S) + 1e-9 && Math.abs(x.key.deadBB - D) <= tolerance.deadBB + 1e-9)
+          .sort((a, b) => Math.abs(a.key.effStackBB - S) - Math.abs(b.key.effStackBB - S) || Math.abs(a.key.deadBB - D) - Math.abs(b.key.deadBB - D) || a.keyString.localeCompare(b.keyString));
+        r = near[0];
+        rounded = !!r;
+      }
       if (!r) {
         const grid = [...new Set(sameHistory.map((x) => x.key.effStackBB))].sort((a, b) => a - b);
         return { missing: { reason: 'stack_off_grid', detail: `${id}: this situation is solved only at ${grid.join(', ')} BB (exact match required); spot is ${d.effStackBB} BB, ${d.deadBB} BB dead` } };
@@ -186,7 +205,7 @@ export function rangeLibrarySource(id: string, records: readonly RangeRecord[]):
           sourceId: id,
           sourceVersion: r.method.version,
           checksum: r.checksum,
-          matchStatus: 'exact',
+          matchStatus: rounded ? 'grid_rounded' : 'exact',
           referenceKey: r.keyString,
           economics: r.key.economics,
           frequencies: freqs,
@@ -195,7 +214,7 @@ export function rangeLibrarySource(id: string, records: readonly RangeRecord[]):
           approximation: r.method.approximation,
           facts: { exploitabilityBB: r.method.exploitabilityBB },
           grade,
-          note: null,
+          note: rounded ? `nearest solved grid point: ${r.key.effStackBB} BB, ${r.key.deadBB} BB dead (spot: ${d.effStackBB} BB, ${d.deadBB} BB dead)` : null,
         },
       };
     },
