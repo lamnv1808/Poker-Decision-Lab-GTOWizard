@@ -35,3 +35,15 @@ export async function waitForContent(page: Page) {
   }
   throw new Error('content not seeded');
 }
+
+/**
+ * Switch the UI language and wait until the choice is saved to the account. The server is the source
+ * of truth on a full page load, so navigating before PUT /api/preferences completes can reload the old
+ * language (this raced once on CI: the page came back in English and a Vietnamese label never appeared).
+ */
+export async function switchLang(page: Page, lang: 'en' | 'vi') {
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/api/preferences') && r.request().method() === 'PUT' && r.ok()),
+    page.getByTestId(`lang-${lang}`).click(),
+  ]);
+}

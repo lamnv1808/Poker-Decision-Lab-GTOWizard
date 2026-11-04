@@ -9,7 +9,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [['list']],
-  use: { baseURL: `http://localhost:${PORT}`, trace: 'retain-on-failure' },
+  use: { baseURL: `http://localhost:${PORT}`, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: {
     // Reset the dedicated *_test DB, then start the server (which validates and seeds content).
     command: 'npx tsx ../web/e2e/reset-db.ts && npx tsx src/main.ts',
