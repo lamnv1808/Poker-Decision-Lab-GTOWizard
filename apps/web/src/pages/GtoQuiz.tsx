@@ -1,5 +1,5 @@
 import type { HandState } from '@pdl/core/engine';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, mixedSessionId } from '../api';
 import { useAttemptIds } from '../attempt';
@@ -48,6 +48,12 @@ export function GtoQuiz() {
   const [spot, setSpot] = useState<Spot | null>(null);
   const attemptFor = useAttemptIds();
   const [result, setResult] = useState<Result | null>(null);
+  // On a phone the verdict + Next replace the (shorter) answer buttons; bring Next fully on screen so the
+  // player never has to scroll to continue. 'nearest' does nothing when it is already visible.
+  const nextRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (result) nextRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [result]);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<'push' | 'call'>('push');
@@ -155,7 +161,7 @@ export function GtoQuiz() {
             ) : (
               <div className="space-y-2" data-testid="gto-quick-feedback" aria-live="polite">
                 <div className="flex items-center gap-2"><GradeBadge grade={result.grade} /><span>{t('fb.evLoss')}: {fmtNum(result.evLossBB, 2)} BB</span></div>
-                <button type="button" onClick={() => void advance()} className="w-full rounded-xl bg-felt-500 py-4 text-base font-bold hover:bg-felt-600" data-testid="gto-next">{t(mixedSessionId() ? 'mixed.next' : 'gto.next')} <span className="text-xs opacity-60">(Enter)</span></button>
+                <button type="button" onClick={() => void advance()} className="w-full rounded-xl bg-felt-500 py-4 text-base font-bold hover:bg-felt-600" ref={nextRef} data-testid="gto-next">{t(mixedSessionId() ? 'mixed.next' : 'gto.next')} <span className="text-xs opacity-60">(Enter)</span></button>
               </div>
             )}
           </div>
