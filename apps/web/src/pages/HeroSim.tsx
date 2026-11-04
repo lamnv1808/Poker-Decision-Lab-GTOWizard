@@ -7,6 +7,7 @@ import { ActionBar } from '../components/ActionBar';
 import { PokerTable } from '../components/PokerTable';
 import { CardText } from '../components/Cards';
 import { ActionComparison, DecisionFeedback, type FeedbackView, ReasoningChecks, TierBadge } from '../components/DecisionFeedback';
+import { DqeEvidence, type DqeVerdictView } from '../components/DqeEvidence';
 import { type Cta, DetailSection, NextBar, QuickFeedback, useSingleFlight } from '../components/QuickFeedback';
 import { toQuickFeedback } from '../feedbackPresentation';
 import { type Reason, ReasonPicker } from '../components/ReasonPicker';
@@ -19,6 +20,8 @@ import type { Grade, Localized } from '../types';
 interface Facts { potBB: number; toCallBB: number; requiredEquity: number | null; spr: number | null; street: string; solverOptions?: { key: string; action: PlayerAction }[] | null }
 type Assessment = 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assumedRange' | 'heuristicCoaching' | 'notEvaluated';
 interface Feedback extends FeedbackView {
+  /** Decision Quality Engine verdict — present only when the server's DQE_FEEDBACK flag is on */
+  dqe?: DqeVerdictView;
   assessment?: Assessment;
   basis: 'solverEv' | 'modelEv' | 'none';
   track: 'strategy' | 'fundamentals' | 'model' | null;
@@ -682,6 +685,7 @@ function SimAnalysis({ v, d, fb, eq, onReview }: { v: SimView; d: DecisionView; 
             {fb.model.assumptions.map((a, i) => <li key={i}>{loc(a, lang)}</li>)}
           </ul>
         )}
+        {fb.dqe && <DqeEvidence v={fb.dqe} />}
       </DetailSection>
       {onReview && (
         <DetailSection n={7} title={t('qf.sec.review')} testId="qf-sec-review">
