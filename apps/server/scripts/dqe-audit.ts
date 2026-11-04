@@ -127,7 +127,7 @@ async function main() {
     shadow: { ...shadow, disagree: shadow.disagree },
     verdictsSha256: createHash('sha256').update(content).digest('hex'),
     runtimeMs: Date.now() - t0,
-    peakRssMB: Math.round(process.memoryUsage().rss / 1e6),
+    peakRssMB: Math.round(process.resourceUsage().maxRSS / 1024),
   };
   writeFileSync(join(OUT, 'coverage-report.json'), JSON.stringify(report, null, 1));
   console.log(JSON.stringify({ decisions: total, reconstructionFailed: failed, byCategory: report.byCategory, shadow: { comparable: shadow.comparable, gradeAgree: shadow.gradeAgree, evLossAgree: shadow.evLossAgree, disagreements: shadow.disagree.length, pkoInconclusive: shadow.pkoInconclusive, existingOnly: shadow.existingOnly, dqeOnlySolver: shadow.dqeOnlySolver }, verdictsSha256: report.verdictsSha256, runtimeMs: report.runtimeMs, peakRssMB: report.peakRssMB }));
