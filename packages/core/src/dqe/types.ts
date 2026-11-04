@@ -63,6 +63,12 @@ export interface DqeDecision {
   requiredEquity?: number | null;
   /** sourced coaching text for this spot, if any (curated scenarios / concepts) */
   heuristic?: { sourceId: string; locator: string; text: string } | null;
+  /**
+   * Grid point already chosen by the importer's push/fold audit from the UNROUNDED stack and dead money.
+   * When present the heads-up source uses it, so a value rounded for display (e.g. 12.249 → 12.25) is
+   * never rounded a second time onto a different grid point (12.5 instead of 12).
+   */
+  pushFoldGrid?: { stackBB: number; deadBB: number } | null;
 }
 
 export type MatchStatus = 'exact' | 'grid_rounded';
