@@ -38,6 +38,11 @@ export interface QuickFeedbackModel {
   evLossBB?: number;
   evidenceLevel: EvidenceLevel;
   shortExplanation: string;
+  /**
+   * For a limited (ungraded) decision whose short line shows the verified facts: why no action is
+   * ranked. Shown under the facts so the limitation stays visible without hiding the numbers.
+   */
+  limitationNote?: string;
   detailedExplanation?: string;
   availableAnalysis: AnalysisSection[];
   handComplete: boolean;
@@ -103,7 +108,12 @@ export function toQuickFeedback(
   const evidence = evidenceLevel(fb);
   const evBacked = quality !== 'limited' && (evidence === 'solver' || evidence === 'math' || evidence === 'reference');
   const why = pick(fb.explain?.why, o.lang);
-  const shortExplanation = evBacked && why ? why : pick(fb.limitation, o.lang) || pick(fb.coaching, o.lang) || pick(fb.note, o.lang) || why;
+  // Ungraded decisions lead with the verified facts (equity vs the modelled ranges, the price) when the
+  // engine computed them; the generic limitation follows as a note instead of replacing the numbers.
+  const facts = quality === 'limited' ? pick(fb.coaching, o.lang) : '';
+  const limitation = pick(fb.limitation, o.lang);
+  const shortExplanation = evBacked && why ? why : facts || limitation || pick(fb.note, o.lang) || why;
+  const limitationNote = facts && limitation ? limitation : undefined;
   const sections: AnalysisSection[] = [];
   if (why || fb.limitation || fb.coaching) sections.push('why');
   if (fb.reasoning && fb.reasoning.quality !== 'notAssessed' && fb.reasoning.checks.length) sections.push('reasoning');
@@ -121,6 +131,7 @@ export function toQuickFeedback(
     evLossBB: evBacked && fb.evLossBB !== undefined && fb.evLossBB > 0 ? fb.evLossBB : undefined,
     evidenceLevel: evidence,
     shortExplanation,
+    limitationNote,
     detailedExplanation: pick(fb.note, o.lang) || undefined,
     availableAnalysis: sections,
     handComplete: o.handComplete,
