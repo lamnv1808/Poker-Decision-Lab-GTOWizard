@@ -1,7 +1,8 @@
 import type { HandState, LegalActions, PlayerAction } from '@pdl/core/engine';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { api, newAttemptId } from '../api';
+import { api } from '../api';
+import { useAttemptIds } from '../attempt';
 import { ActionBar } from '../components/ActionBar';
 import { NotesPanel } from '../components/Notes';
 import { CardText } from '../components/Cards';
@@ -109,6 +110,7 @@ export function HandDetailPage() {
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
   const [hand, setHand] = useState<HandDetail | null>(null);
   const [spot, setSpot] = useState<SpotView | null>(null);
+  const attemptFor = useAttemptIds();
   const [result, setResult] = useState<SpotResult | null>(null);
   const [queued, setQueued] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -123,7 +125,7 @@ export function HandDetailPage() {
   }, [id, spotIdx]);
   const act = async (action: PlayerAction) => {
     try {
-      setResult(await api.post<SpotResult>(`/hands/${id}/spots/${spotIdx}/answer`, { clientAttemptId: newAttemptId(), action }));
+      setResult(await api.post<SpotResult>(`/hands/${id}/spots/${spotIdx}/answer`, { clientAttemptId: attemptFor(spot), action }));
     } catch (e) {
       setError(e);
     }

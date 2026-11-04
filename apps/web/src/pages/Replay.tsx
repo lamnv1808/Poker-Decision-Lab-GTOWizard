@@ -1,7 +1,8 @@
 import type { HandState, LegalActions, PlayerAction } from '@pdl/core/engine';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, newAttemptId, ApiError, mixedSessionId } from '../api';
+import { api, ApiError, mixedSessionId } from '../api';
+import { useAttemptIds } from '../attempt';
 import { type FeedbackView, type Tier, TierBadge } from '../components/DecisionFeedback';
 import { type Reason, ReasonPicker } from '../components/ReasonPicker';
 import { ActionBar } from '../components/ActionBar';
@@ -97,6 +98,7 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
   const [multiway, setMultiway] = useState<'' | 'true' | 'false'>('');
   const [mode, setMode] = useState<'practice' | 'rated'>('practice');
   const [q, setQ] = useState<DecisionQuestion | null>(null);
+  const attemptFor = useAttemptIds();
   const [pending, setPending] = useState<PlayerAction | null>(null);
   const [reasoning, setReasoning] = useState('');
   const [reasons, setReasons] = useState<Reason[]>([]);
@@ -134,7 +136,7 @@ export function ReplayPage({ kind }: { kind: 'replay' | 'strategy' }) {
     if (!q || !pending) return;
     setBusy(true);
     try {
-      const r = await api.post<ReplayResult>(`/real/decisions/${q.decisionId}/answer`, { clientAttemptId: newAttemptId(), action: pending, reasoning: reasoning.trim() || undefined, reasons: reasons.length ? reasons : undefined, confidence: confidence ?? undefined, responseMs: Date.now() - shownAt.current, mode, sessionId: mixedSessionId() });
+      const r = await api.post<ReplayResult>(`/real/decisions/${q.decisionId}/answer`, { clientAttemptId: attemptFor(q), action: pending, reasoning: reasoning.trim() || undefined, reasons: reasons.length ? reasons : undefined, confidence: confidence ?? undefined, responseMs: Date.now() - shownAt.current, mode, sessionId: mixedSessionId() });
       setResult(r);
       // the rest of the real hand is shown right away (only what the hand history recorded)
       api.get<Outcome>(`/real/decisions/${q.decisionId}/outcome`).then(setOutcome).catch(() => {});

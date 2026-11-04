@@ -24,8 +24,8 @@ describe('fixes from the V3 code review', () => {
     for (let i = 0; i < 30; i++) {
       const v = (await u.agent.post('/api/sim/hands').send({ tableSize: 2, stackBB: 10, mode: 'rated' }).expect(201)).body;
       const [a, b] = await Promise.all([
-        u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }),
-        u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: { type: 'fold' } }),
+        u.agent.post(`/api/sim/hands/${v.id}/act`).send({ decisionIndex: v.decisionIndex ?? 0, clientAttemptId: cid(), action: { type: 'fold' } }),
+        u.agent.post(`/api/sim/hands/${v.id}/act`).send({ decisionIndex: v.decisionIndex ?? 0, clientAttemptId: cid(), action: { type: 'fold' } }),
       ]);
       expect([a.status, b.status].sort()).toEqual([200, 409]);
       const atts = await prisma.decisionAttempt.findMany({ where: { userId: u.id, itemRef: { startsWith: `sim:${v.id}:` } } });

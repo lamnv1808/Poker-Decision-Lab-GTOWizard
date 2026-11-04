@@ -2,6 +2,7 @@ import type { HandState, OracleNode, PlayerAction, SimConfig, SimDeal, SpotOracl
 import { fullDeck, totalPot } from '@pdl/core';
 import { mixedSessionFor } from './mixed';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { newDecisionNonce, tokenAttemptKey } from './attemptKey';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
@@ -86,7 +87,7 @@ function issue(o: object) {
   const p = Buffer.from(JSON.stringify(o)).toString('base64url');
   return `${p}.${sign(p)}`;
 }
-function read(userId: string, token: string): { u: string; flop: string; node: QuizNode; c: string } {
+function read(userId: string, token: string): { u: string; flop: string; node: QuizNode; c: string; n?: string } {
   const [p, s] = token.split('.');
   if (!p || !s) throw new HttpError(400, 'invalid_token');
   const a = Buffer.from(sign(p));
@@ -128,7 +129,7 @@ postflopRouter.get('/spot', (req, res) => {
   const potBefore = state.deadAntes + state.players.reduce((s, p) => s + p.totalCommitted, 0) - (node === 'ip_vs_check' ? 0 : state.currentBet);
   const potChips = (potBefore / BB) * d.chipsPerBB;
   res.json({
-    token: issue({ u: userId, flop, node, c: h.c }),
+    token: issue({ u: userId, flop, node, c: h.c, n: newDecisionNonce() }),
     flop,
     node,
     hero,
@@ -197,7 +198,7 @@ postflopRouter.post('/answer', async (req, res) => {
   const mixed = await mixedSessionFor(userId, body.sessionId);
   const outcome = await recordAttempt({
     userId,
-    clientAttemptId: body.clientAttemptId,
+    clientAttemptId: tokenAttemptKey('gtopf', t.n, body.clientAttemptId),
     sessionId: mixed?.id ?? null,
     attemptType: 'quiz',
     itemRef: `gtopf:${t.flop}:${t.node}:${result.heroClass}`,

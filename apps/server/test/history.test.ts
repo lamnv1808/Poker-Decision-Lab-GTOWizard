@@ -3,7 +3,7 @@ import { prisma } from '../src/db';
 import { cid, ensureSeeded, newUser } from './helpers';
 
 type Agent = Awaited<ReturnType<typeof newUser>>['agent'];
-type RunView = { runId: string; status: 'decision' | 'question' | 'complete'; legal: { canCheck: boolean; canFold: boolean } | null; question: { type: string; choices: { id: string }[] | null } | null; scenario?: { id: string } };
+type RunView = { runId: string; nodeKey: string; status: 'decision' | 'question' | 'complete'; legal: { canCheck: boolean; canFold: boolean } | null; question: { type: string; choices: { id: string }[] | null } | null; scenario?: { id: string } };
 
 /** Play a scenario run to its end with simple legal answers. */
 async function finish(agent: Agent, v: RunView) {
@@ -11,11 +11,11 @@ async function finish(agent: Agent, v: RunView) {
   for (let i = 0; i < 20 && view.status !== 'complete'; i++) {
     if (view.status === 'decision') {
       const action = view.legal!.canCheck ? { type: 'check' } : { type: 'fold' };
-      view = (await agent.post(`/api/runs/${view.runId}/act`).send({ clientAttemptId: cid(), action }).expect(200)).body.view;
+      view = (await agent.post(`/api/runs/${view.runId}/act`).send({ nodeKey: view.nodeKey, clientAttemptId: cid(), action }).expect(200)).body.view;
     } else {
       const q = view.question!;
       const answer = q.choices ? { choiceId: q.choices[0]!.id } : q.type === 'rangeGrid' ? { classes: ['AA'] } : { value: 10 };
-      view = (await agent.post(`/api/runs/${view.runId}/answer`).send({ clientAttemptId: cid(), answer }).expect(200)).body.view;
+      view = (await agent.post(`/api/runs/${view.runId}/answer`).send({ nodeKey: view.nodeKey, clientAttemptId: cid(), answer }).expect(200)).body.view;
     }
   }
   return view;

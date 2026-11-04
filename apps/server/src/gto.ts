@@ -27,6 +27,7 @@ import { prisma } from './db';
 import { env } from './env';
 import { HttpError, parse } from './http';
 import { recordAttempt } from './learning';
+import { newDecisionNonce, tokenAttemptKey } from './attemptKey';
 
 const BB = 1000;
 
@@ -34,16 +35,16 @@ function sign(payload: string) {
   return createHmac('sha256', env.APP_SECRET).update(`gto:${payload}`).digest('base64url');
 }
 function issue(userId: string, seed: number, filter: object) {
-  const payload = Buffer.from(JSON.stringify({ u: userId, s: seed, f: filter })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ u: userId, s: seed, f: filter, n: newDecisionNonce() })).toString('base64url');
   return `${payload}.${sign(payload)}`;
 }
-function read(userId: string, token: string): { s: number; f: Parameters<typeof generateGtoSpot>[1] } {
+function read(userId: string, token: string): { s: number; f: Parameters<typeof generateGtoSpot>[1]; n?: string } {
   const [payload, sig] = token.split('.');
   if (!payload || !sig) throw new HttpError(400, 'invalid_token');
   const a = Buffer.from(sign(payload));
   const b = Buffer.from(sig);
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw new HttpError(400, 'invalid_token');
-  const d = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { u: string; s: number; f: Parameters<typeof generateGtoSpot>[1] };
+  const d = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { u: string; s: number; f: Parameters<typeof generateGtoSpot>[1]; n?: string };
   if (d.u !== userId) throw new HttpError(403, 'forbidden');
   return d;
 }
@@ -138,7 +139,7 @@ gtoRouter.post('/answer', async (req, res) => {
   const mixed = await mixedSessionFor(userId, body.sessionId);
   const outcome = await recordAttempt({
     userId,
-    clientAttemptId: body.clientAttemptId,
+    clientAttemptId: tokenAttemptKey('gto', t.n, body.clientAttemptId),
     sessionId: mixed?.id ?? null,
     attemptType: 'quiz',
     itemRef: `gto:${spot.role}:${spot.stackBB}:${spot.deadBB}:${spot.heroClass}`,

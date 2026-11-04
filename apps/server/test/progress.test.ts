@@ -7,7 +7,7 @@ describe('practice progress for every module (not Elo)', () => {
     let v;
     do v = (await u.agent.post('/api/sim/hands').send({ tableSize: 6, stackBB: 100 }).expect(201)).body;
     while (!v.legal);
-    for (let i = 0; i < 30 && v.status === 'active' && v.legal; i++) v = (await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: cid(), action: v.legal.canCheck ? { type: 'check' } : { type: 'fold' }, confidence: 2 }).expect(200)).body.view;
+    for (let i = 0; i < 30 && v.status === 'active' && v.legal; i++) v = (await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ decisionIndex: v.decisionIndex ?? 0, clientAttemptId: cid(), action: v.legal.canCheck ? { type: 'check' } : { type: 'fold' }, confidence: 2 }).expect(200)).body.view;
     const quiz = (await u.agent.get('/api/math/quiz?level=1').expect(200)).body;
     await u.agent.post('/api/math/quiz/answer').send({ token: quiz.token, value: 1, clientAttemptId: cid() }).expect(200);
     const spot = (await u.agent.get('/api/gto/spot').expect(200)).body;

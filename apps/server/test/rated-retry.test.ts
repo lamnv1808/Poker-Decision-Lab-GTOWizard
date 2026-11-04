@@ -32,7 +32,7 @@ describe('rated answers are applied exactly once per clientAttemptId', () => {
     const retry = await u.agent.post('/api/gto/answer').send(answerBody(s, id)).expect(200);
     expect(retry.body.grade).toBe(first.grade);
     expect(await snapshot(u.id)).toEqual(after1);
-    expect(await prisma.ratingHistory.count({ where: { attempt: { userId: u.id, clientAttemptId: id } } })).toBe(first.ratingChanges.length);
+    expect(await prisma.ratingHistory.count({ where: { userId: u.id } })).toBe(first.ratingChanges.length);
   });
 
   it('GTO quiz: a delayed retry, after other rated answers, changes nothing', async () => {
@@ -63,7 +63,7 @@ describe('rated answers are applied exactly once per clientAttemptId', () => {
     expect(ok.length).toBeGreaterThan(0);
     const after = await snapshot(u.id);
     expect(after.attempts - before.attempts).toBe(1);
-    const applied = await prisma.ratingHistory.count({ where: { attempt: { userId: u.id, clientAttemptId: id } } });
+    const applied = await prisma.ratingHistory.count({ where: { userId: u.id } });
     expect(applied).toBeGreaterThan(0);
     expect(after.history - before.history).toBe(applied);
     // each rated skill moved exactly once
@@ -81,7 +81,7 @@ describe('rated answers are applied exactly once per clientAttemptId', () => {
     const id = cid();
     const action = v.legal.canCheck ? { type: 'check' } : { type: 'call' };
     const before = await snapshot(u.id);
-    const res = await Promise.all(Array.from({ length: 5 }, () => u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: id, action })));
+    const res = await Promise.all(Array.from({ length: 5 }, () => u.agent.post(`/api/sim/hands/${v.id}/act`).send({ decisionIndex: v.decisionIndex ?? 0, clientAttemptId: id, action })));
     for (const r of res) expect([200, 409]).toContain(r.status);
     const hand = await prisma.simHand.findUniqueOrThrow({ where: { id: v.id } });
     const steps = (hand.steps as { clientAttemptId?: string }[]).filter((x) => x.clientAttemptId === id);
@@ -90,7 +90,7 @@ describe('rated answers are applied exactly once per clientAttemptId', () => {
     expect(mid.attempts - before.attempts).toBeLessThanOrEqual(1);
     // delayed retry of the same action: still recorded once, nothing else changes
     await new Promise((r) => setTimeout(r, 300));
-    const again = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ clientAttemptId: id, action });
+    const again = await u.agent.post(`/api/sim/hands/${v.id}/act`).send({ decisionIndex: v.decisionIndex ?? 0, clientAttemptId: id, action });
     expect([200, 409]).toContain(again.status);
     const hand2 = await prisma.simHand.findUniqueOrThrow({ where: { id: v.id } });
     expect((hand2.steps as { clientAttemptId?: string }[]).filter((x) => x.clientAttemptId === id)).toHaveLength(1);

@@ -1,5 +1,6 @@
 import { mixedSessionFor } from './mixed';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { newDecisionNonce, tokenAttemptKey } from './attemptKey';
 import { QUIZ_KINDS, type QuizKind, generateQuiz, gradeQuiz, quizDifficulty, GRADING_METHOD_VERSION, isError } from '@pdl/core';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -14,7 +15,7 @@ function sign(payload: string) {
   return createHmac('sha256', env.APP_SECRET).update(payload).digest('base64url');
 }
 export function issueToken(userId: string, kind: QuizKind, seed: number, level: number) {
-  const payload = Buffer.from(JSON.stringify({ u: userId, k: kind, s: seed, l: level })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ u: userId, k: kind, s: seed, l: level, n: newDecisionNonce() })).toString('base64url');
   return `${payload}.${sign(payload)}`;
 }
 function readToken(userId: string, token: string) {
@@ -23,7 +24,7 @@ function readToken(userId: string, token: string) {
   const expected = Buffer.from(sign(payload));
   const got = Buffer.from(sig);
   if (expected.length !== got.length || !timingSafeEqual(expected, got)) throw new HttpError(400, 'invalid_token');
-  const data = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { u: string; k: QuizKind; s: number; l: 1 | 2 | 3 };
+  const data = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { u: string; k: QuizKind; s: number; l: 1 | 2 | 3; n?: string };
   if (data.u !== userId) throw new HttpError(403, 'forbidden');
   return data;
 }
@@ -52,7 +53,7 @@ mathRouter.post('/quiz/answer', async (req, res) => {
   const result = { kind: quiz.kind, prompt: quiz.prompt, value: body.value, answer: quiz.answer, unit: quiz.unit, tolerance: quiz.tolerance, error, grade, steps: quiz.steps, formula: quiz.formula, source: { classification: 'MATH_VERIFIED' } };
   const outcome = await recordAttempt({
     userId,
-    clientAttemptId: body.clientAttemptId,
+    clientAttemptId: tokenAttemptKey('math', t.n, body.clientAttemptId),
     sessionId: session.id,
     attemptType: 'quiz',
     itemRef: `quiz:${quiz.kind}:${quiz.level}:${quiz.seed}`,

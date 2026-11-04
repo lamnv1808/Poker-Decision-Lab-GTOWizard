@@ -1,7 +1,8 @@
 import type { HandState, LegalActions, PlayerAction } from '@pdl/core/engine';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, newAttemptId } from '../api';
+import { api } from '../api';
+import { useAttemptIds } from '../attempt';
 import { ActionBar } from '../components/ActionBar';
 import { PokerTable } from '../components/PokerTable';
 import { CardText } from '../components/Cards';
@@ -39,6 +40,8 @@ export interface SimView {
   state: HandState;
   heroCards: string[];
   legal: LegalActions | null;
+  /** Index of the open Hero decision (sent back with the action); null when Hero is not to act. */
+  decisionIndex: number | null;
   progress: { street: string; decisionNumber: number; complete: boolean };
   current: Facts | null;
   decisions: DecisionView[];
@@ -218,6 +221,7 @@ export function HeroSimPage() {
   const showBB = useApp((s) => s.me?.preferences.showBB ?? true);
   const mixed = new URLSearchParams(window.location.search).get('mixed');
   const [v, setV] = useState<SimView | null>(null);
+  const attemptFor = useAttemptIds();
   const [last, setLast] = useState<{ fb: Feedback; eq?: ModelEq } | null>(null);
   const [reasoning, setReasoning] = useState('');
   const [busy, setBusy] = useState(false);
@@ -291,7 +295,10 @@ export function HeroSimPage() {
     setError(null);
     try {
       const r = await api.post<{ view: SimView; feedback: (Feedback & { modelEquity?: ModelEq }) | null }>(`/sim/hands/${v.id}/act`, {
-        clientAttemptId: newAttemptId(),
+        // one id per decision (hand + decision index), reused by any retry; the index lets the server
+        // refuse a stale retry instead of applying it to the next decision
+        clientAttemptId: attemptFor(`${v.id}:${v.decisionIndex}`),
+        decisionIndex: v.decisionIndex,
         action,
         confidence,
         reasoning: reasoning.trim() || undefined,
