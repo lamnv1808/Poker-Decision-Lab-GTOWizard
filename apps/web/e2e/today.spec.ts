@@ -27,7 +27,8 @@ test("today's plan progresses through its items to the summary", async ({ page }
   await register(page, 'TodayRun');
   await waitForContent(page);
   await page.goto('/today');
-  await page.getByRole('radio', { name: '5 min' }).click();
+  // the page clears the 10-min plan and loads the 5-min one: wait for that response, not for the old list
+  await Promise.all([page.waitForResponse((r) => r.url().includes('/api/daily/plan?minutes=5') && r.ok()), page.getByRole('radio', { name: '5 min' }).click()]);
   await expect(page.getByTestId('today-items').locator('li').first()).toBeVisible();
   const planned = await page.getByTestId('today-items').locator('li').count();
   expect(planned).toBeGreaterThan(0);

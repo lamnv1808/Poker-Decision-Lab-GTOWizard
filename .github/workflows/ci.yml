@@ -31,3 +31,11 @@ jobs:
           PGPASSWORD=pdl psql -h localhost -U pdl -d pdl_test -c 'CREATE DATABASE pdl_e2e_test'
           npx playwright install --with-deps chromium
           npm run test:e2e
+      - name: Upload E2E traces and screenshots (failures only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
