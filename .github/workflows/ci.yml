@@ -31,6 +31,3 @@ jobs:
           PGPASSWORD=pdl psql -h localhost -U pdl -d pdl_test -c 'CREATE DATABASE pdl_e2e_test'
           npx playwright install --with-deps chromium
           npm run test:e2e
-      - name: TEMPORARY R8 + gto-next repeat (diagnostic, removed before merge)
-        working-directory: apps/web
-        run: npx playwright test e2e/p0-repro.spec.ts e2e/gto-next.spec.ts -g "R8|GTO" --repeat-each=60 --reporter=line
