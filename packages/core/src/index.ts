@@ -12,3 +12,4 @@ export * from './realhands';
 export * from './content';
 export * from './sim';
 export * from './plan';
+export * from './dqe';
