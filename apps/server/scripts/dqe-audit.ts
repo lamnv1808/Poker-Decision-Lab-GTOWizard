@@ -60,7 +60,7 @@ async function main() {
       where: { status: 'accepted', id: { gt: last } },
       orderBy: { id: 'asc' },
       take: 400,
-      select: { id: true, raw: true, format: true, decisions: { where: { status: 'accepted' }, select: { id: true, heroActionNo: true, pfAudit: true, formatGroup: true } } },
+      select: { id: true, raw: true, format: true, decisions: { where: { status: 'accepted' }, orderBy: { id: 'asc' }, select: { id: true, heroActionNo: true, pfAudit: true, formatGroup: true } } },
     });
     if (!page.length || total >= LIMIT) break;
     last = page[page.length - 1]!.id;
