@@ -15,6 +15,8 @@ const Env = z.object({
    * backups are taken with pg_dump by a scheduled job; switch on only for a break-glass backup.
    */
   BACKUP_ENDPOINT: z.enum(['on', 'off']).optional(),
+  /** Decision Quality Engine verdicts in training feedback (evidence-labelled). Off unless set to 'on'. */
+  DQE_FEEDBACK: z.enum(['on', 'off']).optional(),
 });
 
 const parsed = Env.safeParse(process.env);
