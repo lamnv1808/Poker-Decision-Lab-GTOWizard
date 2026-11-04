@@ -59,9 +59,11 @@ export function dqeDecisionFromReal(rec: ReconstructedHand, snap: EngineSnapshot
   }
   let deadBB = Math.round((s.deadAntes / bb) * 100) / 100;
   const pf = s.street === 'preflop' ? auditPushFold(rec) : null;
+  let pushFoldGrid: { stackBB: number; deadBB: number } | null = null;
   if (pf && pf.actionIndex === snap.actionIndex) {
     eff = pf.exactStackBB;
     deadBB = pf.exactDeadBB;
+    pushFoldGrid = { stackBB: pf.stackBB, deadBB: pf.deadBB }; // chosen from the unrounded values
   }
   const a = rec.parsed.actions[snap.actionIndex]!;
   const heroShove = (a.type === 'raise' || a.type === 'bet') && (a.allIn || a.amount >= heroTotal * 0.9);
@@ -88,6 +90,7 @@ export function dqeDecisionFromReal(rec: ReconstructedHand, snap: EngineSnapshot
     toCallBB: Math.round(snap.toCallBB * 100) / 100,
     requiredEquity: ctx.requiredEquity,
     heuristic: null,
+    pushFoldGrid,
   };
   void hero;
 }
