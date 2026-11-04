@@ -15,6 +15,32 @@
  "handRows": 979524,
  "totalRuntimeMs": 2501124,
  "peakRssMB": 274,
+ "files": [
+  {
+   "file": "pushfold-nmax-6max.json.gz",
+   "tableSize": 6,
+   "records": 920,
+   "sha256": "31a21a046b7970218aea7ad552eb6c9cd70cc2169450e3ca21a58caa8a2577cf"
+  },
+  {
+   "file": "pushfold-nmax-7max.json.gz",
+   "tableSize": 7,
+   "records": 1242,
+   "sha256": "a7702ac10d3342a14ced1f6f0bc3efa63a03bbf414cf58867e50281acdcaf7c1"
+  },
+  {
+   "file": "pushfold-nmax-8max.json.gz",
+   "tableSize": 8,
+   "records": 1610,
+   "sha256": "d4e02726a2098df2bd16cc3dd1c889daccb789e970937a81f554f9896d5017cc"
+  },
+  {
+   "file": "pushfold-nmax-9max.json.gz",
+   "tableSize": 9,
+   "records": 2024,
+   "sha256": "327eba145bb98c19d2059ad4524da9c8a4afbf7835c103a287f9de7f913f49da"
+  }
+ ],
  "benchmarkVsHeadsUp": [
   {
    "stackBB": 5,
@@ -23,7 +49,7 @@
    "maxEvDiffBB": 0.00181,
    "evSignFlips": 0,
    "epsilonNmax": 0.0001265438658835841,
-   "exploitabilityHU": 0.00003824612018810125
+   "exploitabilityHU": 3.824612018810125e-05
   },
   {
    "stackBB": 10,
@@ -41,7 +67,7 @@
    "maxEvDiffBB": 0.00228,
    "evSignFlips": 0,
    "epsilonNmax": 0.0002297809792357556,
-   "exploitabilityHU": 0.00005387549348256915
+   "exploitabilityHU": 5.387549348256915e-05
   },
   {
    "stackBB": 15,
@@ -86,7 +112,7 @@
     0.00131,
     0.0008949,
     0.0003447,
-    0.00008773
+    8.773e-05
    ],
    "runtimeMs": 5394
   },
@@ -916,7 +942,7 @@
     0.001427,
     0.000923,
     0.0003471,
-    0.00009968
+    9.968e-05
    ],
    "runtimeMs": 12525
   },
@@ -1792,7 +1818,7 @@
     0.001269,
     0.0008052,
     0.0003066,
-    0.0000901
+    9.01e-05
    ],
    "runtimeMs": 14931
   },
@@ -2714,7 +2740,7 @@
     0.001018,
     0.0006401,
     0.0002472,
-    0.00007322
+    7.322e-05
    ],
    "runtimeMs": 19173
   },

@@ -6,6 +6,7 @@
  * lists per configuration the ε-Nash diagnostics, runtime and checksum. Nothing is interpolated: each
  * (table size, stack, ante) is its own solve.
  */
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { CLASSES, solvePushFold } from '../src/gto/pushfold';
@@ -27,6 +28,7 @@ const build = (r: Omit<RangeRecord, 'checksum' | 'keyString' | 'schema'>): Range
 
 mkdirSync(OUT, { recursive: true });
 const manifest: Record<string, unknown>[] = [];
+const files: { file: string; tableSize: number; records: number; sha256: string }[] = [];
 const benchmark: Record<string, unknown>[] = [];
 const t0 = Date.now();
 const mem0 = process.memoryUsage().rss;
@@ -62,7 +64,9 @@ for (const n of TABLES) {
       console.log(`${n}-max S=${S} D=${D}: ${recs.length} nodes, ε ${sol.maxEpsilonBB.toExponential(2)} BB/hand, node gain ${sol.maxNodeGainBB.toExponential(2)}, ${sol.runtimeMs} ms`);
     }
   const file = new URL(`pushfold-nmax-${n}max.json.gz`, OUT);
-  writeFileSync(file, gzipSync(JSON.stringify({ schema: RANGE_SCHEMA_VERSION, method: NMAX_PUSHFOLD_VERSION, records })));
+  const bytes = gzipSync(JSON.stringify({ schema: RANGE_SCHEMA_VERSION, method: NMAX_PUSHFOLD_VERSION, records }));
+  writeFileSync(file, bytes);
+  files.push({ file: `pushfold-nmax-${n}max.json.gz`, tableSize: n, records: records.length, sha256: createHash('sha256').update(bytes).digest('hex') });
 }
 const summary = {
   schema: RANGE_SCHEMA_VERSION,
@@ -78,6 +82,7 @@ const summary = {
   handRows: rows,
   totalRuntimeMs: Date.now() - t0,
   peakRssMB: Math.round(Math.max(process.memoryUsage().rss, mem0) / 1e6),
+  files,
   benchmarkVsHeadsUp: benchmark,
   configurationsList: manifest,
 };
