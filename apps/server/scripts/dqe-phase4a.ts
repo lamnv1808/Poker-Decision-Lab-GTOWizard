@@ -200,7 +200,7 @@ async function main() {
     pkoData: { handsPko, pkoBuyInParsed: pkoBuyIn, seatsPko, seatsWithRecordedBounty: seatsWithBounty, tournaments: firstHand.size, seriesWithVerifiedStartingStack: startStackByName.size, seriesSeen: firstByName.size, phase4aLevel1Estimates: startStackLevel1.size, verifiedVsLevel1Disagree: [...startStackByName.entries()].filter(([k, v]) => startStackLevel1.has(k) && startStackLevel1.get(k) !== v).length },
     topUnratedFamilies: top(fam, 30),
     unratedIntersections: top(famX, 80),
-    modules: top(mod, 200),
+    modules: top(mod, 5000),
     pkoBountyRegimes: top(pkoBand, 20),
     unratedLiftCombinations: top(union, 40),
     flopCensus: top(census, 400),
