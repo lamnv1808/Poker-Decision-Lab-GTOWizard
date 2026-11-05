@@ -6,3 +6,4 @@ export * from './sources/huPushFold';
 export * from './nmaxPushFold';
 export * from './realHand';
 export * from './fromState';
+export * from './decisionMath';

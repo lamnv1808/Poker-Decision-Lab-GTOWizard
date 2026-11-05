@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { injectDecisionMaths } from './decision-maths';
 import { register, waitForContent } from './helpers';
 
 test('mobile: navigation, table and action bar fit the screen', async ({ page }) => {
@@ -119,4 +120,29 @@ test('mobile (iPhone portrait): Next hand is on screen without scrolling, safe, 
   const old = await page.request.get(`/api/sim/hands/${first.split('/').pop()}`);
   expect(old.status()).toBe(200);
   expect((await old.json()).status).toBe('complete');
+});
+
+test('mobile: Decision Maths is behind the details toggle and never pushes Next hand off screen', async ({ page }) => {
+  await register(page, 'DMMobile');
+  await waitForContent(page);
+  await injectDecisionMaths(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/play');
+  await page.getByTestId('sim-deal').click();
+  await expect(page.getByTestId('poker-table')).toBeVisible();
+  await playToEnd(page);
+  // the quick card shows no maths; Next hand is on screen
+  await expect(page.getByTestId('decision-maths')).toHaveCount(0);
+  const sticky = page.getByTestId('sim-next-sticky');
+  await expect(sticky).toBeInViewport();
+  await page.getByTestId('qf-details-toggle').click();
+  const dm = page.getByTestId('qf-details').getByTestId('decision-maths');
+  await expect(dm).toBeVisible();
+  await dm.scrollIntoViewIfNeeded();
+  await expect(dm.getByTestId('dm-verdict')).toContainText('not established');
+  await expect(sticky).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: 'test-results/decision-maths-mobile.png' });
+  await page.getByTestId('qf-details-toggle').click();
+  await expect(sticky).toBeInViewport();
 });
