@@ -7,6 +7,7 @@ import { ActionBar } from '../components/ActionBar';
 import { PokerTable } from '../components/PokerTable';
 import { CardText } from '../components/Cards';
 import { ActionComparison, DecisionFeedback, type FeedbackView, ReasoningChecks, TierBadge } from '../components/DecisionFeedback';
+import { DecisionMaths, type DecisionMathView } from '../components/DecisionMaths';
 import { DqeEvidence, type DqeVerdictView } from '../components/DqeEvidence';
 import { type Cta, DetailSection, NextBar, QuickFeedback, useSingleFlight } from '../components/QuickFeedback';
 import { toQuickFeedback } from '../feedbackPresentation';
@@ -22,6 +23,8 @@ type Assessment = 'solverVerified' | 'mathVerified' | 'reviewedStrategy' | 'assu
 interface Feedback extends FeedbackView {
   /** Decision Quality Engine verdict — present only when the server's DQE_FEEDBACK flag is on */
   dqe?: DqeVerdictView;
+  /** Decision Maths — present only when the server's DQE_DECISION_MATHS flag is on (postflop only) */
+  decisionMaths?: DecisionMathView;
   assessment?: Assessment;
   basis: 'solverEv' | 'modelEv' | 'none';
   track: 'strategy' | 'fundamentals' | 'model' | null;
@@ -668,6 +671,7 @@ function SimAnalysis({ v, d, fb, eq, onReview }: { v: SimView; d: DecisionView; 
         {f.requiredEquity !== null && f.requiredEquity !== undefined && <p className="tabular">{t('qf.requiredEq')}: {pct(f.requiredEquity)}</p>}
         {fb.model && <p className="tabular">{t('qf.equityVsRange')}: {pct(fb.model.facts.equityVsRange)}</p>}
         {!fb.model && hasEq && <p className="tabular">{t('sim.modelEquity')}: {pct(eq!.equity)} (±{pct(eq!.stdErr)})</p>}
+        {fb.decisionMaths && <DecisionMaths m={fb.decisionMaths} />}
       </DetailSection>
       {hasComparison && (
         <DetailSection n={5} title={t('qf.sec.comparison')} testId="qf-sec-comparison">

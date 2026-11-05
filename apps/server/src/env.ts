@@ -17,6 +17,8 @@ const Env = z.object({
   BACKUP_ENDPOINT: z.enum(['on', 'off']).optional(),
   /** Decision Quality Engine verdicts in training feedback (evidence-labelled). Off unless set to 'on'. */
   DQE_FEEDBACK: z.enum(['on', 'off']).optional(),
+  /** Decision Maths section in Full Hand feedback (Phase 4B Gate 1). Default off. */
+  DQE_DECISION_MATHS: z.enum(['on', 'off']).optional(),
 });
 
 const parsed = Env.safeParse(process.env);

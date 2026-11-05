@@ -35,6 +35,7 @@ import {
 } from '@pdl/core';
 import type { Prisma, SimHand } from '@prisma/client';
 import { mixedSessionFor } from './mixed';
+import { decisionMathsForState } from './decisionMaths';
 import { dqeForState } from './dqe';
 import { markCompleted, touchPlayed } from './history';
 import { Router } from 'express';
@@ -420,7 +421,9 @@ simRouter.post('/hands/:id/act', async (req, res) => {
   const reveal = h.feedback === 'guided' || complete;
   // Decision Quality Engine verdict (flag DQE_FEEDBACK, default off): response only, never stored or rated
   const dqe = reveal ? dqeForState(before.state, (h.config as unknown as SimConfig).heroPos, body.action as PlayerAction, `sim:${h.id}:${st.length}`) : null;
-  res.json({ view: simView(fresh, run), feedback: reveal ? { ...fb, modelEquity: d.info.modelEquity, solver: d.info.solver, ...(dqe ? { dqe } : {}) } : null });
+  // Decision Maths (flag DQE_DECISION_MATHS, default off): exact arithmetic for postflop decisions; response only
+  const decisionMaths = reveal ? decisionMathsForState(before.state, (h.config as unknown as SimConfig).heroPos, body.action as PlayerAction) : null;
+  res.json({ view: simView(fresh, run), feedback: reveal ? { ...fb, modelEquity: d.info.modelEquity, solver: d.info.solver, ...(dqe ? { dqe } : {}), ...(decisionMaths ? { decisionMaths } : {}) } : null });
 });
 
 simRouter.post('/hands/:id/abandon', async (req, res) => {
