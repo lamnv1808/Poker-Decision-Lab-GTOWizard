@@ -45,7 +45,8 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
 
   // ---------- pass 1: what the histories contain for PKO (buy-in, starting stack, recorded bounties)
-  const startStacks = new Map<string, Counter>(); // tournament name → Level-1 hero stack histogram
+  const startStacks = new Map<string, Counter>(); // tournament name → Level-1 hero stack histogram (Phase 4A method, kept for comparison)
+  const firstHand = new Map<string, { ts: string; name: string; stack: number }>(); // tournament id → Hero's first recorded hand
   let last = '';
   let handsPko = 0, pkoBuyIn = 0, seatsWithBounty = 0, seatsPko = 0;
   for (;;) {
@@ -63,14 +64,22 @@ async function main() {
         seatsPko += p.seats.length;
         seatsWithBounty += p.seats.filter((x) => x.bounty != null).length;
       }
+      const heroSeat = p.seats.find((x) => x.name === p.heroName);
+      const ts = (h.raw.match(/(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2})/) ?? [])[1] ?? '';
+      if (p.tournamentId && heroSeat && ts) { const f = firstHand.get(p.tournamentId); if (!f || ts < f.ts) firstHand.set(p.tournamentId, { ts, name, stack: heroSeat.stack }); }
       if (/^Level\s*1\b|^Level1\b/i.test(p.level ?? '') || /^1$/.test(p.level ?? '')) {
         const hero = p.seats.find((x) => x.name === p.heroName);
         if (hero) { const m = startStacks.get(name) ?? new Map(); inc(m, String(hero.stack)); startStacks.set(name, m); }
       }
     }
   }
+  const startStackLevel1 = new Map<string, number>();
+  for (const [name, m] of startStacks) { const [v, n] = top(m, 1)[0]!; if (n >= 3) startStackLevel1.set(name, Number(v)); }
+  // verified: mode of the first-hand stacks of a series, ≥3 tournaments, ≥90 % at the mode
+  const firstByName = new Map<string, Counter>();
+  for (const f of firstHand.values()) { const m = firstByName.get(f.name) ?? new Map(); inc(m, String(f.stack)); firstByName.set(f.name, m); }
   const startStackByName = new Map<string, number>();
-  for (const [name, m] of startStacks) { const [v, n] = top(m, 1)[0]!; if (n >= 3) startStackByName.set(name, Number(v)); }
+  for (const [name, m] of firstByName) { const tot = [...m.values()].reduce((a, b) => a + b, 0); const [v, n] = top(m, 1)[0]!; if (tot >= 3 && n / tot >= 0.9) startStackByName.set(name, Number(v)); }
 
   // ---------- pass 2: decisions
   const base: Counter = new Map();
@@ -132,6 +141,7 @@ async function main() {
             const lo = 0.625 * ssBB, hi = 2.625 * ssBB;
             const regime = hi / S < 0.25 ? 'bounty<0.25stack(all scenarios)' : lo / S >= 1 ? 'bounty≥stack(all scenarios)' : 'spansRegimes';
             inc(pkoBand, `${c}|${regime}`);
+            for (const [tag, small, big] of [['strict', 0.15, 1.5], ['default', 0.25, 1], ['loose', 0.35, 0.75]] as const) inc(pkoBand, `thresholds:${tag}|${c}|${hi / S < small || lo / S >= big ? 'robust' : 'sensitive'}`);
             if (c === 'unrated' && regime !== 'spansRegimes') lifts.push('M1');
           }
         }
@@ -187,7 +197,7 @@ async function main() {
     reconstructionFailed: failed,
     baseline: Object.fromEntries(top(base, 10)),
     baselineContentSha256: contentHash,
-    pkoData: { handsPko, pkoBuyInParsed: pkoBuyIn, seatsPko, seatsWithRecordedBounty: seatsWithBounty, tournamentNamesWithStartingStackEstimate: startStackByName.size, tournamentNamesSeenAtLevel1: startStacks.size },
+    pkoData: { handsPko, pkoBuyInParsed: pkoBuyIn, seatsPko, seatsWithRecordedBounty: seatsWithBounty, tournaments: firstHand.size, seriesWithVerifiedStartingStack: startStackByName.size, seriesSeen: firstByName.size, phase4aLevel1Estimates: startStackLevel1.size, verifiedVsLevel1Disagree: [...startStackByName.entries()].filter(([k, v]) => startStackLevel1.has(k) && startStackLevel1.get(k) !== v).length },
     topUnratedFamilies: top(fam, 30),
     unratedIntersections: top(famX, 80),
     modules: top(mod, 200),
