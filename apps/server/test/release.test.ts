@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { adminToken } from '../src/admin';
+import { adminToken, canonicalJson, manifestHash } from '../src/admin';
 import { prisma } from '../src/db';
 import { setBackupEndpoint } from '../src/env';
 import { app, cid, newUser } from './helpers';
@@ -58,6 +59,8 @@ describe('release safety: backup endpoint, integrity report, test-account remova
     // dry run → manifest
     const dry = (await post({ ids: [t1.id, t2.id] }).expect(200)).body;
     expect(dry.dryRun).toBe(true);
+    expect(dry.hash).toBe(manifestHash(dry.manifest));
+    expect(dry.hashAlgorithm).toMatch(/pdl-manifest-v2/);
     expect(dry.manifest.accounts.map((a: { id: string }) => a.id).sort()).toEqual([t1.id, t2.id].sort());
     expect(dry.manifest.rows.DecisionAttempt).toBeGreaterThanOrEqual(1);
     expect(dry.manifest.rows.TrainingSession).toBeGreaterThanOrEqual(1);
@@ -72,6 +75,75 @@ describe('release safety: backup endpoint, integrity report, test-account remova
     expect(await prisma.user.count({ where: { id: { in: [keep.id, real.id] } } })).toBe(2);
     await keep.agent.get('/api/auth/me').expect(200);
     expect(done.before.fingerprints.realHandRaw).toBe(done.after.fingerprints.realHandRaw);
+  });
+
+  it('manifest hash is canonical: independent of key order, reproducible outside the app', () => {
+    // the production dry run lists tables in foreign-key creation order, which differs between a database
+    // built by migrations and one restored by pg_restore; the hash must not depend on it
+    const accounts = [{ id: 'a1', email: 'x@test.dev', createdAt: '2026-11-01T00:00:00.000Z' }];
+    const a = { accounts, rows: { Session: 2, Annotation: 0, DecisionAttempt: 5 }, external: {} };
+    const b = { external: {}, rows: { DecisionAttempt: 5, Session: 2, Annotation: 0 }, accounts: [{ createdAt: '2026-11-01T00:00:00.000Z', email: 'x@test.dev', id: 'a1' }] };
+    expect(manifestHash(a)).toBe(manifestHash(b));
+    expect(canonicalJson(b)).toBe('{"accounts":[{"createdAt":"2026-11-01T00:00:00.000Z","email":"x@test.dev","id":"a1"}],"external":{},"rows":{"Annotation":0,"DecisionAttempt":5,"Session":2}}');
+    // same as Python: hashlib.sha256(json.dumps(m, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode())
+    expect(manifestHash(b)).toBe(createHash('sha256').update(canonicalJson(a)).digest('hex'));
+    expect(manifestHash({ rows: { b: 1, a: 2 } })).toBe(createHash('sha256').update('{"rows":{"a":2,"b":1}}').digest('hex'));
+  });
+
+  it('revalidates inside the deletion transaction, counts cascaded rows, revokes sessions, rolls back on mismatch', async () => {
+    const t = await newUser('gone3');
+    const keep = await newUser('stays3');
+    const mem = await prisma.leakMemory.create({ data: { userId: t.id, leakKey: 'training:potOdds', source: 'training', evidence: 'training', category: 'math', label: { en: 'x', vi: 'x' }, drill: 'math', status: 'active', severity: 0.5, confidence: 'low', n: 3 } });
+    await prisma.leakSnapshot.create({ data: { memoryId: mem.id, status: 'active', n: 3, severity: 0.5 } });
+    await t.agent.get('/api/auth/me').expect(200);
+    const post = (body: object) => request(app).post('/api/admin/accounts/delete').set('x-admin-token', admin()).send(body);
+    const dry = (await post({ ids: [t.id] }).expect(200)).body;
+    // rows without userId that Postgres removes by cascade are part of the manifest (and the hash)
+    expect(dry.manifest.cascade.LeakSnapshot).toBe(1);
+    expect(dry.manifest.rows.LeakMemory).toBe(1);
+    expect(dry.manifest.rows.Session).toBeGreaterThanOrEqual(1);
+
+    // the transaction itself refuses a stale hash even if the caller skips the endpoint's pre-check
+    const { deleteTestAccounts, DeletionAborted } = await import('../src/accountCleanup');
+    await prisma.leakSnapshot.create({ data: { memoryId: mem.id, status: 'active', n: 4, severity: 0.5 } });
+    await expect(deleteTestAccounts([t.id], dry.hash)).rejects.toBeInstanceOf(DeletionAborted);
+    expect(await prisma.user.count({ where: { id: t.id } })).toBe(1);
+    expect(await prisma.leakSnapshot.count({ where: { memoryId: mem.id } })).toBe(2); // nothing was deleted
+
+    // with the fresh hash: everything goes, cascades verified, sessions revoked, cookie no longer works
+    const fresh = (await post({ ids: [t.id] }).expect(200)).body;
+    expect(fresh.manifest.cascade.LeakSnapshot).toBe(2);
+    const done = (await post({ ids: [t.id], confirmHash: fresh.hash }).expect(200)).body;
+    expect(done.deletedRows.LeakSnapshot).toBe(2);
+    expect(done.deletedRows.User).toBe(1);
+    expect(done.remainingSessions).toBe(0);
+    await t.agent.get('/api/auth/me').expect(401);
+    await keep.agent.get('/api/auth/me').expect(200);
+    expect(done.after.ok).toBe(true);
+  });
+
+  it('a row-count surprise inside the transaction rolls everything back', async () => {
+    const t = await newUser('gone4');
+    const { deleteTestAccounts, dryRunTestAccounts, DeletionAborted } = await import('../src/accountCleanup');
+    const dry = await dryRunTestAccounts([t.id]);
+    // simulate a concurrent writer between the dry run and the deletion: the transaction must notice
+    await prisma.session.create({ data: { userId: t.id, tokenHash: `extra-${Date.now()}`, expiresAt: new Date(Date.now() + 3600_000) } });
+    await expect(deleteTestAccounts([t.id], dry.hash)).rejects.toBeInstanceOf(DeletionAborted);
+    expect(await prisma.user.count({ where: { id: t.id } })).toBe(1);
+    expect(await prisma.session.count({ where: { userId: t.id } })).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the dry run is read-only at the database level', async () => {
+    const t = await newUser('ro');
+    const { dryRunTestAccounts } = await import('../src/accountCleanup');
+    const before = await prisma.session.count({ where: { userId: t.id } });
+    const r = await dryRunTestAccounts([t.id]);
+    expect(r.problems).toEqual([]);
+    await expect(prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+      await tx.$executeRawUnsafe(`DELETE FROM "Session" WHERE "userId" = $1`, t.id);
+    })).rejects.toThrow(/read-only/);
+    expect(await prisma.session.count({ where: { userId: t.id } })).toBe(before);
   });
 
   it("refuses when other users' data refers to the account", async () => {

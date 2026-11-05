@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,10 +6,11 @@ import { pipeline } from 'node:stream/promises';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma } from './db';
-import { backupEndpointOn, env, ownerEmails } from './env';
+import { backupEndpointOn, env } from './env';
 import { type ImportSummary, bundleSource, importV2 } from './realhands/import';
-import { streamBackup, tablesInOrder } from './backup';
+import { streamBackup } from './backup';
 import { integrityReport } from './integrity';
+import { DeletionAborted, deleteTestAccounts, dryRunTestAccounts } from './accountCleanup';
 
 /**
  * Operator-only endpoints (bulk import of a user's hand-history bundle when the database is not
@@ -127,56 +128,18 @@ adminRouter.get('/integrity', async (_req, res) => {
  * anything changed. Only exact ids are accepted, only @test.dev accounts, never an owner, never an
  * account other users' data refers to. Runs in one transaction.
  */
-const TEST_DOMAIN = '@test.dev';
-async function deletionManifest(ids: string[]) {
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, createdAt: true } });
-  const problems: string[] = [];
-  for (const id of ids) {
-    const u = users.find((x) => x.id === id);
-    if (!u) problems.push(`${id}: not found`);
-    else if (!u.email.toLowerCase().endsWith(TEST_DOMAIN)) problems.push(`${id}: not a ${TEST_DOMAIN} account`);
-    else if (ownerEmails.has(u.email.toLowerCase())) problems.push(`${id}: owner account`);
-  }
-  // every FK column that points at User: rows owned by these accounts, and rows of OTHER users that refer to them
-  const fks = await prisma.$queryRaw<{ tbl: string; col: string }[]>`
-    SELECT c.conrelid::regclass::text AS tbl, a.attname AS col FROM pg_constraint c
-    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
-    WHERE c.contype = 'f' AND c.confrelid = '"User"'::regclass`;
-  const rows: Record<string, number> = {};
-  const external: Record<string, number> = {};
-  for (const f of fks) {
-    const t = f.tbl.replace(/^"|"$/g, '');
-    const hasUserId = (await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'userId'`, t))[0]!.n > 0n;
-    if (f.col === 'userId') rows[t] = Number((await prisma.$queryRawUnsafe<{ n: bigint }[]>(`SELECT count(*) AS n FROM "${t}" WHERE "userId" = ANY($1::text[])`, ids))[0]!.n);
-    else {
-      const q = hasUserId ? `SELECT count(*) AS n FROM "${t}" WHERE "${f.col}" = ANY($1::text[]) AND NOT ("userId" = ANY($1::text[]))` : `SELECT count(*) AS n FROM "${t}" WHERE "${f.col}" = ANY($1::text[])`;
-      const n = Number((await prisma.$queryRawUnsafe<{ n: bigint }[]>(q, ids))[0]!.n);
-      if (n) external[`${t}.${f.col}`] = n;
-    }
-  }
-  if (Object.keys(external).length) problems.push(`referenced by other users' data: ${JSON.stringify(external)}`);
-  const manifest = { accounts: users.map((u) => ({ id: u.id, email: u.email, createdAt: u.createdAt.toISOString() })).sort((a, b) => a.id.localeCompare(b.id)), rows, external };
-  return { manifest, hash: createHash('sha256').update(JSON.stringify(manifest)).digest('hex'), problems };
-}
+export { canonicalJson, manifestHash, MANIFEST_HASH_ALGORITHM } from './accountCleanup';
 
 adminRouter.post('/accounts/delete', async (req, res) => {
   const body = z.object({ ids: z.array(z.string().min(1)).min(1).max(50), confirmHash: z.string().length(64).optional() }).parse(req.body);
-  const ids = [...new Set(body.ids)].sort();
-  const m = await deletionManifest(ids);
+  const m = await dryRunTestAccounts(body.ids);
   if (m.problems.length) return void res.status(409).json({ deleted: false, ...m });
   if (!body.confirmHash) return void res.json({ dryRun: true, ...m });
   if (body.confirmHash !== m.hash) return void res.status(409).json({ deleted: false, error: 'manifest_changed', ...m });
-  const before = await integrityReport();
-  await prisma.$transaction(
-    async (tx) => {
-      // children first (reverse FK order), then the accounts; any surprise aborts the whole thing
-      const order = (await tablesInOrder(tx)).reverse();
-      for (const t of order) if (t !== 'User' && m.manifest.rows[t] !== undefined) await tx.$executeRawUnsafe(`DELETE FROM "${t}" WHERE "userId" = ANY($1::text[])`, ids);
-      const n = await tx.$executeRawUnsafe(`DELETE FROM "User" WHERE id = ANY($1::text[]) AND lower(email) LIKE $2`, ids, `%${TEST_DOMAIN}`);
-      if (n !== ids.length) throw new Error(`expected to delete ${ids.length} accounts, would delete ${n}`);
-    },
-    { timeout: 120_000 },
-  );
-  const after = await integrityReport();
-  res.json({ deleted: true, ...m, before: { counts: before.counts, fingerprints: before.fingerprints }, after: { ok: after.ok, failed: after.failed, counts: after.counts, fingerprints: after.fingerprints, users: after.users } });
+  try {
+    res.json(await deleteTestAccounts(body.ids, body.confirmHash));
+  } catch (e) {
+    if (e instanceof DeletionAborted) return void res.status(409).json({ deleted: false, error: e.message, detail: e.detail });
+    throw e;
+  }
 });

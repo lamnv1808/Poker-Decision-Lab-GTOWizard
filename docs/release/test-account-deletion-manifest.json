@@ -1,6 +1,9 @@
 {
-  "purpose": "Proposed deletion of generated QA accounts (owner-approved scope). Produced by the dry run of POST /api/admin/accounts/delete on a restored copy of production (backup 2026-11-02T01:54Z). The production run must reproduce this exact hash or it is refused.",
-  "manifestHash": "9b4ca2e62dfe0cb5643c87a21ed36524859df8d63e8b7afc087e96f71db4f8ee",
+  "purpose": "Final proposed deletion of the 12 generated QA accounts. Produced by a READ ONLY dry run against the LIVE production database (pdl-backup workflow qa-accounts run 41443135230, 2026-11-02T12:15Z, app 2b0d709). Nothing was deleted. The deletion recomputes this manifest inside one SERIALIZABLE transaction and rolls back unless it hashes to exactly this value.",
+  "hashAlgorithm": "pdl-manifest-v2: SHA-256 of canonical JSON of {accounts, rows, cascade, external} (object keys sorted at every level, accounts sorted by id, separators \",\" and \":\", UTF-8). Python: hashlib.sha256(json.dumps(m, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False).encode()).hexdigest()",
+  "manifestHash": "74ff0dc8da20d02920480b796128d035aff6523e93ec33f4a0e15bb9d1c5b988",
+  "source": "live production, 2026-11-02T12:15Z (read-only transaction)",
+  "rollbackPoint": "weekly-backup run 41442517204 (encrypted, restore-verified), finished 2026-11-02T12:13Z; the delete workflow additionally requires a green backup < 60 min old",
   "accounts": [
     {
       "id": "089cd977-82b5-4a5c-8773-9ce162f43342",
@@ -64,19 +67,133 @@
     }
   ],
   "rowsToDelete": {
-    "Session": 15,
-    "UserPreference": 12,
-    "TrainingSession": 12,
-    "ScenarioRun": 6,
-    "DecisionAttempt": 81,
+    "DecisionAttempt": 93,
+    "LeakMemory": 1,
+    "LeakMemoryState": 1,
+    "LeakObservation": 164,
     "Rating": 18,
     "RatingHistory": 196,
-    "LeakObservation": 137,
-    "ReviewItem": 4,
-    "SimHand": 210,
     "RatingModelState": 7,
-    "ScenarioHistory": 213
+    "ReviewItem": 4,
+    "ScenarioHistory": 228,
+    "ScenarioRun": 6,
+    "Session": 22,
+    "SimHand": 227,
+    "TrainingSession": 13,
+    "UserPreference": 12
   },
-  "referencedByOtherUsers": {},
-  "problems": []
+  "cascadeToDelete": {
+    "LeakSnapshot": 1
+  },
+  "manifest": {
+    "accounts": [
+      {
+        "id": "089cd977-82b5-4a5c-8773-9ce162f43342",
+        "email": "smoke-v31-1793553378597@test.dev",
+        "createdAt": "2026-11-01T17:16:20.502Z"
+      },
+      {
+        "id": "1d71fa62-d254-47b3-a53f-b6cb421f542d",
+        "email": "smoke-gto-1793503759@test.dev",
+        "createdAt": "2026-11-01T03:29:26.892Z"
+      },
+      {
+        "id": "1dc7ca8e-adce-4b34-b0f2-9322f0eef6ad",
+        "email": "smoke-next-1793508483@test.dev",
+        "createdAt": "2026-11-01T04:48:08.249Z"
+      },
+      {
+        "id": "353a65f5-499f-44cc-a246-7f9cc2216a0a",
+        "email": "smoke-v31-1793553582396@test.dev",
+        "createdAt": "2026-11-01T17:19:44.708Z"
+      },
+      {
+        "id": "5e50f7bc-2cbc-4b57-8ba0-d3ecdb3f991a",
+        "email": "qa-1793553264318@test.dev",
+        "createdAt": "2026-11-01T17:14:25.005Z"
+      },
+      {
+        "id": "729e958d-9484-481d-9de8-380f3a2afb1f",
+        "email": "smoke-pf85-1793514531@test.dev",
+        "createdAt": "2026-11-01T06:28:57.470Z"
+      },
+      {
+        "id": "7cd379ac-2be0-4f05-8132-dee25741d0d3",
+        "email": "qa-1793552064489@test.dev",
+        "createdAt": "2026-11-01T16:54:25.370Z"
+      },
+      {
+        "id": "8a51be23-d574-47d5-833a-6f6abcba3795",
+        "email": "smoke-pf-1793508889@test.dev",
+        "createdAt": "2026-11-01T04:54:54.534Z"
+      },
+      {
+        "id": "aa61b723-3fd0-4112-acca-f038ef394e58",
+        "email": "qa-1793551930011@test.dev",
+        "createdAt": "2026-11-01T16:52:11.065Z"
+      },
+      {
+        "id": "eed31a58-afe6-443b-a475-74084ddd08aa",
+        "email": "smoke-v31-1793552669546@test.dev",
+        "createdAt": "2026-11-01T17:04:31.971Z"
+      },
+      {
+        "id": "f69d25ec-9757-4eea-8efc-9e929fbdda2e",
+        "email": "smoke-1793499563@test.dev",
+        "createdAt": "2026-11-01T02:19:28.228Z"
+      },
+      {
+        "id": "f9f67ba3-20db-4746-af99-085be2a7bc21",
+        "email": "smoke-v31-1793552560598@test.dev",
+        "createdAt": "2026-11-01T17:02:42.961Z"
+      }
+    ],
+    "rows": {
+      "Annotation": 0,
+      "Bookmark": 0,
+      "DecisionAttempt": 93,
+      "HandHistory": 0,
+      "ImportError": 0,
+      "ImportedFile": 0,
+      "LeakMemory": 1,
+      "LeakMemoryState": 1,
+      "LeakObservation": 164,
+      "Rating": 18,
+      "RatingHistory": 196,
+      "RatingModelState": 7,
+      "RealDecision": 0,
+      "RealHand": 0,
+      "ReviewItem": 4,
+      "ScenarioHistory": 228,
+      "ScenarioRun": 6,
+      "Session": 22,
+      "SimHand": 227,
+      "Tournament": 0,
+      "TrainingSession": 13,
+      "UserNote": 0,
+      "UserPreference": 12
+    },
+    "cascade": {
+      "HandAction": 0,
+      "LeakSnapshot": 1
+    },
+    "external": {}
+  },
+  "unaffected": {
+    "RealHand": 0,
+    "RealDecision": 0,
+    "Annotation": 0,
+    "HandHistory": 0,
+    "crossUserReferences": 0,
+    "nonTestAccountsRemaining": 1,
+    "productionTotalsAtDryRun": {
+      "realHands": 52523,
+      "realDecisions": 78821,
+      "annotations": 1097
+    }
+  },
+  "previousHashes": {
+    "7fda15e3fb89ed4c38a004df4cd9d2b67b4d3a8885e37a3768f1c5fb44eda2f8": "v2 without cascade counts, backup 10:31Z (superseded: QA account used for the Solver-tier production check; cascade counting added)",
+    "9b4ca2e6\u2026/257fd8b6\u2026": "legacy order-dependent hashes"
+  }
 }

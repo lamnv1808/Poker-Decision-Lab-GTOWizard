@@ -1,0 +1,187 @@
+# Isolated checks on the newest encrypted backup — never contacts the production database.
+#
+# 1. Restores the newest weekly-backup artifact into a throw-away Postgres 18 on the runner.
+# 2. Boots the application at `app_ref` against that copy and runs the test-account deletion DRY RUN
+#    (nothing is deleted), printing the full manifest, the app's hash and an independently computed
+#    canonical hash (pdl-manifest-v2: SHA-256 of JSON with sorted keys, compact separators).
+# 3. Optional Neon rehearsal (only when the NEON_REHEARSAL_URL secret exists and points at neon.tech):
+#    restores the same backup into that EMPTY Neon test database, compares row counts and per-table
+#    checksums with the local copy, runs the integrity checks there, boots the app against Neon through
+#    the pooler and times a few queries on both. Production is never touched.
+name: isolated-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_ref:
+        description: application git ref to run against the restored copy
+        default: main
+        required: true
+      neon:
+        description: also run the Neon rehearsal (needs secret NEON_REHEARSAL_URL)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      restore:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: restore
+          POSTGRES_DB: restore
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      RESTORE_URL: postgresql://postgres:restore@localhost:5432/restore
+    steps:
+      - name: Refuse to run in a public repository
+        if: ${{ !github.event.repository.private }}
+        run: exit 1
+
+      - name: Install PostgreSQL 18 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-18
+
+      - name: Download, decrypt and verify the newest backup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          umask 077
+          run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow weekly-backup.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          gh run download "$run" -R "$GITHUB_REPOSITORY" -D dl
+          find dl -type f -exec mv {} dl/ \; 2>/dev/null || true
+          f=$(ls dl/pdl-*.dump.gpg | head -n 1); stamp=$(basename "$f" .dump.gpg | sed 's/^pdl-//')
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          printf '%s' "$BACKUP_PASSPHRASE" > .pass
+          gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file .pass -d "$f" > pdl.dump
+          rm -f .pass
+          test "$(cut -c1-64 dl/pdl-$stamp.sha256)" = "$(sha256sum pdl.dump | cut -c1-64)"
+          echo "backup $stamp from weekly-backup run $run; plaintext SHA-256 verified" | tee -a "$GITHUB_STEP_SUMMARY"
+          /usr/lib/postgresql/18/bin/pg_restore --no-owner --no-acl --exit-on-error --dbname="$RESTORE_URL" pdl.dump
+
+      - uses: actions/checkout@v4
+        with:
+          path: backup-repo
+
+      - name: Integrity checks on the restored copy
+        run: |
+          psql "$RESTORE_URL" -At -F '|' -f backup-repo/scripts/integrity.sql | tee integrity.txt
+          test "$(awk -F'|' '$2!=0' integrity.txt | wc -l)" = 0
+          echo "integrity checks: $(grep -c . integrity.txt) passed" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: lamnv1808/Poker-Decision-Lab-GTOWizard
+          ref: ${{ inputs.app_ref }}
+          path: app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test-account deletion DRY RUN on the restored copy (nothing deleted)
+        working-directory: app
+        env:
+          DATABASE_URL: ${{ env.RESTORE_URL }}
+          APP_SECRET: restore-check-only-not-production
+          NODE_ENV: test
+          PORT: '8099'
+        run: |
+          npm ci --no-audit --no-fund >/dev/null
+          npx prisma generate --schema apps/server/prisma/schema.prisma >/dev/null
+          echo "app ref ${{ inputs.app_ref }} = $(git rev-parse --short HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          (cd apps/server && npx tsx src/main.ts > ../../../server.log 2>&1 &)
+          for i in $(seq 1 60); do curl -fs localhost:8099/api/health >/dev/null && break; sleep 2; done
+          tok=$(node -e "console.log(require('crypto').createHmac('sha256','restore-check-only-not-production').update('pdl-admin-v1').digest('hex'))")
+          ids=$(python3 -c "import json; print(json.dumps({'ids':[a['id'] for a in json.load(open('docs/release/test-account-deletion-manifest.json'))['accounts']]}))")
+          curl -s -m 120 -H "x-admin-token: $tok" -H 'content-type: application/json' -d "$ids" localhost:8099/api/admin/accounts/delete > ../dryrun.json
+          # independent check of everything that would be touched, straight from SQL
+          psql "$RESTORE_URL" -At -c "SELECT count(*) FROM \"User\" WHERE lower(email) NOT LIKE '%@test.dev'" > ../keep.txt
+          python3 - <<'PY'
+          import json, hashlib
+          r = json.load(open('../dryrun.json'))
+          assert r.get('dryRun') is True, r
+          m = r['manifest']
+          canon = json.dumps(m, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+          h = hashlib.sha256(canon.encode()).hexdigest()
+          print('DRY RUN - nothing deleted')
+          print('problems:', r['problems'], '| external references:', m['external'])
+          for a in m['accounts']: print('  account', a['id'], a['email'], a['createdAt'])
+          print('rows:', json.dumps(m['rows'], sort_keys=True))
+          print('app hash      :', r['hash'], r.get('hashAlgorithm', '(legacy JSON.stringify order)'))
+          print('canonical hash:', h, '(python sort_keys)')
+          print('app hash == canonical:', r['hash'] == h)
+          print('accounts that stay (not @test.dev):', open('../keep.txt').read().strip())
+          json.dump(m, open('../manifest.json', 'w'), indent=1, sort_keys=True)
+          PY
+          python3 -c "import json;r=json.load(open('../dryrun.json'));print('canonical hash',r['hash'],'| rows',json.dumps(r['manifest']['rows'],sort_keys=True))" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Neon rehearsal (empty TEST database only)
+        if: ${{ inputs.neon }}
+        env:
+          NEON_URL: ${{ secrets.NEON_REHEARSAL_URL }}
+        run: |
+          test -n "$NEON_URL" || { echo "::error::secret NEON_REHEARSAL_URL is not set"; exit 1; }
+          case "$NEON_URL" in *neon.tech*) ;; *) echo "::error::NEON_REHEARSAL_URL must point at neon.tech"; exit 1;; esac
+          # direct (non-pooled) endpoint for restore; pooled endpoint for the app
+          direct=$(echo "$NEON_URL" | sed 's/-pooler\././'); pooled=$(echo "$direct" | sed -E 's#@([^.]+)\.#@\1-pooler.#')
+          echo "::add-mask::$direct"; echo "::add-mask::$pooled"
+          n=$(psql "$direct" -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")
+          test "$n" = 0 || { echo "::error::the Neon test database is not empty ($n tables) — refusing"; exit 1; }
+          echo "Neon: $(psql "$direct" -Atc 'SHOW server_version'), empty target" | tee -a "$GITHUB_STEP_SUMMARY"
+          start=$(date +%s)
+          /usr/lib/postgresql/18/bin/pg_restore --no-owner --no-acl --exit-on-error --dbname="$direct" pdl.dump
+          echo "restore into Neon: $(( $(date +%s) - start )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          # row counts + per-table content checksums, local copy vs Neon
+          q="SELECT string_agg(format('%s %s %s', t, n, h), E'\n' ORDER BY t) FROM (SELECT c.relname t,
+              (xpath('/row/n/text()', query_to_xml(format('select count(*) n from %I', c.relname), false, true, '')))[1]::text n,
+              (xpath('/row/h/text()', query_to_xml(format('select md5(coalesce(string_agg(x::text, ''|'' ORDER BY x::text), '''')) h from %I x', c.relname), false, true, '')))[1]::text h
+              FROM pg_class c JOIN pg_namespace s ON s.oid=c.relnamespace WHERE s.nspname='public' AND c.relkind='r') z"
+          psql "$RESTORE_URL" -Atc "$q" > local.txt
+          psql "$direct" -Atc "$q" > neon.txt
+          if diff -q local.txt neon.txt; then echo "Neon == restored backup: $(wc -l < local.txt) tables, row counts and content checksums identical" | tee -a "$GITHUB_STEP_SUMMARY"; else diff local.txt neon.txt | cut -c1-120; exit 1; fi
+          psql "$direct" -At -F '|' -f backup-repo/scripts/integrity.sql > neon-integrity.txt
+          test "$(awk -F'|' '$2!=0' neon-integrity.txt | wc -l)" = 0 && echo "integrity on Neon: $(grep -c . neon-integrity.txt) checks passed" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "migrations on Neon: $(psql "$direct" -Atc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL') finished" | tee -a "$GITHUB_STEP_SUMMARY"
+          # timing: the same heavy-ish read on both (owner history aggregate)
+          t="SELECT \"userId\", count(*), sum(\"potBB\") FROM \"RealDecision\" GROUP BY 1"
+          for target in RESTORE_URL direct; do
+            u=$([ $target = direct ] && echo "$direct" || echo "$RESTORE_URL")
+            s=$(date +%s%N); for i in 1 2 3; do psql "$u" -Atc "$t" >/dev/null; done; e=$(date +%s%N)
+            echo "timing $target: $(( (e - s) / 3000000 )) ms per aggregate over RealDecision (incl. connect)" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+          echo "NEON_DIRECT=$direct" >> "$GITHUB_ENV"
+
+      - name: App against Neon exactly as production would start it (direct endpoint; test database only)
+        if: ${{ inputs.neon }}
+        working-directory: app
+        run: |
+          pkill -f "tsx src/main.ts" || true; sleep 2
+          sep=$(echo "$NEON_DIRECT" | grep -q '?' && echo '&' || echo '?')
+          export DATABASE_URL="${NEON_DIRECT}${sep}connect_timeout=15"
+          echo "::add-mask::$DATABASE_URL"
+          export APP_SECRET=restore-check-only-not-production NODE_ENV=test PORT=8098
+          # production's start command runs migrate deploy first: it must find nothing to apply
+          npx prisma migrate deploy --schema apps/server/prisma/schema.prisma 2>&1 | tail -2 | tee -a "$GITHUB_STEP_SUMMARY"
+          s=$(date +%s)
+          (cd apps/server && npx tsx src/main.ts > ../../../server-neon.log 2>&1 &)
+          for i in $(seq 1 90); do curl -fs localhost:8098/api/health >/dev/null && break; sleep 2; done
+          echo "app booted on Neon in $(( $(date +%s) - s )) s; health $(curl -fs localhost:8098/api/health)" | tee -a "$GITHUB_STEP_SUMMARY"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -c jar -H 'content-type: application/json' -d '{"email":"neon-check@example.invalid","password":"neon-check-only-123","displayName":"check"}' localhost:8098/api/auth/register)
+          me=$(curl -s -o /dev/null -w '%{http_code}' -b jar localhost:8098/api/auth/me)
+          deal=$(curl -s -o /dev/null -w '%{http_code} %{time_total}s' -b jar -H 'content-type: application/json' -d '{"tableSize":6}' localhost:8098/api/sim/hands)
+          echo "on Neon: register $code, session $me, deal $deal" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$code" = 201 && test "$me" = 200
+          grep -i -E "error|P1001|P2024|timeout" ../server-neon.log | head -5 || true
